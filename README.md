@@ -4,6 +4,21 @@ A Go server and SDK for the [Things 3](https://culturedcode.com/things/) cloud A
 
 Built on a reverse-engineered, unofficial SDK — there is no official API documentation from Cultured Code.
 
+> **Fork status.** This is an independently maintained fork of the archived
+> [`mattydsmith/things-cloud-mcp`](https://github.com/mattydsmith/things-cloud-mcp).
+> It is being reworked for self-hosting on a VPS with authenticated access from Claude
+> and ChatGPT. Known defects and the plan are in [`docs/known-issues.md`](docs/known-issues.md)
+> and [`docs/roadmap.md`](docs/roadmap.md). Contributors and AI agents start at
+> [`AGENTS.md`](AGENTS.md).
+>
+> **Not affiliated with Cultured Code.** "Things" is a trademark of Cultured Code GmbH & Co. KG.
+> This project uses a private, undocumented protocol that can change or be blocked at any
+> time, and a bad write can corrupt your Things data on every device. Use at your own risk,
+> test with a separate account first, and read [`docs/legal-and-risk.md`](docs/legal-and-risk.md).
+>
+> **Security warning.** The `/mcp` endpoint currently has no authentication (KI-07). Do not
+> expose it on a public address until OAuth lands.
+
 ## What it does
 
 The server syncs your Things Cloud data into a local SQLite database and exposes it through two interfaces:

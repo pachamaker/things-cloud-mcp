@@ -1,0 +1,208 @@
+# AGENTS.md
+
+Operating contract for AI coding agents (Claude Code, Codex, others) and humans working
+on this repository. Read this file fully before changing code. `CLAUDE.md` imports it.
+
+## 1. What this project is
+
+An **unofficial, single-user MCP server for Things 3**. It talks directly to the private
+Things Cloud sync protocol (reverse-engineered, no official docs), mirrors the owner's
+data into SQLite, and exposes MCP tools so Claude and ChatGPT can read and change tasks
+from any device.
+
+**North star:** the owner runs it on their own VPS and manages Things from iPhone, iPad,
+Mac or web through Claude/ChatGPT — no Mac needs to be online, and the official Things
+apps never break because of something this server wrote.
+
+**Lineage:** `nicolai86/things-cloud-sdk` → `arthursoares/things-cloud-sdk` →
+`mattydsmith/things-cloud-mcp` (archived) → this fork (`pachamaker/things-cloud-mcp`).
+Upstream is dead; we own everything. See `docs/adr/0001-fork-identity.md`.
+
+## 2. Non-negotiable rules
+
+These protect the owner's real task database. Violating one is worse than leaving a
+feature unimplemented.
+
+1. **Never write to the owner's real Things account from tests, scripts or
+   experiments.** Use the sandbox account (`THINGS_SANDBOX_*` credentials, never
+   committed). If you are unsure which account a command targets, stop and ask.
+2. **No guessing on the wire.** Do not add or change any field or value the server
+   *writes* to Things Cloud unless it is marked ✅ in
+   `docs/protocol/things-cloud.md` or you add a capture fixture from the official
+   client following §8 of that document. Things Cloud accepts anything; the Things
+   apps crash on bad data, sometimes irreversibly.
+3. **Recurrence writes are forbidden.** Do not send `rr` (not even `null`), do not
+   modify repeating templates or instances, do not re-enable the `repeat` parameter.
+   Incident 2026-08-18 (KI-01, ADR-0004).
+4. **IDs must be safe Base58.** Never emit an identifier whose natural encoding drops a
+   leading zero byte (KI-26). Never write `Task7` items until a validated encoder exists.
+5. **Never weaken authentication.** No unauthenticated route may read or write task
+   data on a publicly reachable deployment.
+6. **Never log secrets or personal data:** Things password, `Authorization` headers,
+   OAuth tokens, API keys, full task notes. Debug dumps must redact them.
+7. **Calendar dates are civil dates in the owner's timezone.** Do not call
+   `time.Now()` or `.UTC()` to decide "today" in new code; use the clock and timezone
+   from config (ADR-0003). Until ADR-0003 lands, do not add new UTC-based date logic.
+8. **Do not hand-edit generated code** (`itemaction_string.go`); run `go generate`.
+9. **Do not edit `.env` files, deployment secrets, or anything under `/migrations`**
+   without an explicit instruction.
+
+**Current top risks** (read before touching sync or writes): KI-25 (`Task7` from
+Things ≥ 3.23 is silently dropped on `main`; fixed by the upstream-SDK migration in
+progress, ADR-0001), KI-01 (recurrence), KI-07 (no auth on `/mcp`).
+
+## 3. Before you start a task
+
+1. Find the task's issue in `docs/known-issues.md` (`KI-NN`) or the ADR it belongs to.
+   If neither exists and the change is non-trivial, write the KI entry or a Proposed
+   ADR first and get it approved.
+2. Read the files the KI points to, and the relevant section of
+   `docs/architecture.md` and `docs/protocol/things-cloud.md`.
+3. State the plan in 2–5 bullets: what changes, why, how you will test it.
+4. If the task is ambiguous, ask **one** clarifying question.
+
+## 4. Commands
+
+```bash
+go build ./...                       # build everything
+go vet ./...                         # static checks
+go test ./...                        # unit + tape tests (no network)
+go test -race ./sync ./server        # concurrency-sensitive packages
+go test -run TestName ./sync         # single test
+go generate                          # regenerate stringer output after enum changes
+go build -o things-server ./server   # build the server binary
+```
+
+If the default Go proxy is unreachable (e.g. a corporate proxy), prefix commands with
+`GOPROXY=https://proxy.golang.org,direct`.
+
+Run the server locally **against the sandbox account only**:
+
+```bash
+export THINGS_USERNAME="$THINGS_SANDBOX_USERNAME" THINGS_PASSWORD="$THINGS_SANDBOX_PASSWORD"
+mkdir -p /data && go run ./server     # DB path is currently hard-coded to /data/things.db (KI-16)
+```
+
+Black-box scripts in `tests/` call a running server and **create real items** in
+whatever account it is connected to:
+
+```bash
+BASE_URL=http://localhost:8080 ./tests/test-mcp-protocol.sh   # read-only protocol checks
+BASE_URL=http://localhost:8080 ./tests/test-mcp.sh 001        # writes! sandbox only
+```
+
+Configuration (environment variables):
+
+| Variable | Required | Meaning |
+|---|---|---|
+| `THINGS_USERNAME` / `THINGS_PASSWORD` | yes | Things Cloud account the server syncs |
+| `API_KEY` | no | Static bearer for `/api/*` (no effect on `/mcp`, KI-07) |
+| `PORT` | no | Listen port, default `8080` |
+| `DEBUG` | no | `true` enables HTTP dumps (currently leaks the password, KI-09) and debug endpoints (KI-08) — never in production |
+
+Planned: `THINGS_TIMEZONE` (ADR-0003), `DATA_DIR` (KI-16), OAuth settings (ADR-0002).
+
+Baseline at `c622fdb` (after PRs #1–#3): build, vet and `go test ./...` pass locally.
+CI does not run yet (KI-15). Do not add failures.
+
+## 5. Repository map
+
+| Path | What | Status |
+|---|---|---|
+| `server/` | The product: HTTP server, MCP tools (`mcp.go`), writes (`write.go`), REST | live |
+| `sync/` | Persistent sync engine: history → SQLite, view queries (`state.go`), change detection | live |
+| `*.go` at root | SDK (`package thingscloud`): HTTP client, histories, items, wire types, notes, repeat maths | live |
+| `state/memory/` | In-memory aggregation, used by CLIs/tests | support |
+| `syncutil/` | Analytics helpers for CLIs | support |
+| `cmd/` | CLI and debugging tools | support; some duplicate write logic (KI-23) |
+| `tapes/` | Recorded HTTP responses for SDK tests | test data |
+| `tests/` | Shell e2e scripts against a running server | sandbox only |
+| `docs/` | See `docs/README.md` for the index | |
+
+The module path is still `github.com/arthursoares/things-cloud-sdk` (to be renamed,
+ADR-0001). Imports in new code must match `go.mod`.
+
+## 6. Architecture in one minute
+
+- **Read path:** tool call → `syncer.Sync()` (incremental pull from Things Cloud) →
+  SQL query in `sync/state.go` → JSON. Views (Today, Upcoming, …) are *derived
+  locally*; Things Cloud has no view endpoints.
+- **Write path:** tool call → input validation → Things wire payload in
+  `server/write.go` → `history.Write()` commit with `ancestor-index` (retry once on
+  409) → post-write sync.
+- **Source of truth** is the Things Cloud history; SQLite is a disposable cache (schema
+  migrations may wipe and resync it).
+- **Concurrency:** `Syncer.mu` serialises syncs; `historyMu` serialises writes. Package
+  globals (`client`, `syncer`, `history`) are a known smell (KI-17).
+
+Details and target architecture: `docs/architecture.md`.
+
+## 7. Things domain cheat sheet
+
+| Concept | Wire | Notes |
+|---|---|---|
+| To-do / Project / Heading | `Task6` with `tp` = 0 / 1 / 2 | |
+| Status | `ss`: 0 open, 2 canceled, 3 completed | `sp` = stop instant, never `0` |
+| Start state | `st`: 0 Inbox, 1 started, 2 deferred | |
+| Start date ("when") | `sr` (+ `tir` when placed in Today) | civil date as midnight UTC |
+| This Evening | `sb = 1` | not exposed yet |
+| Deadline | `dd`; suppressed overdue: `dds` | year 4001 = "never" (KI-04) |
+| Project / subtask parent | `pr` | heading membership in `agr` (KI-13) |
+| Area / Tags | `ar` / `tg` | arrays of UUIDs |
+| Recurrence | `rr` on hidden template, `rt` on instances | read-only, ⛔ write |
+| IDs | 21–22 char Base58 | non-Base58 IDs crash Things |
+
+Verified placement writes: Inbox `st0,sr∅,tir∅` · Today `st1,sr=today,tir=today` ·
+Anytime `st1,∅,∅` · Someday `st2,∅,∅` · Upcoming `st2,sr=D>today,tir∅`.
+Never write `st=2` with today's date.
+
+## 8. Write capability status
+
+| Capability | Tool(s) | Status |
+|---|---|---|
+| Create to-do (title, notes, when, deadline, project, parent, tags) | `things_create_task` | ✅ verified |
+| Edit title / notes / when / deadline / project / area / tags | `things_edit_task` | ✅ verified (no target precondition yet, KI-10) |
+| Complete / reopen / trash / untrash to-do | `things_*_task` | ✅ verified |
+| Move to Today / Anytime / Someday / Inbox | `things_move_to_*` | ✅ verified (Today uses UTC date, KI-03) |
+| Create project / area / tag / heading | `things_create_*` | ✅ create only |
+| Checklist add / complete / reopen / delete | `things_*_checklist_item` | ✅ verified |
+| Recurrence (`repeat`) | create/edit | ⛔ forbidden (KI-01) |
+| This Evening, reminders, reordering, delete area/tag | — | ❓ not implemented, needs captures |
+
+## 9. Coding conventions
+
+- Follow the existing style of the file you edit; `gofmt`/`goimports` clean.
+- Errors: wrap with `%w`; user-facing validation errors use `invalidInputf` so REST maps
+  them to 400. MCP tools return `mcp.NewToolResultError` with an actionable message.
+- No comments that restate code; comment only non-obvious protocol facts, with a
+  pointer to the evidence (`docs/protocol/...`, capture fixture, KI).
+- No TODO comments; open a KI instead.
+- Keep functions pure where possible; pass time, timezone and dependencies in.
+- Tests: table-driven, `t.Parallel()` where safe, no network, no wall clock. New logic
+  needs a new test in the same package; bug fixes start with a failing test named
+  after the KI.
+
+## 10. Definition of done
+
+- [ ] Change is scoped to one KI/ADR item; unrelated refactors are not mixed in.
+- [ ] `go build ./...`, `go vet ./...`, `go test ./...` pass (no new failures).
+- [ ] New or changed behaviour has tests; wire changes have capture fixtures.
+- [ ] Docs updated: KI status, protocol evidence, README tool tables, ADR status.
+- [ ] Final report lists changed files with one line each, what was verified, and what
+      still needs manual verification (e.g. "not checked on a real Things client").
+
+Commits: English, prefixed with the Jira-style key from the branch name if the branch
+matches `^[A-Z]+-\d+`, otherwise no prefix. PR descriptions: Russian, short bullets.
+
+## 11. Where knowledge lives
+
+| Question | Document |
+|---|---|
+| What is broken and why? | `docs/known-issues.md` |
+| How does the system fit together? | `docs/architecture.md` |
+| What exactly goes over the wire? | `docs/protocol/things-cloud.md` |
+| Why did we decide X? | `docs/adr/` |
+| What are we doing next? | `docs/roadmap.md` |
+| How do I deploy it? | `docs/deployment/vps.md` |
+| Legal/ToS risks? | `docs/legal-and-risk.md` |
+| What happened in past incidents? | dated files in `docs/` (historical, see `docs/README.md`) |
