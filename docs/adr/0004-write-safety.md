@@ -2,6 +2,10 @@
 
 ## Status
 Proposed (2026-10-10). Addresses KI-01, KI-08, KI-10, KI-11.
+Implemented so far: §2 recurrence disabled (PR #2); §3 preconditions except template
+detection (phase 0, KI-10); §6 debug endpoints and `things_smoke_test` removed (phase 0,
+KI-08, KI-11); read-only unless `ENABLE_WRITES=true` (phase 0). Open: §1 allowlist with
+capture fixtures, §4 read-back, §5 audit log, §6 annotations (KI-24).
 
 ## Context
 - Things Cloud accepts any payload; a bad one breaks the official apps on every device,

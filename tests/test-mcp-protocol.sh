@@ -2,6 +2,7 @@
 set -euo pipefail
 
 # MCP protocol-level tests — verifies JSON-RPC handshake and error handling.
+# Expects a server started with ENABLE_WRITES=true (35 tools; read-only lists 17).
 # Usage: ./test-mcp-protocol.sh [base_url]
 
 BASE="${1:-${BASE_URL:-}}"
@@ -61,7 +62,7 @@ check "has tools capability" "$HAS_TOOLS" "true"
 echo "--- List Tools ---"
 RESP=$(mcp_raw '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')
 TOOL_COUNT=$(echo "$RESP" | python3 -c "import sys,json; r=json.loads(sys.stdin.read()); print(len(r.get('result',{}).get('tools',[])))" 2>/dev/null || echo "0")
-check "tool count is 36" "$TOOL_COUNT" "36"
+check "tool count is 35" "$TOOL_COUNT" "35"
 
 # Verify a few key tools exist
 HAS_CREATE=$(echo "$RESP" | python3 -c "

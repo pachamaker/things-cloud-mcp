@@ -32,7 +32,8 @@ const (
 	// sandboxRunTitleRoot starts every title the harness writes; cleanup of
 	// earlier runs matches on it.
 	sandboxRunTitleRoot = "[e2e-"
-	// smokeTestTitlePrefix is what things_smoke_test writes (server/mcp.go).
+	// smokeTestTitlePrefix is what the removed things_smoke_test wrote (KI-11);
+	// its leftovers are still cleaned up.
 	smokeTestTitlePrefix = "[smoke-test] "
 
 	envSandboxUsername = "THINGS_SANDBOX_USERNAME"
@@ -216,9 +217,7 @@ func (r *redactor) add(secret string) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for _, s := range []string{secret, url.PathEscape(secret), url.QueryEscape(secret)} {
-		r.secrets = append(r.secrets, s)
-	}
+	r.secrets = append(r.secrets, secret, url.PathEscape(secret), url.QueryEscape(secret))
 	sort.Slice(r.secrets, func(i, j int) bool { return len(r.secrets[i]) > len(r.secrets[j]) })
 }
 

@@ -40,18 +40,23 @@ send a write the official apps might choke on (rule 2). Layers, in the order the
    - `st`/`sr`/`tir` only in the verified combinations of AGENTS.md §7 (Inbox, Today,
      Anytime, Someday, Upcoming on a future date); `sr`/`tir` without `st` is refused;
    - `ix`, `ti` non-negative integers (KI-31); `sp` never `0`; tag `sh` never `""`;
-   - titles must start with the run prefix (or `[smoke-test] ` for `things_smoke_test`);
+   - titles must start with the run prefix;
    - modifies and tombstones only for objects this run created (cleanup registers the
      leftovers it trashes). Seed items and everything else on the account are untouchable.
 5. **Run prefix and cleanup.** Every title starts with `[e2e-YYYYMMDD-HHMM-xxxx] `. At the
    end — also when the test fails or panics — the run trashes every to-do, heading and
    project it created. A run killed by `-timeout` leaves objects behind:
-   `TestSandboxCleanupLeftovers` trashes everything titled `[e2e-…` or `[smoke-test] …`.
+   `TestSandboxCleanupLeftovers` trashes everything titled `[e2e-…` or `[smoke-test] …`
+   (leftovers of the removed `things_smoke_test`, KI-11).
    With `THINGS_E2E_RUN_ID` set (`e2e-` plus up to 40 letters, digits or hyphens) the run
    uses that ID, and the cleanup test trashes only that run's objects (plus
    `[smoke-test] …` leftovers); CI sets it per workflow run.
 6. **Throttle.** At most one Things Cloud request per second (`THINGS_E2E_REQUEST_INTERVAL`,
-   minimum `250ms`). Any `429` stops the run; cleanup then waits a minute first.
+   minimum `250ms`). A GET answered with `429` waits and retries (30 s, 1 min, 2 min, or
+   the `Retry-After` header, capped at 5 min); the run log counts these retries. A `429`
+   that outlasts the retries, or one on a commit (never retried), stops the run; cleanup
+   then waits a minute first. Each CI step is a new process with a full initial sync, so
+   the step after a long run can start rate-limited (KI-27).
 7. **Time.** The server's "today" is the UTC day (KI-03), so the harness skips itself
    within 15 minutes of 00:00 UTC.
 8. **Public logs.** CI logs of this public repository are readable by anyone, and GitHub
@@ -204,7 +209,7 @@ ignores. Check `git ls-files .github` before committing.
 | lifecycle | complete (+ `things_list_completed`), uncomplete, trash, untrash, with list membership after each |
 | checklist | add, complete, reopen, delete |
 | repeat_rejected | `repeat` on create and edit (`"none"` included) is rejected with KI-01 and sends no commit |
-| read_tools | projects, areas, tags, project/area tasks, all tasks, search, `things_smoke_test` |
+| read_tools | projects, areas, tags, project/area tasks, all tasks, search |
 | conflict_409 | the observer commits a title change to a to-do while the server's edit is in flight; Things Cloud must answer 409 and the server's retry must land both changes |
 | observer_mirror | a second SDK client syncs into its own temporary SQLite mirror; titles, parents, tags, statuses, trash flags and view classification must match |
 | wire | every committed item is read back from raw history: same kind and action, stored payload equals sent payload, and it passes the firewall rules again; writes by other devices to run objects are logged |
@@ -216,8 +221,8 @@ ignores. Check `git ls-files .github` before committing.
 - `the sandbox firewall refused a commit` — the server tried to send something outside
   the verified write set. The commit did not leave the process. This is a server bug (or
   a new write that needs evidence first, see `docs/protocol/things-cloud.md` §8).
-- `Things Cloud answered 429` — stop, wait, retry later with a larger
-  `THINGS_E2E_REQUEST_INTERVAL`.
+- `Things Cloud answered 429` — the retries ran out (or a commit got a 429): stop,
+  wait, retry later with a larger `THINGS_E2E_REQUEST_INTERVAL`.
 - `<key>: sent …, stored …` or `sent but not stored` in the wire section — Things Cloud
   stored something other than what the server sent. Record it in
   `docs/protocol/things-cloud.md` before relaxing the check.
@@ -234,4 +239,3 @@ ignores. Check `git ls-files .github` before committing.
 - Not exercised because the write is not verified: `things_edit_task` with `when: "none"`
   (writes `sr`/`tir` without `st`; the firewall would refuse it), This Evening,
   reminders, reordering, deleting areas and tags, and anything recurring.
-- `things_smoke_test` writes `[smoke-test] Verify` titles without the run prefix (KI-11).

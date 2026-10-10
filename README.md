@@ -44,7 +44,7 @@ The server performs an initial sync at startup and now exits if it cannot establ
                                                      Connector
 ```
 
-## MCP tools (36)
+## MCP tools (35)
 
 Once connected, Claude can do pretty much everything you'd do in the Things app:
 
@@ -54,7 +54,6 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 - **Edit** — title, notes, dates, deadlines, project, area, and tags (recurrence is not supported, see below)
 - **Organise** — move tasks between Today, Anytime, Someday, and Inbox
 - **Complete & restore** — complete or reopen tasks and checklist items; trash and untrash
-- **Diagnostics** — built-in smoke test covering the full create/read/edit/complete/trash cycle
 
 <details>
 <summary>Full tool reference</summary>
@@ -113,12 +112,6 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 | `things_complete_checklist_item` | Complete a checklist item | `uuid` |
 | `things_uncomplete_checklist_item` | Reopen a checklist item | `uuid` |
 | `things_delete_checklist_item` | Delete a checklist item | `uuid` |
-
-### Diagnostic tools
-
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `things_smoke_test` | Run a smoke test: create, read, edit, complete, trash | — |
 
 ### Parameter reference
 
@@ -185,6 +178,8 @@ See **[docs/skills.md](docs/skills.md)** for a step-by-step guide to creating yo
 ## REST API
 
 All `/api/*` endpoints require `Authorization: Bearer <API_KEY>` when `API_KEY` is set.
+The write endpoints and write tools exist only when the server runs with
+`ENABLE_WRITES=true`; by default it is read-only.
 
 See **[docs/endpoints-and-things-cloud.md](docs/endpoints-and-things-cloud.md)** for how the REST and MCP surfaces sync from Things Cloud history, answer reads from the local SQLite mirror, and commit writes back to the cloud.
 
@@ -230,8 +225,9 @@ daily) are in [docs/testing/sandbox-e2e.md](docs/testing/sandbox-e2e.md):
 THINGS_SANDBOX_ENV_FILE=~/.config/things-cloud-mcp/sandbox.env go test -tags e2e -run '^TestSandboxE2E$' -count=1 -v -timeout 30m ./server
 ```
 
-The older shell suites call a running server and create items in whatever account it is
-connected to — sandbox only:
+The older shell suites call a running server (started with `ENABLE_WRITES=true`) and
+create items in the account it is connected to — sandbox only. The writing suites stop
+before their first write unless the account has the area `MCP E2E SANDBOX`:
 
 ```bash
 ./tests/test-smoke.sh          # Core read/write workflow (11 checks)
@@ -247,6 +243,7 @@ API_KEY=your-key ./tests/test-api.sh  # All REST endpoints (18 checks)
 go build -v -o things-server ./server/
 export THINGS_USERNAME='...' THINGS_PASSWORD='...'   # sandbox account, never your real one
 export DATA_DIR="$PWD/.data"   # SQLite cache things-upstream.db; default /data
+export ENABLE_WRITES=true      # write tools are off unless this is true
 ./things-server
 
 go test -race ./...

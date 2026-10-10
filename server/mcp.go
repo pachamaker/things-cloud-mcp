@@ -737,150 +737,18 @@ func mcpDeleteChecklistItem(_ context.Context, req mcp.CallToolRequest) (*mcp.Ca
 }
 
 // ---------------------------------------------------------------------------
-// Smoke test
-// ---------------------------------------------------------------------------
-
-type smokeCheck struct {
-	Name   string `json:"name"`
-	Status string `json:"status"` // "pass" or "fail"
-	Detail string `json:"detail,omitempty"`
-}
-
-func mcpSmokeTest(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	var checks []smokeCheck
-
-	check := func(name string, fn func() error) {
-		if err := fn(); err != nil {
-			checks = append(checks, smokeCheck{Name: name, Status: "fail", Detail: err.Error()})
-		} else {
-			checks = append(checks, smokeCheck{Name: name, Status: "pass"})
-		}
-	}
-
-	// 1. Sync
-	check("sync", func() error {
-		_, err := mirror.Sync()
-		return err
-	})
-
-	// 2. List today
-	check("list_today", func() error {
-		_, err := readState().TasksInToday(listOpts{})
-		return err
-	})
-
-	// 3. List projects
-	check("list_projects", func() error {
-		_, err := readState().AllProjects(listOpts{})
-		return err
-	})
-
-	// 4. Create task
-	var taskUUID string
-	check("create_task", func() error {
-		uuid, err := createTask(CreateTaskRequest{Title: "[smoke-test] Verify", When: "today"})
-		if err != nil {
-			return err
-		}
-		taskUUID = uuid
-		return nil
-	})
-
-	if taskUUID == "" {
-		// Can't continue without the task
-		return jsonToolResultWithIndent(map[string]any{
-			"passed": countStatus(checks, "pass"),
-			"failed": countStatus(checks, "fail"),
-			"checks": checks,
-		}, true), nil
-	}
-
-	// 5. Get task
-	check("get_task", func() error {
-		task, err := syncer.State().Task(taskUUID)
-		if err != nil {
-			return err
-		}
-		if task == nil {
-			return fmt.Errorf("task not found after create")
-		}
-		if task.Title != "[smoke-test] Verify" {
-			return fmt.Errorf("title mismatch: got %q", task.Title)
-		}
-		if task.Status != things.TaskStatusPending {
-			return fmt.Errorf("status mismatch: got %v, want pending", task.Status)
-		}
-		return nil
-	})
-
-	// 6. Edit task
-	check("edit_task", func() error {
-		return editTask(EditTaskRequest{UUID: taskUUID, Title: "[smoke-test] Verify (edited)"})
-	})
-
-	// 7. Verify edit
-	check("verify_edit", func() error {
-		task, err := syncer.State().Task(taskUUID)
-		if err != nil {
-			return err
-		}
-		if task == nil {
-			return fmt.Errorf("task not found after edit")
-		}
-		if task.Title != "[smoke-test] Verify (edited)" {
-			return fmt.Errorf("title mismatch after edit: got %q", task.Title)
-		}
-		return nil
-	})
-
-	// 8. Complete task
-	check("complete_task", func() error {
-		return completeTask(taskUUID)
-	})
-
-	// 9. Verify complete
-	check("verify_complete", func() error {
-		task, err := syncer.State().Task(taskUUID)
-		if err != nil {
-			return err
-		}
-		if task == nil {
-			return fmt.Errorf("task not found after complete")
-		}
-		if task.Status != things.TaskStatusCompleted {
-			return fmt.Errorf("status mismatch: got %v, want completed", task.Status)
-		}
-		return nil
-	})
-
-	// 10. Trash task (cleanup)
-	check("trash_task", func() error {
-		return trashTask(taskUUID)
-	})
-
-	return jsonToolResultWithIndent(map[string]any{
-		"passed": countStatus(checks, "pass"),
-		"failed": countStatus(checks, "fail"),
-		"checks": checks,
-	}, true), nil
-}
-
-func countStatus(checks []smokeCheck, status string) int {
-	n := 0
-	for _, c := range checks {
-		if c.Status == status {
-			n++
-		}
-	}
-	return n
-}
-
-// ---------------------------------------------------------------------------
 // MCP server setup
 // ---------------------------------------------------------------------------
 
-func newMCPHandler() http.Handler {
-	s := server.NewMCPServer("Things Cloud", "1.1.0")
+// newMCPHandler registers the write tools only when writes is true
+// (ENABLE_WRITES, ADR-0004); a read-only server does not even list them.
+func newMCPHandler(writes bool) http.Handler {
+	s := server.NewMCPServer("Things Cloud", version)
+	addWrite := func(tool mcp.Tool, handler server.ToolHandlerFunc) {
+		if writes {
+			s.AddTool(tool, handler)
+		}
+	}
 
 	// --- Read tools ---
 
@@ -1087,7 +955,7 @@ func newMCPHandler() http.Handler {
 
 	// --- Write tools ---
 
-	s.AddTool(mcp.NewTool("things_create_task",
+	addWrite(mcp.NewTool("things_create_task",
 		mcp.WithDescription("Create a new task in Things. Recurrence cannot be set through this server (KI-01); ask the user to set it up in the Things app."),
 		mcp.WithString("title",
 			mcp.Required(),
@@ -1113,7 +981,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpCreateTask)
 
-	s.AddTool(mcp.NewTool("things_complete_task",
+	addWrite(mcp.NewTool("things_complete_task",
 		mcp.WithDescription("Mark a Things task as completed"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1121,7 +989,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpCompleteTask)
 
-	s.AddTool(mcp.NewTool("things_edit_task",
+	addWrite(mcp.NewTool("things_edit_task",
 		mcp.WithDescription("Edit an existing Things task. Recurrence cannot be set, changed or removed through this server (KI-01); ask the user to do it in the Things app."),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1153,7 +1021,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpEditTask)
 
-	s.AddTool(mcp.NewTool("things_trash_task",
+	addWrite(mcp.NewTool("things_trash_task",
 		mcp.WithDescription("Move a Things task to the trash"),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithString("uuid",
@@ -1162,7 +1030,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpTrashTask)
 
-	s.AddTool(mcp.NewTool("things_move_to_today",
+	addWrite(mcp.NewTool("things_move_to_today",
 		mcp.WithDescription("Move a Things task to the Today view"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1170,7 +1038,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpMoveToToday)
 
-	s.AddTool(mcp.NewTool("things_move_to_anytime",
+	addWrite(mcp.NewTool("things_move_to_anytime",
 		mcp.WithDescription("Move a Things task to the Anytime view"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1178,7 +1046,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpMoveToAnytime)
 
-	s.AddTool(mcp.NewTool("things_move_to_someday",
+	addWrite(mcp.NewTool("things_move_to_someday",
 		mcp.WithDescription("Move a Things task to the Someday view"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1186,7 +1054,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpMoveToSomeday)
 
-	s.AddTool(mcp.NewTool("things_move_to_inbox",
+	addWrite(mcp.NewTool("things_move_to_inbox",
 		mcp.WithDescription("Move a Things task back to the Inbox"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1194,7 +1062,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpMoveToInbox)
 
-	s.AddTool(mcp.NewTool("things_uncomplete_task",
+	addWrite(mcp.NewTool("things_uncomplete_task",
 		mcp.WithDescription("Mark a completed Things task as open again"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1202,7 +1070,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpUncompleteTask)
 
-	s.AddTool(mcp.NewTool("things_untrash_task",
+	addWrite(mcp.NewTool("things_untrash_task",
 		mcp.WithDescription("Restore a Things task from the trash"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1210,7 +1078,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpUntrashTask)
 
-	s.AddTool(mcp.NewTool("things_create_area",
+	addWrite(mcp.NewTool("things_create_area",
 		mcp.WithDescription("Create a new area in Things"),
 		mcp.WithString("title",
 			mcp.Required(),
@@ -1221,7 +1089,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpCreateArea)
 
-	s.AddTool(mcp.NewTool("things_create_tag",
+	addWrite(mcp.NewTool("things_create_tag",
 		mcp.WithDescription("Create a new tag in Things"),
 		mcp.WithString("title",
 			mcp.Required(),
@@ -1235,7 +1103,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpCreateTag)
 
-	s.AddTool(mcp.NewTool("things_create_heading",
+	addWrite(mcp.NewTool("things_create_heading",
 		mcp.WithDescription("Create a heading within a project in Things"),
 		mcp.WithString("title",
 			mcp.Required(),
@@ -1246,7 +1114,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpCreateHeading)
 
-	s.AddTool(mcp.NewTool("things_create_project",
+	addWrite(mcp.NewTool("things_create_project",
 		mcp.WithDescription("Create a new project in Things"),
 		mcp.WithString("title",
 			mcp.Required(),
@@ -1280,7 +1148,7 @@ func newMCPHandler() http.Handler {
 
 	// --- Checklist item tools ---
 
-	s.AddTool(mcp.NewTool("things_create_checklist_item",
+	addWrite(mcp.NewTool("things_create_checklist_item",
 		mcp.WithDescription("Add a checklist item (lightweight checkbox) to a task. Checklist items are simple checkboxes within a task's detail view — they cannot have their own dates, tags, or notes. For full nested tasks with independent scheduling, use things_create_task with parent_task instead."),
 		mcp.WithString("title",
 			mcp.Required(),
@@ -1292,7 +1160,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpCreateChecklistItem)
 
-	s.AddTool(mcp.NewTool("things_complete_checklist_item",
+	addWrite(mcp.NewTool("things_complete_checklist_item",
 		mcp.WithDescription("Mark a checklist item (checkbox) as completed"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1300,7 +1168,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpCompleteChecklistItem)
 
-	s.AddTool(mcp.NewTool("things_uncomplete_checklist_item",
+	addWrite(mcp.NewTool("things_uncomplete_checklist_item",
 		mcp.WithDescription("Mark a completed checklist item (checkbox) as open again"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1308,7 +1176,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpUncompleteChecklistItem)
 
-	s.AddTool(mcp.NewTool("things_delete_checklist_item",
+	addWrite(mcp.NewTool("things_delete_checklist_item",
 		mcp.WithDescription("Delete a checklist item (checkbox) from a task"),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithString("uuid",
@@ -1316,12 +1184,6 @@ func newMCPHandler() http.Handler {
 			mcp.Description("UUID of the checklist item to delete"),
 		),
 	), mcpDeleteChecklistItem)
-
-	// --- Diagnostic tools ---
-
-	s.AddTool(mcp.NewTool("things_smoke_test",
-		mcp.WithDescription("Run a smoke test that creates a task, verifies read/edit/complete, then cleans up. Returns pass/fail results for each check."),
-	), mcpSmokeTest)
 
 	return server.NewStreamableHTTPServer(s,
 		server.WithEndpointPath("/mcp"),

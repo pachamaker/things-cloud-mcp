@@ -28,7 +28,7 @@ func TestDecodeOptionalJSONBody_RequestBodyTooLarge(t *testing.T) {
 	oversizedKey := strings.Repeat("a", maxJSONBodyBytes)
 	body := `{"key":"` + oversizedKey + `"}`
 
-	req := httptest.NewRequest(http.MethodPost, "/api/debug/delete-history", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/example", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	var payload struct {

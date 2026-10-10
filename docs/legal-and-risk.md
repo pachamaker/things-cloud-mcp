@@ -101,7 +101,7 @@ non-commercial open source excluded), and *Power Ventures*-style revocation risk
 | Prominent non-affiliation and risk disclaimer; "Things" used only to describe compatibility; no logos or screenshots | README |
 | Mandatory authentication on every data route | KI-07, ADR-0002 |
 | Guarded writes: allowlist, preconditions, recurrence disabled, audit log | ADR-0004 |
-| Consider a read-only mode (`ENABLE_WRITES=false` default for new installs) | roadmap Phase 0 candidate |
+| Read-only by default: write tools exist only with `ENABLE_WRITES=true` | done (phase 0, ADR-0004) |
 | Remove account surgery (sign-up, accept SLA, delete account) from the server | KI-08 |
 | Rate limiting and coalesced syncs; never hammer the cloud | KI-27 |
 | No identity or IP rotation to evade blocks. **If blocked or contacted by Cultured Code: stop** | this document |

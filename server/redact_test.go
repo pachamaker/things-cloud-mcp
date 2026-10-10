@@ -61,18 +61,24 @@ func (c cloudStub) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 // useCloudStub routes the SDK client (its http.Client uses the default
-// transport) to stub and captures the log. Callers must not be parallel.
+// transport) to stub, lets the write preconditions pass and captures the log.
+// Callers must not be parallel.
 func useCloudStub(t *testing.T, stub cloudStub) *bytes.Buffer {
 	t.Helper()
 	prevTransport := http.DefaultTransport
 	prevClient, prevSyncer, prevMirror, prevHistory := client, syncer, mirror, history
+	prevWriteMirror := writeMirror
 	prevLog := log.Writer()
 	var logs bytes.Buffer
 	http.DefaultTransport = stub
+	// The write preconditions (KI-10) pass: these tests are about what happens
+	// after them.
+	writeMirror = func() (mirrorLookup, error) { return fakeMirror{anyOpenToDo: true}, nil }
 	log.SetOutput(&logs)
 	t.Cleanup(func() {
 		http.DefaultTransport = prevTransport
 		client, syncer, mirror, history = prevClient, prevSyncer, prevMirror, prevHistory
+		writeMirror = prevWriteMirror
 		log.SetOutput(prevLog)
 	})
 	return &logs

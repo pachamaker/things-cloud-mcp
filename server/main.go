@@ -18,6 +18,9 @@ import (
 	"github.com/arthursoares/things-cloud-sdk/sync"
 )
 
+// version is set at build time: go build -ldflags "-X main.version=v2.0.0" (KI-16).
+var version = "dev"
+
 var (
 	client  *things.Client
 	syncer  *sync.Syncer
@@ -299,46 +302,22 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func authHandlerMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		apiKey := os.Getenv("API_KEY")
-		if apiKey == "" {
-			next.ServeHTTP(w, r)
-			return
-		}
-		if r.Header.Get("Authorization") != "Bearer "+apiKey {
-			jsonError(w, "unauthorized", 401)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func debugAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if os.Getenv("DEBUG") != "true" {
-			jsonError(w, "not found", 404)
-			return
-		}
-
-		apiKey := os.Getenv("API_KEY")
-		if apiKey == "" {
-			jsonError(w, "debug endpoints require API_KEY", 503)
-			return
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+apiKey {
-			jsonError(w, "unauthorized", 401)
-			return
-		}
-
-		next(w, r)
+// writesEnabled parses ENABLE_WRITES. Writes are off unless explicitly enabled,
+// so a new install cannot change the account by accident (ADR-0004).
+func writesEnabled(raw string) (bool, error) {
+	if raw == "" {
+		return false, nil
 	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, fmt.Errorf("ENABLE_WRITES must be true or false, got %q", raw)
+	}
+	return v, nil
 }
 
 // newThingsClient never sets Client.Debug: upstream dumps whole requests,
 // including "Authorization: Password <plaintext>", and offers no redaction
-// hook (spike report B7, KI-09). DEBUG only gates the debug endpoints.
+// hook (spike report B7, KI-09).
 func newThingsClient(endpoint, username, password string) *things.Client {
 	return things.New(endpoint, username, password)
 }
@@ -438,6 +417,16 @@ func main() {
 		port = "8080"
 	}
 
+	writes, err := writesEnabled(os.Getenv("ENABLE_WRITES"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	if writes {
+		log.Println("Writes enabled (ENABLE_WRITES=true)")
+	} else {
+		log.Println("Read-only: write tools and endpoints are off; set ENABLE_WRITES=true to enable them")
+	}
+
 	closeMirror, err := connectThings(username, password, os.Getenv("DATA_DIR"))
 	if err != nil {
 		log.Fatal(err)
@@ -449,7 +438,7 @@ func main() {
 			jsonError(w, "not found", 404)
 			return
 		}
-		jsonResponse(w, map[string]string{"service": "things-cloud-api", "status": "ok"})
+		jsonResponse(w, map[string]string{"service": "things-cloud-api", "status": "ok", "version": version})
 	})
 
 	http.HandleFunc("/api/verify", authMiddleware(handleVerify))
@@ -463,153 +452,21 @@ func main() {
 	http.HandleFunc("/api/areas", authMiddleware(handleAreas))
 	http.HandleFunc("/api/tags", authMiddleware(handleTags))
 
-	// Write endpoints
-	http.HandleFunc("/api/tasks/create", authMiddleware(handleCreateTask))
-	http.HandleFunc("/api/tasks/complete", authMiddleware(handleCompleteTask))
-	http.HandleFunc("/api/tasks/trash", authMiddleware(handleTrashTask))
-	http.HandleFunc("/api/tasks/edit", authMiddleware(handleEditTask))
-
-	// Debug endpoint — dump raw write history items
-	http.HandleFunc("/api/debug/history", debugAuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		items, _, err := client.HistoryWithID(history.ID).Items(things.ItemsOptions{})
-		if err != nil {
-			jsonError(w, err.Error(), 500)
-			return
-		}
-		type debugItem struct {
-			UUID string `json:"uuid"`
-			things.Item
-		}
-		out := make([]debugItem, len(items))
-		for i, item := range items {
-			out[i] = debugItem{UUID: item.UUID, Item: item}
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(out)
-	}))
-
-	// Debug endpoint — list all history keys (uses SDK method with auth)
-	http.HandleFunc("/api/debug/histories", debugAuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		histories, err := client.Histories()
-		if err != nil {
-			jsonError(w, fmt.Sprintf("list histories failed: %v", err), 500)
-			return
-		}
-		keys := make([]string, len(histories))
-		for i, h := range histories {
-			keys[i] = h.ID
-		}
-		jsonResponse(w, map[string]any{
-			"own_history": history.ID,
-			"all_keys":    keys,
-			"total":       len(keys),
-		})
-	}))
-
-	// Debug endpoint — delete the current history key (uses SDK method with auth)
-	http.HandleFunc("/api/debug/delete-history", debugAuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			jsonError(w, "POST required", 405)
-			return
-		}
-		keyToDelete := history.ID
-		var body struct {
-			Key string `json:"key"`
-		}
-		ok, err := decodeOptionalJSONBody(w, r, &body)
-		if err != nil {
-			if isRequestBodyTooLarge(err) {
-				jsonError(w, errRequestBodyTooLarge.Error(), http.StatusRequestEntityTooLarge)
-				return
-			}
-		} else if ok && body.Key != "" {
-			keyToDelete = body.Key
-		}
-		h := client.HistoryWithID(keyToDelete)
-		if err := h.Delete(); err != nil {
-			jsonError(w, fmt.Sprintf("delete failed: %v", err), 500)
-			return
-		}
-		log.Printf("[DELETE-HISTORY] key=%s deleted successfully", keyToDelete)
-		jsonResponse(w, map[string]any{
-			"deleted": keyToDelete,
-			"status":  "accepted",
-		})
-	}))
-
-	// Debug endpoint — delete account and recreate it
-	http.HandleFunc("/api/debug/nuke-account", debugAuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			jsonError(w, "POST required", 405)
-			return
-		}
-		email := client.EMail
-		password := os.Getenv("THINGS_PASSWORD")
-
-		log.Printf("[NUKE] Deleting account...")
-		if err := client.Accounts.Delete(); err != nil {
-			jsonError(w, fmt.Sprintf("delete failed: %v", err), 500)
-			return
-		}
-		log.Printf("[NUKE] Account deleted. Recreating...")
-
-		newClient, err := client.Accounts.SignUp(email, password)
-		if err != nil {
-			jsonError(w, fmt.Sprintf("signup failed: %v", err), 500)
-			return
-		}
-		log.Printf("[NUKE] Signup complete. Account needs email confirmation.")
-
-		_ = newClient
-		jsonResponse(w, map[string]any{
-			"status":  "account deleted and re-created",
-			"email":   email,
-			"message": "Check email for confirmation code, then POST to /api/debug/confirm-account",
-		})
-	}))
-
-	// Debug endpoint — confirm account with email code
-	http.HandleFunc("/api/debug/confirm-account", debugAuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			jsonError(w, "POST required", 405)
-			return
-		}
-		var body struct {
-			Code string `json:"code"`
-		}
-		if err := decodeJSONBody(w, r, &body); err != nil {
-			if isRequestBodyTooLarge(err) {
-				jsonError(w, errRequestBodyTooLarge.Error(), http.StatusRequestEntityTooLarge)
-				return
-			}
-			jsonError(w, "JSON body with 'code' required", 400)
-			return
-		}
-		if body.Code == "" {
-			jsonError(w, "JSON body with 'code' required", 400)
-			return
-		}
-		if err := client.Accounts.Confirm(body.Code); err != nil {
-			jsonError(w, fmt.Sprintf("confirm failed: %v", err), 500)
-			return
-		}
-		if err := client.Accounts.AcceptSLA(); err != nil {
-			log.Printf("[CONFIRM] SLA accept failed (non-fatal): %v", err)
-		}
-		log.Printf("[CONFIRM] Account confirmed and SLA accepted")
-		jsonResponse(w, map[string]any{
-			"status": "confirmed",
-		})
-	}))
+	if writes {
+		http.HandleFunc("/api/tasks/create", authMiddleware(handleCreateTask))
+		http.HandleFunc("/api/tasks/complete", authMiddleware(handleCompleteTask))
+		http.HandleFunc("/api/tasks/trash", authMiddleware(handleTrashTask))
+		http.HandleFunc("/api/tasks/edit", authMiddleware(handleEditTask))
+	}
 
 	// MCP endpoint (no bearer auth — claude.ai connectors use OAuth which we don't implement)
-	http.Handle("/mcp", newMCPHandler())
+	http.Handle("/mcp", newMCPHandler(writes))
 
 	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	server := &http.Server{Addr: ":" + port}
 
-	log.Printf("Starting server on :%s", port)
+	log.Printf("Starting server %s on :%s", version, port)
 	if err := serveWithGracefulShutdown(shutdownCtx, server, shutdownTimeout); err != nil {
 		log.Fatal(err)
 	}

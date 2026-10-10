@@ -129,7 +129,9 @@ workaround can be deleted.
   do not expose the server on a public address.
 
 ### KI-08 · Destructive debug endpoints ship in the production binary
-- **Status:** open · **Evidence:** confirmed (`server/main.go:463-557`)
+- **Status:** fixed (phase 0) — every `/api/debug/*` route and the `DEBUG` variable are
+  gone from the server; there is no account-surgery tool, the sandbox e2e cleanup covers
+  test data · **Evidence:** confirmed (`server/main.go:463-557` before the fix)
 - **Symptom:** with `DEBUG=true` and an `API_KEY`, one POST deletes the Things Cloud
   history (`/api/debug/delete-history`) or the whole Things account
   (`/api/debug/nuke-account`).
@@ -137,8 +139,9 @@ workaround can be deleted.
   that requires interactive confirmation and a sandbox account.
 
 ### KI-09 · `DEBUG=true` logs the Things password
-- **Status:** mitigated — the server never sets the SDK's `Client.Debug`; `DEBUG` only
-  gates the debug endpoints (PR #4) · **Evidence:** confirmed (SDK `client.go:135-146`
+- **Status:** fixed for the server — it never sets the SDK's `Client.Debug` (PR #4) and
+  has no debug mode since KI-08; `TestNewThingsClient_KI09_DebugEnvDoesNotDumpPassword`
+  guards it · **Evidence:** confirmed (SDK `client.go:135-146`
   dumps full requests incl. `Authorization: Password <plaintext>` when `Debug` is set)
 - **Remaining:** the SDK logs a full response dump (no request headers) when a commit is
   rejected (`histories.go:281-282`).
@@ -168,15 +171,24 @@ workaround can be deleted.
   `server/redact_test.go` drive the MCP and REST handlers through a refusing
   `http.DefaultTransport` and check the tool result, the REST body and the log. The
   sandbox harness keeps its own redaction as a second layer.
-- **Remaining:** the debug endpoints (KI-08) still show the key by design:
-  `/api/debug/histories` returns it, `/api/debug/delete-history` logs it, and
-  `/api/debug/history` returns raw SDK errors. Errors of `client.Verify`/`OwnHistory`
+- **Remaining:** errors of `client.Verify`/`OwnHistory`
   outside the sync gate (`/api/verify`, `failed to get history` at startup) can carry the
   account e-mail address, not the key.
 
 ### KI-10 · Writes are accepted for UUIDs that do not exist (or have the wrong type)
-- **Status:** open · **Evidence:** confirmed (`server/write.go:650-852` validate only the
-  Base58 shape)
+- **Status:** fixed except templates (phase 0) — every write syncs and resolves its
+  target and references in the mirror first (`server/preconditions.go`): the target
+  exists and is a to-do (trash/untrash also accept projects and headings, since `tr`
+  is verified for every type); trashed to-dos are refused except by untrash; complete
+  needs an open to-do, uncomplete a completed or canceled one; project, parent to-do,
+  area, tags, heading project and checklist items must exist (a trashed project or
+  parent is refused). A refused write sends nothing and returns an invalid-input error
+  (REST 400). Side effect: `project: "none"` used to write `pr=["none"]` and is now
+  refused · **Evidence:** confirmed (before the fix `server/write.go:650-852` validated
+  only the Base58 shape)
+- **Remaining:** repeating templates and instances cannot be recognised: the SDK
+  mirror does not store `rr`/`rt` (spike report §4 B4). Checklist writes find the item
+  by scanning every to-do's checklist (the SDK has no lookup by item UUID).
 - **Symptom:** a hallucinated or mistyped UUID produces a modify-item for an unknown
   object in the cloud history. Clients receive a partial entity with no creation
   payload. `things_edit_task` can also modify a project, heading, or repeating
@@ -186,7 +198,8 @@ workaround can be deleted.
   otherwise.
 
 ### KI-11 · `things_smoke_test` is exposed to the LLM
-- **Status:** open · **Evidence:** confirmed (`server/mcp.go:1333`)
+- **Status:** fixed (phase 0) — the tool is gone; the sandbox e2e harness (KI-34) is the
+  write check, run only against the sandbox account · **Evidence:** confirmed (`server/mcp.go:1333` before the fix)
 - **Symptom:** the model can run a create/edit/complete/trash cycle against the real
   account at any time; leaves trashed `[smoke-test]` tasks behind.
 - **Fix direction:** move to an admin CLI / CI job against the sandbox account.
@@ -341,8 +354,8 @@ workaround can be deleted.
   `go mod tidy -diff`, `go build -o /dev/null ./...`, `go vet ./...` and
   `go test -race ./...` on every pull request and every push to `main`, with the Go
   version from `go.mod`; `.github/Workflows/` (old `go.yml`, Fly.io deploy, nested
-  duplicate) is deleted. `govulncheck` runs since KI-32; `staticcheck` is not in CI
-  yet: it fails on the current code (KI-33) · **Evidence:** confirmed
+  duplicate) is deleted. `govulncheck` runs since KI-32, `staticcheck` since KI-33
+  (phase 0) · **Evidence:** confirmed
 - **Root cause:** workflows live in `.github/Workflows/` (capital `W`) — GitHub only
   reads `.github/workflows/`. There is also a nested duplicate
   `.github/Workflows/.github/Workflows/deploy.yml`. `go.yml` pins Go 1.23 while
@@ -352,10 +365,11 @@ workaround can be deleted.
 
 ### KI-16 · Hard-coded runtime assumptions from the Fly.io era
 - **Status:** partially fixed — cache at `$DATA_DIR/things-upstream.db` (PR #4); module
-  renamed to `github.com/pachamaker/things-cloud-mcp` (SDK migration) · **Evidence:** confirmed
-- **Remaining:** server version string `1.1.0`
-  hard-coded in `server/mcp.go`; Dockerfile uses `alpine:latest` and `CGO_ENABLED=1`
-  although `modernc.org/sqlite` is pure Go.
+  renamed to `github.com/pachamaker/things-cloud-mcp` (SDK migration); the version comes
+  from `-ldflags "-X main.version=…"` (Dockerfile `ARG VERSION`, default `dev`) and is
+  reported in MCP `serverInfo` and on `/` (phase 0) · **Evidence:** confirmed
+- **Remaining:** Dockerfile uses `alpine:latest` and `CGO_ENABLED=1` although
+  `modernc.org/sqlite` is pure Go.
 - **Fix direction:** ADR-0001 (fork identity) and ADR-0002 (deployment).
 
 ### KI-34 · The write path has no automated end-to-end check on a real account
@@ -382,9 +396,10 @@ workaround can be deleted.
   and a leftover cleanup test, a 1 request/s throttle, and read-only checks of a manual
   seed list (`Task7`, repeating to-dos). Offline self-test against an in-memory fake:
   `go test -tags 'e2e fakecloud' -run '^TestSandbox' ./server`.
-- **Remaining:** make the workflow survive Things Cloud rate limiting (pause or back off
-  between steps, or run the three tests in one process), a green seed-check run, then a
-  Mac + iOS round trip (ADR-0004). `things_edit_task` with `when: "none"`
+- **Remaining:** a green seed-check run, then a Mac + iOS round trip (ADR-0004). Since
+  phase 0 the harness retries a GET after a 429 (30 s, 1 min, 2 min, or `Retry-After`;
+  commits are never retried) and the workflow gives the seed and cleanup steps room for
+  it; not yet confirmed against Things Cloud. `things_edit_task` with `when: "none"`
   writes `sr`/`tir` without `st`, which is not a verified placement: the firewall refuses
   it, so the harness does not exercise it; capture what the official client sends, or
   write `st` explicitly.
@@ -409,13 +424,13 @@ workaround can be deleted.
 | KI-22 | `Host` header set manually and misleadingly | SDK `client.go:117` |
 | KI-23 | 14 CLI tools without tests; several duplicated server write logic with a divergent wire format — resolved: removed with the SDK migration (upstream has its own `things-cli`) | — |
 | KI-24 | Write tools have no MCP annotations beyond defaults (`destructiveHint` defaults to true, so every write asks for confirmation; no `idempotentHint`) | `server/mcp.go:1095-1329` |
-| KI-33 | `staticcheck` (2026.2.1) fails with U1000: `authHandlerMiddleware`, an `API_KEY` bearer check for `http.Handler`, is never used (`/mcp` is registered without it, KI-07). Blocks the `staticcheck` CI job; wire it in or delete it as part of KI-07/ADR-0002 | `server/main.go:302` |
+| KI-33 | ~~`staticcheck` (2026.2.1) fails with U1000: `authHandlerMiddleware` is never used~~ — fixed (phase 0): the dead middleware is deleted (`/mcp` auth stays with KI-07/ADR-0002) and `staticcheck -tags 'e2e fakecloud'` runs in CI | `.github/workflows/ci.yml` |
 
 ## P1 — Resilience against Things Cloud behaviour (reported by other implementations)
 
 | ID | Issue | Evidence | Fix direction |
 |---|---|---|---|
-| KI-27 | `429 AbusePrevention` on reads: every tool call syncs, bursts of calls trip it | [wbopan#32](https://github.com/wbopan/things-cloud-mcp/issues/32) | Coalesce/throttle syncs (freshness window), backoff on 429 — done for syncs in `server/syncgate.go` (PR #4); writes are not gated |
+| KI-27 | `429 AbusePrevention` on reads: every tool call syncs, bursts of calls trip it | [wbopan#32](https://github.com/wbopan/things-cloud-mcp/issues/32) | Coalesce/throttle syncs (freshness window), backoff on 429 — done for syncs in `server/syncgate.go` (PR #4); writes are not gated. The sandbox harness retries GETs after a 429 (phase 0): consecutive CI steps hit it on the first run (KI-34) |
 | KI-28 | History key change or `404 AccountIssue` after an account reset leaves a stale cursor | [wbopan#27](https://github.com/wbopan/things-cloud-mcp/issues/27), [#35](https://github.com/wbopan/things-cloud-mcp/issues/35) | Detect key change / 404, rebuild the mirror |
 | KI-29 | One malformed historical tombstone can block processing | [arthursoares#37](https://github.com/arthursoares/things-cloud-sdk/issues/37) | Quarantine bad items with a log entry instead of aborting or skipping silently |
 | KI-30 | Client identity is a Things 3.22-era build (`ThingsMac/32209501`; 3.23 is `32300536`) | SDK `client.go` (`DefaultClientInfo`, `ThingsUserAgent`) | Hypothesis: the cloud may adapt responses to the client version. Decide deliberately (see `legal-and-risk.md`); do not change blindly |

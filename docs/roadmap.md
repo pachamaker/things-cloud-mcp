@@ -34,17 +34,17 @@ change is checked automatically.
 | Item | Refs | Size |
 |---|---|---|
 | ~~Adopt upstream SDK per spike result, or port its fixes~~ (done, migration PR) | ADR-0001 | M |
-| ~~Move workflows to `.github/workflows/`, drop Fly.io deploy and nested duplicate, Go version from `go.mod`, add `-race`~~ (done, `ci.yml`); ~~add `govulncheck`~~ (done with KI-32); add `staticcheck` once KI-33 is fixed | KI-15, ADR-0007 | S |
+| ~~Move workflows to `.github/workflows/`, drop Fly.io deploy and nested duplicate, Go version from `go.mod`, add `-race`~~ (done, `ci.yml`); ~~add `govulncheck`~~ (done with KI-32); ~~add `staticcheck` once KI-33 is fixed~~ (done, phase 0) | KI-15, ADR-0007 | S |
 | ~~Build and test on a supported Go release (Go 1.25 is out of support; 9 reachable stdlib vulnerabilities)~~ (done: `toolchain go1.26.9`, `golang:1.26.9-alpine`, `govulncheck` job) | KI-32 | S |
 | ~~Reject `repeat` on all surfaces; remove it from tool schemas~~ (done, PR #2) | KI-01, ADR-0004 | S |
-| Remove debug endpoints (`delete-history`, `nuke-account`, `confirm-account`) from the server | KI-08 | S |
-| Redact `Authorization`/passwords in debug dumps + test | KI-09 | S |
-| Remove `things_smoke_test` from MCP; keep as sandbox-only CLI | KI-11 | S |
-| Write preconditions: target exists, right type, not template, not trashed | KI-10, ADR-0004 | M |
-| `ENABLE_WRITES` switch (write tools not registered when off; default off for new installs) | ADR-0004, `legal-and-risk.md` | S |
-| Sandbox Things account + `.env.sandbox` convention; mark `tests/*.sh` sandbox-only | ADR-0007 | S |
-| Sandbox e2e harness: every MCP tool, account guard, pre-send write firewall, 409 test, wire check by an independent client, cleanup, seed list (`docs/testing/sandbox-e2e.md`); first run by the owner, then at most daily via `.github/workflows/e2e.yml` | KI-34, ADR-0007 | M — first run 2026-10-11: main suite green; seed checks and leftover cleanup hit 429 (KI-27) |
-| ~~Module rename to `github.com/pachamaker/things-cloud-mcp`~~ (done, migration PR); version via ldflags | ADR-0001, KI-16 | S |
+| ~~Remove debug endpoints (`delete-history`, `nuke-account`, `confirm-account`) from the server~~ (done, phase 0: all of `/api/debug/*` and `DEBUG`) | KI-08 | S |
+| ~~Redact `Authorization`/passwords in debug dumps + test~~ (done for the server: no SDK dumps, no debug mode; the SDK's own dump on a rejected commit needs an upstream PR) | KI-09 | S |
+| ~~Remove `things_smoke_test` from MCP; keep as sandbox-only CLI~~ (done, phase 0; the sandbox e2e harness replaces it) | KI-11 | S |
+| ~~Write preconditions: target exists, right type, not trashed~~ (done, phase 0); not template (needs `rr`/`rt` in the mirror) | KI-10, ADR-0004 | M |
+| ~~`ENABLE_WRITES` switch (write tools not registered when off; default off for new installs)~~ (done, phase 0) | ADR-0004, `legal-and-risk.md` | S |
+| ~~Sandbox Things account + `.env.sandbox` convention; mark `tests/*.sh` sandbox-only~~ (done: account and `things-sandbox` environment by the owner, `.env.sandbox` ignored, `THINGS_SANDBOX_ENV_FILE` for the harness; writing scripts check the marker area, phase 0) | ADR-0007 | S |
+| Sandbox e2e harness: every MCP tool, account guard, pre-send write firewall, 409 test, wire check by an independent client, cleanup, seed list (`docs/testing/sandbox-e2e.md`); first run by the owner, then at most daily via `.github/workflows/e2e.yml` | KI-34, ADR-0007 | M — first run 2026-10-11: main suite green; seed checks and leftover cleanup hit 429 (KI-27); GET retry after 429 added in phase 0, next run pending |
+| ~~Module rename to `github.com/pachamaker/things-cloud-mcp`~~ (done, migration PR); ~~version via ldflags~~ (done, phase 0) | ADR-0001, KI-16 | S |
 
 **Exit:** CI green on `main`; no route can delete history/account; `repeat` rejected;
 writes to unknown UUIDs fail with a clear error.

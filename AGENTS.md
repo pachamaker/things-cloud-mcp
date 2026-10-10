@@ -79,7 +79,9 @@ go test -race ./...                  # includes the concurrent-sync gate tests
 go test -run TestName ./server       # single test
 go mod tidy -diff                    # go.mod/go.sum must be tidy; prints the needed change
 go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...   # vulnerabilities in reachable code, as in CI
-go build -o things-server ./server   # build the server binary
+go build -o things-server ./server   # build the server binary (version "dev")
+go build -ldflags "-X main.version=v2.0.0" -o things-server ./server   # release build
+docker build --build-arg VERSION=v2.0.0 -t things-cloud-mcp:v2.0.0 .     # image
 ```
 
 If the default Go proxy is unreachable (e.g. a corporate proxy), prefix commands with
@@ -95,6 +97,7 @@ Run the server locally **against the sandbox account only**:
 ```bash
 export THINGS_USERNAME="$THINGS_SANDBOX_USERNAME" THINGS_PASSWORD="$THINGS_SANDBOX_PASSWORD"
 export DATA_DIR="$PWD/.data"            # empty directory; the cache is $DATA_DIR/things-upstream.db
+export ENABLE_WRITES=true               # writes are off by default
 go run ./server
 ```
 
@@ -131,8 +134,10 @@ Agents run the sandbox tests against an account only when the owner asks for tha
 the credentials are the owner's, and so is the day's run. The compile check and the
 offline self-test are always fine.
 
-Black-box scripts in `tests/` call a running server and **create real items** in
-whatever account it is connected to:
+Black-box scripts in `tests/` call a running server and **create real items** in the
+account it is connected to. The writing ones (`test-mcp.sh`, `test-smoke.sh`,
+`test-api.sh`) first check for the sandbox marker area `MCP E2E SANDBOX`
+(`tests/sandbox-guard.sh`) and refuse to write without it:
 
 ```bash
 BASE_URL=http://localhost:8080 ./tests/test-mcp-protocol.sh   # read-only protocol checks
@@ -146,14 +151,15 @@ Configuration (environment variables):
 | `THINGS_USERNAME` / `THINGS_PASSWORD` | yes | Things Cloud account the server syncs |
 | `API_KEY` | no | Static bearer for `/api/*` (no effect on `/mcp`, KI-07) |
 | `PORT` | no | Listen port, default `8080` |
+| `ENABLE_WRITES` | no | `true` registers the write tools and REST write endpoints. Unset or `false`: read-only, the write tools are not even listed (ADR-0004). Any other value stops the server at startup |
 | `DATA_DIR` | no | Directory of the SQLite cache `things-upstream.db`, default `/data` (created with mode 0700). The cache is disposable: delete the file to force a full resync |
-| `DEBUG` | no | `true` enables the debug endpoints (KI-08) — never in production. It no longer turns on SDK HTTP dumps, which would log the password (KI-09) |
 
 Planned: `THINGS_TIMEZONE` (ADR-0003), OAuth settings (ADR-0002).
 
 Baseline: CI (`.github/workflows/ci.yml`) runs `go mod tidy -diff`, build, vet,
 `go test -race ./...` and `govulncheck` on Go 1.26.9 for every pull request and push to
-`main`; all pass. `staticcheck` is not gated yet (KI-33). Do not add failures.
+`main`; all pass. `staticcheck -tags 'e2e fakecloud'` is gated too (KI-33). Do not add
+failures.
 
 ## 5. Repository map
 
@@ -215,10 +221,15 @@ Never write `st=2` with today's date.
 
 ## 8. Write capability status
 
+All write tools exist only when the server runs with `ENABLE_WRITES=true` (ADR-0004).
+Every write first checks its target and references against a freshly synced mirror
+(`server/preconditions.go`, KI-10) and sends nothing when a check fails. Repeating
+templates are not recognised yet (the SDK does not store `rr`/`rt`).
+
 | Capability | Tool(s) | Status |
 |---|---|---|
 | Create to-do (title, notes, when, deadline, project, parent, tags) | `things_create_task` | ✅ verified |
-| Edit title / notes / when / deadline / project / area / tags | `things_edit_task` | ✅ verified (no target precondition yet, KI-10) |
+| Edit title / notes / when / deadline / project / area / tags | `things_edit_task` | ✅ verified; to-dos only, target and references checked first (KI-10) |
 | Complete / reopen / trash / untrash to-do | `things_*_task` | ✅ verified |
 | Move to Today / Anytime / Someday / Inbox | `things_move_to_*` | ✅ verified (Today uses UTC date, KI-03) |
 | Create project / area / tag / heading | `things_create_*` | ✅ create only |
