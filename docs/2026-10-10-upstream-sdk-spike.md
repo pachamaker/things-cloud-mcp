@@ -10,7 +10,7 @@ in this repository.
 | Upstream | `v0.6.0`, commit `6919edc`, `go 1.25.0` (latest tag on proxy.golang.org) |
 | Module path on the branch | `github.com/pachamaker/things-cloud-mcp` |
 | Verdict | **Conditional GO** (see [Recommendation](#recommendation)) |
-| Status | Branch compiles against upstream; `go vet` and `go test ./...` pass (2026-10-11). Phase 2 safety adapters done (2026-10-11, §4); phase 3 open |
+| Status | Branch compiles against upstream; `go vet` and `go test ./...` pass (2026-10-11). Phase 2 safety adapters done (2026-10-11, §4). `main` (PRs #1–#3) and the docs (PR #5) merged in; phase 3 view classifier done (2026-10-11) |
 
 ## 1. What was done
 
@@ -38,6 +38,22 @@ in this repository.
    closed locally in `server/` (details in the "Closing" column of §4). B2 stays the
    suffix match. Phase 3 is still open: views use upstream `TasksIn*` (B3), so §7
    condition 3 is not met and the branch is still not ready for production.
+4. 2026-10-11, phase 3 on `spike-upstream-sdk`, after ADR-0001 was accepted:
+   - Merged `origin/main` (PR #1 view rules, PR #2 `repeat` rejection, PR #3 22-character
+     IDs) and `origin/docs-agentic-architecture` (PR #5). Conflicts resolved: PR #2
+     behaviour kept; the phase 2 ID adapter kept instead of PR #3's root `base58.go`
+     (`base58*.go`, `cmd/`, `example/` dropped again); `sync/state.go` dropped, its rules
+     moved to the server.
+   - `server/views.go`: pure classifier (`inToday`, `inView`, `tasksInView`) carrying the
+     PR #1 rules; `readModel` builds Inbox/Today/Anytime/Someday/Upcoming from
+     `State.AllTasks` and drops canceled items from every open list (KI-05). The SDK's
+     `TasksIn*` are no longer used (B3).
+   - Known difference from PR #1, caused by B4 (`tir` not mirrored): a `st=1` to-do placed
+     in Today only through `tir` (no start date) is listed in Anytime; a `st=2` to-do with
+     a future `tir` and no start date is listed in Someday instead of Upcoming.
+   - `server/views_test.go` ports the PR #1 matrix (`sync/views_test.go`) minus the two
+     `tir` rows; a mutation check (dropping the "start date before today" branch) makes
+     three rows fail.
 
 ## 2. Build, vet and test results
 
@@ -46,6 +62,7 @@ in this repository.
 | Baseline `3164e8a` (clean export, run in a scratch directory) | ok | ok | 1 known failure: `sync: TestIntegration/query_change_log` (KI-15). `server`, root SDK, `state/memory`: ok |
 | `spike-upstream-sdk` | ok | ok | ok (`server` is the only package; `-race` on `server`: ok) |
 | `claude/upstream-sdk-safety-adapters-015b47` | ok | ok | ok; `-race` on `server`: ok, now including concurrent syncs |
+| `spike-upstream-sdk` after phase 3 (2026-10-11) | ok | ok | `go test -race ./...`: ok |
 
 Notes:
 
@@ -108,7 +125,7 @@ New tests: `server/readmodel_test.go` (`paginate`, `completedInRange`); updated:
 |---|---|---|---|---|---|
 | B1 | Sync concurrency | `Syncer.mu` serialises `Sync()`, reads take `RLock` (March 2026 incident fix) | No mutex (`sync/sync.go:28-34`). `Sync()` swaps `s.db` to a transaction and mutates `s.history` | Every tool call syncs; parallel calls race on the syncer (double-applied batches, `-race` failures) | ✅ Done (phase 2): `server/syncgate.go`. One mutex serialises every `Sync()`; reads share the outcome (including an error) of a sync that started less than 2 s before the call; post-write syncs (`SyncNow`) only share a sync that started after the call; injectable clock. Reads through `State` use the raw pool and are safe under WAL (`State()` holds only `rawDB`), so they bypass the gate |
 | B2 | 409 retry on write | `errors.As(*HTTPStatusError)` → retry once | `Write` returns an untyped error; `isConflictError` never matches | Concurrent edit from a Things app → write fails instead of retrying | Done on the branch as a stopgap: suffix match on `Write failed: 409` (fragile, cf. KI-21; §3.1 C6). Upstream PR: return `*HTTPError` from `Write` |
-| B3 | View queries | Today: `st=1` and `sr` **or** `tir` on the current UTC day; Anytime: `st=1` not Today; Someday: `st=2` not Upcoming; Upcoming: `st=2`, `sr`/`tir` > now (UTC) | Today: `st=1`, `sr` within `startOfDay(time.Now())` in the **process time zone**, no `tir`; Anytime: `st=1 AND sr IS NULL`; Someday: `st=2 AND sr IS NULL`; Upcoming: `st=2 AND sr >= tomorrow` (`sync/state.go:120-174`) | Two KI-02 cases disappear from **every** list: `st=1` with a past start date and `st=2` with start date ≤ today. The embedded copy at least shows them in Anytime/Someday. Process time zone: correct for UTC and positive offsets only; with a negative offset Today shows tomorrow's tasks | Do not use upstream `TasksIn*` for views. Implement the ADR-0005 classifier over `State.AllTasks` (it is needed under option A too) |
+| B3 | View queries | Today: `st=1` and `sr` **or** `tir` on the current UTC day; Anytime: `st=1` not Today; Someday: `st=2` not Upcoming; Upcoming: `st=2`, `sr`/`tir` > now (UTC) | Today: `st=1`, `sr` within `startOfDay(time.Now())` in the **process time zone**, no `tir`; Anytime: `st=1 AND sr IS NULL`; Someday: `st=2 AND sr IS NULL`; Upcoming: `st=2 AND sr >= tomorrow` (`sync/state.go:120-174`) | Two KI-02 cases disappear from **every** list: `st=1` with a past start date and `st=2` with start date ≤ today. The embedded copy at least shows them in Anytime/Someday. Process time zone: correct for UTC and positive offsets only; with a negative offset Today shows tomorrow's tasks | ✅ Done (phase 3): `server/views.go` classifies over `State.AllTasks` with the PR #1 rules; upstream `TasksIn*` are unused. Still UTC-based (KI-03) |
 | B4 | Persisted task fields | Stores `tir` (`today_index_ref`); drops `rr`, `rt`, `sb`, `dds` | Stores none of `tir`, `dds`, `sb`, `rr`, `rt` (`RecurrenceIDs` is on the struct but not stored; `recurrence_rule` column always NULL) | The classifier cannot honour deadline suppression, This Evening, or hide repeating templates (KI-05); KI-01's "persist `rr`/`rt` read-only" is impossible on this mirror | Upstream PR: add the columns and bump `TaskReplayVersion` — upstream's replay machinery then rebuilds old caches automatically. Fallback: soft fork via `replace` (§7) |
 | B5 | Schema numbering | `schemaVersion = 4` (adds `today_index_ref`, v4 wipes the cache) | `schemaVersion = 2` (`sync/schema.go:3`) + separate `task_replay_state` generation (`TaskReplayVersion = 3`) | Opening an existing `/data/things.db`: `migrate()` is a no-op (4 ≥ 2), replay generation defaults to 1 → backup + full replay on first sync; `today_index_ref` stays stale; any future upstream migration numbered 3–4 would be **silently skipped** on this file | ✅ Done (phase 2): the cache is `$DATA_DIR/things-upstream.db` (`DATA_DIR` defaults to `/data`, created with mode 0700). Upstream never opens the old `things.db`, which stays as is for a rollback; a fresh file starts at the current replay generation, so no backup is written |
 | B6 | ID generation | `generateUUID` drops a leading zero byte (KI-26) | `History.Write` refuses non-canonical or duplicate UUIDs (`histories.go:233`); `NewUUID` pads leading zero bytes with `1` (`base58.go:20-41,139`) | With the current server generator ~1/256 creates now fail with an error instead of poisoning the account. Upstream's padding contradicts AGENTS.md rule 4 and the ZhehanZhang crash report (see §5) | ✅ Done (phase 2): `generateUUID` → `newIDFromReader` redraws until byte 0 ≠ 0 **and** the `EncodeUUID` result is 22 characters (the rule of the KI-26 fix merged on `main`, PR #3); byte 0 = 0 alone is not enough because the canonical encoding of such a draw is 22 characters starting with `1`. `isBase58UUID` = `things.ValidateUUID` + length 21–22 |
@@ -141,7 +158,7 @@ from a fresh file (B5).
 |---|---|---|
 | 1. Compile with parity | C1–C9 | ~0.5 day — **done on the branch** (§3.1) |
 | 2. Safety adapters (must ship before the first production deploy) | B1 sync wrapper (+coalescing, 429 backoff), B2 conflict detection, B5 fresh DB file, B6 ID generator, B7 debug off | ~0.5–0.75 day — **done** (B2 kept as the stopgap suffix match) |
-| 3. Views on the local read model | ADR-0005 classifier for the cases the upstream mirror supports (`st`, `sr`, `dd`, `ss`, `tr`, type, parents, headings), replacing `TasksIn*`; optional in-memory snapshot keyed by `LastSyncedIndex` to avoid N+1 on every call | ~1 day |
+| 3. Views on the local read model | ADR-0005 classifier for the cases the upstream mirror supports (`st`, `sr`, `dd`, `ss`, `tr`, type, parents, headings), replacing `TasksIn*`; optional in-memory snapshot keyed by `LastSyncedIndex` to avoid N+1 on every call | ~1 day — **done** without the snapshot (every view call loads all to-dos, KI-18) |
 | **Total to "server runs on upstream, no regression"** | | **~2–2.25 days** |
 | Blocked on upstream | B4 fields (`dds`, `sb`, `rr`, `rt`, `tir`) for the full ADR-0005 rule set and KI-05/KI-01 | calendar time |
 
@@ -176,8 +193,8 @@ Conditions:
    the complete list.~~ Met on 2026-10-11 (§1, §3.1).
 2. ~~The phase 2 safety adapters ship before any production deploy on upstream.~~
    Implemented on 2026-10-11 (§1, §4); they must be merged together with the switch.
-3. Views never use upstream `TasksIn*`; the read model goes through the local
-   classifier (ADR-0005).
+3. ~~Views never use upstream `TasksIn*`; the read model goes through the local
+   classifier (ADR-0005).~~ Met on 2026-10-11 (§1 item 4).
 4. Pin `v0.6.0` exactly; upgrades go through CI and the conformance suite (ADR-0001).
 5. Open the upstream PRs from §6. If the B4 fields PR is not accepted within a few
    weeks, carry it as a **soft fork** (`replace github.com/arthursoares/things-cloud-sdk
@@ -193,14 +210,13 @@ has a fallback.
 The spike itself is finished: the dependency is added (approved by the owner on
 2026-10-11), the embedded SDK is gone, and the branch builds, vets and tests green.
 
-If option B is accepted:
+ADR-0001 was accepted on 2026-10-11.
 
-1. Mark ADR-0001 Accepted; keep this branch as the starting point, or redo phase 1 on a
-   fresh branch after open PRs #1 and #2 are merged (ADR-0001 consequences).
-2. ~~Phase 2 safety adapters (§6)~~ (done), then phase 3 view classifier (ADR-0005).
-   Do not deploy before phase 3.
+1. ~~Mark ADR-0001 Accepted; merge PRs #1 and #2 first, then carry their logic into
+   the new layout.~~ Done (§1 item 4).
+2. ~~Phase 2 safety adapters, then phase 3 view classifier (ADR-0005).~~ Done.
 3. Open the upstream PRs from §6.
-4. Update the documents that still describe the embedded SDK: `CLAUDE.md`, `AGENTS.md`
+4. ~~Update the documents that still describe the embedded SDK~~ (done on 2026-10-11, except the CI workflow, which stays with KI-15): `CLAUDE.md`, `AGENTS.md`
    §4–§5 (commands, repository map, baseline), `docs/architecture.md` §4, the KI entries
    that point to `sync/` and root `*.go` files (KI-09, KI-15, KI-16, KI-18, KI-20,
    KI-21, KI-22, KI-23, KI-25, KI-26), and the CI workflow (KI-15). Phase 2 also changes

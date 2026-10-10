@@ -248,7 +248,7 @@ talks to the cloud sees an instance only after some Things app has created it.
 - The history is an append-only log shared by every device on the account; the cloud
   orders commits by server index.
 - Every Things app pulls the log and materialises its own local database. The server
-  does the same into SQLite (`sync/`).
+  does the same into SQLite (the SDK's `sync` package).
 - Last writer wins per field, ordered by commit (with `md` used by clients for
   conflict resolution).
 - Propagation to other devices is near-real-time when they are online (APNS push),

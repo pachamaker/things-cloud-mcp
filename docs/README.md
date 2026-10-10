@@ -15,9 +15,8 @@ Start with [`../AGENTS.md`](../AGENTS.md) if you are about to change code.
 | [`legal-and-risk.md`](legal-and-risk.md) | Legal and Terms-of-Service risk notes (not legal advice) |
 | [`installation.md`](installation.md) | Legacy Fly.io installation guide (superseded by `deployment/vps.md`) |
 | [`skills.md`](skills.md) | Writing Claude Skills on top of the tools |
-| [`sdk.md`](sdk.md) | SDK and sync engine usage |
+| [`sdk.md`](sdk.md) | SDK and sync engine usage, written for the embedded copy; the SDK is now the [`arthursoares/things-cloud-sdk`](https://github.com/arthursoares/things-cloud-sdk) dependency, whose README is authoritative |
 | [`endpoints-and-things-cloud.md`](endpoints-and-things-cloud.md) | How REST/MCP endpoints map to Things Cloud calls |
-| [`../cmd/README.md`](../cmd/README.md) | CLI and debugging tools |
 
 ## Historical records (do not update; read for context)
 
@@ -32,6 +31,7 @@ Start with [`../AGENTS.md`](../AGENTS.md) if you are about to change code.
 | [`2026-03-05-mcp-today-mismatch-incident.md`](2026-03-05-mcp-today-mismatch-incident.md) | Today mismatch: cursor bug, sync race |
 | [`2026-03-14-code-review.md`](2026-03-14-code-review.md) | Full code review |
 | [`2026-03-15-stability-wrap-up.md`](2026-03-15-stability-wrap-up.md) | Stability pass summary |
+| [`2026-10-10-upstream-sdk-spike.md`](2026-10-10-upstream-sdk-spike.md) | Upstream SDK spike for ADR-0001: API and behaviour gaps (C1–C9, B1–B14), phases 1–3 of the migration |
 | [`plans/`](plans/) | Persistent sync engine design and implementation plan (Feb 2026) |
 | [`BACKLOG.md`](BACKLOG.md) | Upstream backlog (superseded by `roadmap.md` and `known-issues.md`) |
 

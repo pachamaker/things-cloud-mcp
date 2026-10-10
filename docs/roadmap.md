@@ -12,19 +12,19 @@ damage data; fix them before relying on the server again.
 | Item | Refs | Size | Status |
 |---|---|---|---|
 | Base58 ID generation: never emit an ID that loses a leading zero byte (redraw), tighten validation, fuzz test | KI-26 | S | ✅ PR #3 |
-| Read `Task7` (+ skip `Settings5`, `Command*`), fail loudly on unknown task kinds | KI-25 | S–M | via upstream SDK (branch `spike-upstream-sdk`) |
+| Read `Task7` (+ skip `Settings5`, `Command*`), fail loudly on unknown task kinds | KI-25 | S–M | ✅ via upstream SDK (migration PR) |
 | Merge PR #2 (reject `repeat`), extend to `repeat: "none"` | KI-01 | S | ✅ PR #2 |
 | Merge PR #1 (Today/canceled/sentinel) as an interim improvement | KI-02, KI-04, KI-05 | S | ✅ PR #1 |
 | Upstream SDK spike (go/no-go for ADR-0001 option B) | ADR-0001 | S | ✅ GO; phase 2 adapters merged into the spike branch (PR #4) |
 
 ### Upstream migration, phase 3 (before any deployment)
 
-| Item | Refs |
-|---|---|
-| Merge `main` (PRs #1–#3, these docs) into `spike-upstream-sdk`; keep PR #2 behaviour; prefer the PR #4 ID adapter over PR #3's local `base58.go` | ADR-0001 |
-| View classifier over upstream `State.AllTasks` carrying PR #1's rules (upstream `TasksIn*` lose two KI-02 cases) | ADR-0005, spike report §4 B3 |
-| Update docs that still describe the embedded SDK (spike report §8 item 4) | AGENTS.md, architecture.md, KI entries |
-| PR `spike-upstream-sdk` → `main`; sandbox-account smoke test from an empty `DATA_DIR` | AGENTS.md rule 1 |
+| Item | Refs | Status |
+|---|---|---|
+| Merge `main` (PRs #1–#3, these docs) into `spike-upstream-sdk`; keep PR #2 behaviour; prefer the PR #4 ID adapter over PR #3's local `base58.go` | ADR-0001 | ✅ |
+| View classifier over upstream `State.AllTasks` carrying PR #1's rules (upstream `TasksIn*` lose two KI-02 cases) | ADR-0005, spike report §4 B3 | ✅ `server/views.go`; two `tir`-only cases differ (KI-02) |
+| Update docs that still describe the embedded SDK (spike report §8 item 4) | AGENTS.md, architecture.md, KI entries | ✅ (CI workflow stays with KI-15) |
+| PR `spike-upstream-sdk` → `main`; sandbox-account smoke test from an empty `DATA_DIR` | AGENTS.md rule 1 | PR open; smoke test and Docker build pending |
 
 ## Phase 0 — Make it safe to touch (≈ 1 week)
 
@@ -33,16 +33,16 @@ change is checked automatically.
 
 | Item | Refs | Size |
 |---|---|---|
-| Adopt upstream SDK per spike result, or port its fixes | ADR-0001 | M |
+| ~~Adopt upstream SDK per spike result, or port its fixes~~ (done, migration PR) | ADR-0001 | M |
 | Move workflows to `.github/workflows/`, drop Fly.io deploy and nested duplicate, Go version from `go.mod`, add `-race`, `staticcheck`, `govulncheck` | KI-15, ADR-0007 | S |
-| Reject `repeat` on all surfaces; remove it from tool schemas | KI-01, ADR-0004 | S |
+| ~~Reject `repeat` on all surfaces; remove it from tool schemas~~ (done, PR #2) | KI-01, ADR-0004 | S |
 | Remove debug endpoints (`delete-history`, `nuke-account`, `confirm-account`) from the server | KI-08 | S |
 | Redact `Authorization`/passwords in debug dumps + test | KI-09 | S |
 | Remove `things_smoke_test` from MCP; keep as sandbox-only CLI | KI-11 | S |
 | Write preconditions: target exists, right type, not template, not trashed | KI-10, ADR-0004 | M |
 | `ENABLE_WRITES` switch (write tools not registered when off; default off for new installs) | ADR-0004, `legal-and-risk.md` | S |
 | Sandbox Things account + `.env.sandbox` convention; mark `tests/*.sh` sandbox-only | ADR-0007 | S |
-| Module rename to `github.com/pachamaker/things-cloud-mcp`, version via ldflags | ADR-0001, KI-16 | S |
+| ~~Module rename to `github.com/pachamaker/things-cloud-mcp`~~ (done, migration PR); version via ldflags | ADR-0001, KI-16 | S |
 
 **Exit:** CI green on `main`; no route can delete history/account; `repeat` rejected;
 writes to unknown UUIDs fail with a clear error.
@@ -56,8 +56,8 @@ workarounds.
 |---|---|---|
 | `THINGS_TIMEZONE`, `domain/civil` (Date, Clock), migrate all date logic | KI-03, ADR-0003 | M |
 | Normalise year ≥ 4000 sentinels to null at ingestion | KI-04 | S |
-| Persist `rr`, `rt`, `sb`, `dds` in the mirror (schema v5, forced resync) | KI-01, KI-02 | M |
-| `domain/view` classifier; rewrite `sync/state.go` views and `detect.go` on top | KI-02, KI-05, ADR-0005 | M |
+| Persist `rr`, `rt`, `sb`, `dds`, `tir` in the mirror: upstream SDK PR with a `TaskReplayVersion` bump, or a `replace` soft fork (spike report §4 B4) | KI-01, KI-02, ADR-0001 | M |
+| Move the classifier from `server/views.go` to `domain/view`; extend it once B4 fields exist (evening, `dds`, templates, projects in Today) | KI-02, KI-05, ADR-0005 | M |
 | Resolve project membership through headings | KI-13 | S |
 | Conformance harness + first snapshots (incl. post-midnight and "Mac closed for a day") | ADR-0005 | M |
 | Freshness-bounded, coalesced sync on read; backoff on 429 | architecture §7, KI-27 | S |

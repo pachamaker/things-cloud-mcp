@@ -232,13 +232,13 @@ API_KEY=your-key ./tests/test-api.sh  # All REST endpoints (18 checks)
 
 ```bash
 go build -v -o things-server ./server/
-export THINGS_USERNAME='...' THINGS_PASSWORD='...'
-mkdir -p /data
+export THINGS_USERNAME='...' THINGS_PASSWORD='...'   # sandbox account, never your real one
+export DATA_DIR="$PWD/.data"   # SQLite cache things-upstream.db; default /data
 ./things-server
 
-go test -v ./...
+go test -race ./...
 ```
 
 ## Credits
 
-Built on top of [arthursoares/things-cloud-sdk](https://github.com/arthursoares/things-cloud-sdk), which reverse-engineered the Things Cloud sync protocol.
+Built on top of [arthursoares/things-cloud-sdk](https://github.com/arthursoares/things-cloud-sdk), which reverse-engineered the Things Cloud sync protocol. Since ADR-0001 the server uses it as a pinned Go dependency (`go.mod`) instead of an embedded copy.
