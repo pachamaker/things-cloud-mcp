@@ -35,8 +35,13 @@ workaround can be deleted.
 | [#1](https://github.com/pachamaker/things-cloud-mcp/pull/1) Today, Someday, Upcoming per Things rules | 2026-10-10 (`f79b05e`) | KI-02 core rules (things.py three-set Today, incl. `st=2` with start date ≤ today), KI-04 (sentinel hidden in output), KI-05 (canceled excluded). Still UTC (KI-03); no `dds`, evening, projects in Today, template hiding |
 | [#2](https://github.com/pachamaker/things-cloud-mcp/pull/2) Reject every `repeat` value | 2026-10-10 (`7aa1009`) | KI-01 mitigated on all write surfaces, incl. `repeat: "none"`; details in [`known-issues/repeat-disabled.md`](known-issues/repeat-disabled.md) |
 | [#3](https://github.com/pachamaker/things-cloud-mcp/pull/3) 22-character Base58 IDs | 2026-10-10 (`c622fdb`) | KI-26 fixed on `main` |
-| [#4](https://github.com/pachamaker/things-cloud-mcp/pull/4) Safety adapters over upstream SDK | 2026-10-10, into `spike-upstream-sdk` | Upstream migration (ADR-0001 option B): sync gate + 429 backoff (KI-27), ID redraw (KI-26), no HTTP dumps from `DEBUG` (KI-09), cache under `DATA_DIR` (KI-16). Reaches `main` with the migration PR |
-| Upstream SDK migration (`spike-upstream-sdk` → `main`) | pending review | KI-25 fixed (SDK reads `Task7`), KI-02/KI-05 rules ported to `server/views.go`, KI-21 fixed for syncs, KI-23 resolved (CLI tools removed); `today_index_ref` no longer in tool output. Spike report: `docs/2026-10-10-upstream-sdk-spike.md` |
+| [#4](https://github.com/pachamaker/things-cloud-mcp/pull/4) Safety adapters over upstream SDK | 2026-10-10, into `spike-upstream-sdk`; on `main` with #6 | Upstream migration (ADR-0001 option B): sync gate + 429 backoff (KI-27), ID redraw (KI-26), no HTTP dumps from `DEBUG` (KI-09), cache under `DATA_DIR` (KI-16) |
+| [#5](https://github.com/pachamaker/things-cloud-mcp/pull/5) Agent-facing documentation | 2026-10-10 (`8a0a7fc`) | This register, ADRs, `AGENTS.md`, architecture, protocol, roadmap |
+| [#6](https://github.com/pachamaker/things-cloud-mcp/pull/6) Upstream SDK migration | 2026-10-10 (`15e5b6b`) | KI-25 fixed (SDK reads `Task7`), KI-02/KI-05 rules ported to `server/views.go`, KI-21 fixed for syncs, KI-23 resolved (CLI tools removed); `today_index_ref` no longer in tool output. Spike report: `docs/2026-10-10-upstream-sdk-spike.md` |
+| [#7](https://github.com/pachamaker/things-cloud-mcp/pull/7) CI on GitHub Actions | 2026-10-10, into `spike-upstream-sdk`; on `main` with #8 | KI-15 fixed |
+| [#8](https://github.com/pachamaker/things-cloud-mcp/pull/8) Go 1.26.9 toolchain, `govulncheck` in CI | 2026-10-10 (`fe8c3e2`) | KI-32 fixed; also brings #7 (KI-15) to `main` |
+| [#9](https://github.com/pachamaker/things-cloud-mcp/pull/9) Sandbox e2e harness and workflow | 2026-10-10 (`c1cca5e`) | KI-34 harness and `e2e.yml` |
+| [#10](https://github.com/pachamaker/things-cloud-mcp/pull/10) Hide the history key in transport errors | 2026-10-10 (`4eb6c4a`) | KI-35 fixed |
 
 ---
 
@@ -141,7 +146,7 @@ workaround can be deleted.
   plus an injectable `http.Client`; a test that the secret never appears in output.
 
 ### KI-35 · Tool errors can echo the history key
-- **Status:** fixed on branch `KI-35-hide-history-key` (pending review) — tool results,
+- **Status:** fixed (PR #10, `4eb6c4a`) — tool results,
   REST error bodies and log lines now read `write failed: Post
   "https://cloud.culturedcode.com/<redacted>": …` · **Evidence:** confirmed (sandbox
   harness offline self-test, 2026-10-11: a refused commit surfaced as the tool error below)
@@ -155,7 +160,7 @@ workaround can be deleted.
 - **Root cause:** the SDK's `http.Client` returns a `*url.Error` carrying the full URL;
   `historyWrite` and `syncForRead` (`server/write.go`) wrap it with `%w`, and the MCP and
   REST handlers return `err.Error()`.
-- **Fix (done on the branch):** `redactRequestURL` (`server/redact.go`) replaces the path
+- **Fix:** `redactRequestURL` (`server/redact.go`) replaces the path
   and query of a `*url.Error` with `<redacted>`, keeping `Op`, the host and the cause,
   where SDK errors enter the server: the sync gate (all reads, `/api/sync`, the initial
   sync), `historyWrite` (pull, commit, re-sync after a 409) and the history pull in
@@ -187,7 +192,7 @@ workaround can be deleted.
 - **Fix direction:** move to an admin CLI / CI job against the sandbox account.
 
 ### KI-32 · The server is built with Go 1.25, which no longer gets security fixes
-- **Status:** fixed on branch `KI-32-go-1-26-toolchain`: `go.mod` keeps `go 1.25.0` as
+- **Status:** fixed (PR #8, `fe8c3e2`): `go.mod` keeps `go 1.25.0` as
   the minimum and adds `toolchain go1.26.9`, which `setup-go` installs in CI and a local
   `go` older than 1.26.9 switches to (`GOTOOLCHAIN=auto`); the `Dockerfile` builder is
   `golang:1.26.9-alpine`; the CI job `govulncheck` runs govulncheck v1.8.0 (which itself
@@ -332,7 +337,7 @@ workaround can be deleted.
   stays a separate, explicit tool.
 
 ### KI-15 · CI never runs
-- **Status:** fixed on branch `KI-15-github-actions-ci`: `.github/workflows/ci.yml` runs
+- **Status:** fixed (PR #7, on `main` via PR #8, `fe8c3e2`): `.github/workflows/ci.yml` runs
   `go mod tidy -diff`, `go build -o /dev/null ./...`, `go vet ./...` and
   `go test -race ./...` on every pull request and every push to `main`, with the Go
   version from `go.mod`; `.github/Workflows/` (old `go.yml`, Fly.io deploy, nested
@@ -354,9 +359,15 @@ workaround can be deleted.
 - **Fix direction:** ADR-0001 (fork identity) and ADR-0002 (deployment).
 
 ### KI-34 · The write path has no automated end-to-end check on a real account
-- **Status:** in-progress — harness ready (`server/sandbox_*_test.go`,
-  `docs/testing/sandbox-e2e.md`); the sandbox account, its seed list and the first run
-  are pending the owner · **Evidence:** confirmed
+- **Status:** in-progress — harness and workflow on `main` (PR #9); the sandbox account
+  and the `things-sandbox` environment exist. First CI run 2026-10-11
+  ([run 38093792463](https://github.com/pachamaker/things-cloud-mcp/actions/runs/38093792463)):
+  `TestSandboxE2E` passed all 12 subtests against Things Cloud (placement, edit,
+  lifecycle, checklist, `repeat` rejection, reads, 409 retry, observer mirror, wire
+  check, cleanup of 13 objects); the next two steps, `TestSandboxSeedChecks` and
+  `TestSandboxCleanupLeftovers`, failed with `429 Too Many Requests` (KI-27): each starts
+  a fresh server with a full initial sync right after the previous one. The seed list
+  is not verified yet · **Evidence:** confirmed
 - **Symptom:** the only end-to-end checks were the shell scripts in `tests/`. They write
   into whatever account the server uses, cover part of the tools, check nothing on the
   wire, and leave areas and tags behind. A payload regression of the KI-01/KI-26/KI-31
@@ -371,9 +382,9 @@ workaround can be deleted.
   and a leftover cleanup test, a 1 request/s throttle, and read-only checks of a manual
   seed list (`Task7`, repeating to-dos). Offline self-test against an in-memory fake:
   `go test -tags 'e2e fakecloud' -run '^TestSandbox' ./server`.
-- **Remaining:** first sandbox run, then a Mac + iOS round trip (ADR-0004). The nightly
-  workflow `.github/workflows/e2e.yml` (environment `things-sandbox`, manual approval) is
-  ready; it needs the owner's one-time environment and secrets setup. `things_edit_task` with `when: "none"`
+- **Remaining:** make the workflow survive Things Cloud rate limiting (pause or back off
+  between steps, or run the three tests in one process), a green seed-check run, then a
+  Mac + iOS round trip (ADR-0004). `things_edit_task` with `when: "none"`
   writes `sr`/`tir` without `st`, which is not a verified placement: the firewall refuses
   it, so the harness does not exercise it; capture what the official client sends, or
   write `st` explicitly.
