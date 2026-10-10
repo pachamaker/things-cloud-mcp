@@ -204,7 +204,7 @@ func generateUUID() string {
 // syncForRead syncs before a read operation, logging any errors.
 // Returns the error so callers can optionally surface it.
 func syncForRead() error {
-	if _, err := syncer.Sync(); err != nil {
+	if _, err := mirror.Sync(); err != nil {
 		log.Printf("[SYNC] pre-read sync failed: %v", err)
 		return err
 	}
@@ -214,7 +214,7 @@ func syncForRead() error {
 // syncAfterWrite syncs after a write to refresh local state.
 // Errors are logged but not returned (best-effort refresh).
 func syncAfterWrite() {
-	if _, err := syncer.Sync(); err != nil {
+	if _, err := mirror.SyncNow(); err != nil {
 		log.Printf("[SYNC] post-write refresh failed: %v", err)
 	}
 }

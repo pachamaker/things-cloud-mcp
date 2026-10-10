@@ -20,12 +20,9 @@ import (
 var (
 	client  *things.Client
 	syncer  *sync.Syncer
+	mirror  *syncGate
 	history *things.History
 )
-
-type initialSyncer interface {
-	Sync() ([]sync.Change, error)
-}
 
 type shutdownServer interface {
 	ListenAndServe() error
@@ -76,7 +73,7 @@ func paginationQueryOpts(r *http.Request) (listOpts, error) {
 }
 
 func handleSync(w http.ResponseWriter, r *http.Request) {
-	changes, err := syncer.Sync()
+	changes, err := mirror.Sync()
 	if err != nil {
 		jsonError(w, fmt.Sprintf("sync failed: %v", err), 500)
 		return
@@ -323,7 +320,7 @@ func debugAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func runInitialSync(s initialSyncer) error {
+func runInitialSync(s changeSyncer) error {
 	log.Println("Performing initial sync...")
 	changes, err := s.Sync()
 	if err != nil {
@@ -391,8 +388,9 @@ func main() {
 		log.Fatalf("failed to open sync database: %v", err)
 	}
 	defer syncer.Close()
+	mirror = newSyncGate(syncer, time.Now)
 
-	if err := runInitialSync(syncer); err != nil {
+	if err := runInitialSync(mirror); err != nil {
 		log.Fatal(err)
 	}
 

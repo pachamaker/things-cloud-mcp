@@ -759,7 +759,7 @@ func mcpSmokeTest(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult
 
 	// 1. Sync
 	check("sync", func() error {
-		_, err := syncer.Sync()
+		_, err := mirror.Sync()
 		return err
 	})
 
