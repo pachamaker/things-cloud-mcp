@@ -37,6 +37,25 @@ func paginate[T any](items []T, opts listOpts) []T {
 	return items
 }
 
+// openList drops canceled items unless closed ones were asked for: the SDK's
+// IncludeCompleted gate only excludes completed (status 3), Things hides both
+// from open lists (KI-05).
+func openList(tasks []*things.Task, err error, opts listOpts) ([]*things.Task, error) {
+	if err != nil {
+		return nil, err
+	}
+	if opts.IncludeCompleted {
+		return paginate(tasks, opts), nil
+	}
+	open := tasks[:0:0]
+	for _, t := range tasks {
+		if !isClosed(t) {
+			open = append(open, t)
+		}
+	}
+	return paginate(open, opts), nil
+}
+
 func paged[T any](items []T, err error, opts listOpts) ([]T, error) {
 	if err != nil {
 		return nil, err
@@ -46,12 +65,12 @@ func paged[T any](items []T, err error, opts listOpts) ([]T, error) {
 
 func (r readModel) AllTasks(opts listOpts) ([]*things.Task, error) {
 	tasks, err := r.State.AllTasks(opts.QueryOpts)
-	return paged(tasks, err, opts)
+	return openList(tasks, err, opts)
 }
 
 func (r readModel) AllProjects(opts listOpts) ([]*things.Task, error) {
 	tasks, err := r.State.AllProjects(opts.QueryOpts)
-	return paged(tasks, err, opts)
+	return openList(tasks, err, opts)
 }
 
 func (r readModel) AllAreasWithOpts(opts listOpts) ([]*things.Area, error) {
@@ -64,39 +83,46 @@ func (r readModel) AllTagsWithOpts(opts listOpts) ([]*things.Tag, error) {
 	return paged(tags, err, opts)
 }
 
+// tasksInView classifies every to-do locally instead of using the SDK's
+// TasksIn* queries, which drop overdue and arrived-but-unconfirmed items from
+// every list (spike report §4 B3). "Today" is the UTC day until KI-03.
+func (r readModel) tasksInView(view listView, opts listOpts) ([]*things.Task, error) {
+	tasks, err := r.State.AllTasks(opts.QueryOpts)
+	if err != nil {
+		return nil, err
+	}
+	tasks = tasksInView(tasks, view, time.Unix(todayMidnightUTC(), 0).UTC())
+	return openList(tasks, nil, opts)
+}
+
 func (r readModel) TasksInInbox(opts listOpts) ([]*things.Task, error) {
-	tasks, err := r.State.TasksInInbox(opts.QueryOpts)
-	return paged(tasks, err, opts)
+	return r.tasksInView(viewInbox, opts)
 }
 
 func (r readModel) TasksInToday(opts listOpts) ([]*things.Task, error) {
-	tasks, err := r.State.TasksInToday(opts.QueryOpts)
-	return paged(tasks, err, opts)
+	return r.tasksInView(viewToday, opts)
 }
 
 func (r readModel) TasksInAnytime(opts listOpts) ([]*things.Task, error) {
-	tasks, err := r.State.TasksInAnytime(opts.QueryOpts)
-	return paged(tasks, err, opts)
+	return r.tasksInView(viewAnytime, opts)
 }
 
 func (r readModel) TasksInSomeday(opts listOpts) ([]*things.Task, error) {
-	tasks, err := r.State.TasksInSomeday(opts.QueryOpts)
-	return paged(tasks, err, opts)
+	return r.tasksInView(viewSomeday, opts)
 }
 
 func (r readModel) TasksInUpcoming(opts listOpts) ([]*things.Task, error) {
-	tasks, err := r.State.TasksInUpcoming(opts.QueryOpts)
-	return paged(tasks, err, opts)
+	return r.tasksInView(viewUpcoming, opts)
 }
 
 func (r readModel) TasksInProject(projectUUID string, opts listOpts) ([]*things.Task, error) {
 	tasks, err := r.State.TasksInProject(projectUUID, opts.QueryOpts)
-	return paged(tasks, err, opts)
+	return openList(tasks, err, opts)
 }
 
 func (r readModel) TasksInArea(areaUUID string, opts listOpts) ([]*things.Task, error) {
 	tasks, err := r.State.TasksInArea(areaUUID, opts.QueryOpts)
-	return paged(tasks, err, opts)
+	return openList(tasks, err, opts)
 }
 
 // CompletedTasksInRange returns completed to-dos, most recent first.
