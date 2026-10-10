@@ -218,7 +218,20 @@ The underlying Go SDK can be used directly as a library. See **[docs/sdk.md](doc
 
 ## Testing
 
-113 integration tests across 5 test suites:
+Unit tests need no network: `go test -race ./...`.
+
+End-to-end tests run the real server against a **dedicated sandbox Things account** and
+call every MCP tool through `/mcp`. They are opt-in (build tag `e2e`), refuse to write
+unless the account has an area titled `MCP E2E SANDBOX`, and inspect every commit before
+it leaves the process. Setup, the one-time seed list and the recommended cadence (at most
+daily) are in [docs/testing/sandbox-e2e.md](docs/testing/sandbox-e2e.md):
+
+```bash
+THINGS_SANDBOX_ENV_FILE=~/.config/things-cloud-mcp/sandbox.env go test -tags e2e -run '^TestSandboxE2E$' -count=1 -v -timeout 30m ./server
+```
+
+The older shell suites call a running server and create items in whatever account it is
+connected to — sandbox only:
 
 ```bash
 ./tests/test-smoke.sh          # Core read/write workflow (11 checks)

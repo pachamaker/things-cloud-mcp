@@ -24,7 +24,7 @@ damage data; fix them before relying on the server again.
 | Merge `main` (PRs #1–#3, these docs) into `spike-upstream-sdk`; keep PR #2 behaviour; prefer the PR #4 ID adapter over PR #3's local `base58.go` | ADR-0001 | ✅ |
 | View classifier over upstream `State.AllTasks` carrying PR #1's rules (upstream `TasksIn*` lose two KI-02 cases) | ADR-0005, spike report §4 B3 | ✅ `server/views.go`; two `tir`-only cases differ (KI-02) |
 | Update docs that still describe the embedded SDK (spike report §8 item 4) | AGENTS.md, architecture.md, KI entries | ✅ (CI workflow stays with KI-15) |
-| PR `spike-upstream-sdk` → `main`; sandbox-account smoke test from an empty `DATA_DIR` | AGENTS.md rule 1 | PR #6 open; Docker image builds (linux/arm64); sandbox smoke test pending |
+| PR `spike-upstream-sdk` → `main`; sandbox-account smoke test from an empty `DATA_DIR` | AGENTS.md rule 1 | PR #6 merged; Docker image builds (linux/arm64); sandbox run pending (harness: KI-34) |
 
 ## Phase 0 — Make it safe to touch (≈ 1 week)
 
@@ -42,6 +42,7 @@ change is checked automatically.
 | Write preconditions: target exists, right type, not template, not trashed | KI-10, ADR-0004 | M |
 | `ENABLE_WRITES` switch (write tools not registered when off; default off for new installs) | ADR-0004, `legal-and-risk.md` | S |
 | Sandbox Things account + `.env.sandbox` convention; mark `tests/*.sh` sandbox-only | ADR-0007 | S |
+| Sandbox e2e harness: every MCP tool, account guard, pre-send write firewall, 409 test, wire check by an independent client, cleanup, seed list (`docs/testing/sandbox-e2e.md`); first run by the owner, then at most daily via `.github/workflows/e2e.yml` | KI-34, ADR-0007 | M — harness and workflow ready, environment setup and first run pending |
 | ~~Module rename to `github.com/pachamaker/things-cloud-mcp`~~ (done, migration PR); version via ldflags | ADR-0001, KI-16 | S |
 
 **Exit:** CI green on `main`; no route can delete history/account; `repeat` rejected;

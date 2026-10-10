@@ -91,6 +91,39 @@ export DATA_DIR="$PWD/.data"            # empty directory; the cache is $DATA_DI
 go run ./server
 ```
 
+Sandbox end-to-end tests (KI-34, `docs/testing/sandbox-e2e.md`): opt-in Go tests behind
+the `e2e` build tag that start the server in-process on a temp `DATA_DIR` and call every
+MCP tool. Credentials come only from `THINGS_SANDBOX_ENV_FILE` (a file outside the repo)
+or `THINGS_SANDBOX_USERNAME`/`THINGS_SANDBOX_PASSWORD`; without them the tests skip. An
+account guard (area `MCP E2E SANDBOX`, username ≠ `THINGS_USERNAME`) and a write firewall
+(verified writes on the run's own objects only) gate every commit. At most one run a day:
+
+```bash
+go test -tags e2e -run XXX ./...                                              # compile only (no network)
+go test -tags 'e2e fakecloud' -run '^TestSandbox' -count=1 ./server           # offline harness self-test
+go test -tags e2e -run '^TestSandboxE2E$' -count=1 -v -timeout 30m ./server   # writes! sandbox only
+go test -tags e2e -run '^TestSandboxSeedChecks$' -count=1 -v ./server         # read-only seed checks
+go test -tags e2e -run '^TestSandboxCleanupLeftovers$' -count=1 -v ./server   # trash leftovers of killed runs
+```
+
+CI: `.github/workflows/e2e.yml` (manual and nightly, never on push or PRs) runs the same
+tests in the GitHub environment `things-sandbox`, which the owner sets up once: required
+reviewer, deployment branch `main` only, and the environment secrets, entered
+interactively:
+
+```bash
+gh secret set THINGS_SANDBOX_USERNAME --env things-sandbox --repo pachamaker/things-cloud-mcp
+gh secret set THINGS_SANDBOX_PASSWORD --env things-sandbox --repo pachamaker/things-cloud-mcp
+```
+
+First runs by hand via `workflow_dispatch`. CI logs are public: sandbox test output may
+carry IDs and statuses, never e-mails, titles or notes read from the account
+(`docs/testing/sandbox-e2e.md`, "CI").
+
+Agents run the sandbox tests against an account only when the owner asks for that run:
+the credentials are the owner's, and so is the day's run. The compile check and the
+offline self-test are always fine.
+
 Black-box scripts in `tests/` call a running server and **create real items** in
 whatever account it is connected to:
 
@@ -125,7 +158,8 @@ add failures.
 | `server/readmodel.go` | Read model over the SDK `State`: pagination, open-list filtering, completed range | live |
 | `server/views.go` | View classifier (Inbox/Today/Anytime/Someday/Upcoming), ADR-0005 | live |
 | `server/syncgate.go` | Serialises and coalesces syncs, 429 backoff | live |
-| `tests/` | Shell e2e scripts against a running server | sandbox only |
+| `server/sandbox_*_test.go` | Sandbox e2e harness (tag `e2e`) and its pure rules (untagged, unit-tested) | sandbox only |
+| `tests/` | Shell e2e scripts against a running server (superseded by the Go harness) | sandbox only |
 | `docs/` | See `docs/README.md` for the index | |
 
 The module is `github.com/pachamaker/things-cloud-mcp`. The SDK packages are imported
