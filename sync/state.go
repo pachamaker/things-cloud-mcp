@@ -161,30 +161,40 @@ func (st *State) TasksInInbox(opts QueryOpts) ([]*things.Task, error) {
 	return st.queryTasks(query, args...)
 }
 
-// TasksInToday returns tasks in the Today view. A task appears in Today when:
-//   - schedule=1 (started/anytime) AND sr (scheduled_date) is today or in the
-//     past (overdue carry-over — Things keeps showing an Anytime-scheduled
-//     task in Today until it's dealt with, not just on its exact date), OR
-//   - schedule=1 AND tir (today_index_ref) falls on today's date (explicit
-//     manual placement into Today), OR
-//   - schedule is not Inbox AND it has a deadline that is today or overdue.
+// todayCondition selects the items Things shows in Today, following
+// docs/protocol/things-cloud.md §5.1 (things.py today()):
+//   - started (st=1) or deferred (st=2) with a start date on or before today:
+//     overdue carry-over and scheduled items whose date has arrived but that no
+//     Things client has confirmed yet;
+//   - started and placed in Today via tir;
+//   - no start date and a deadline on or before today, Inbox included.
 //
-// Deadline-driven inclusion is additive only: a Someday/Upcoming task pulled
-// into Today by an overdue deadline still also appears in
-// TasksInSomeday/TasksInUpcoming — Things' real cross-list behavior for that
-// case is not verified here, so this does not attempt to remove it from its
-// other list. Within schedule=1, Today and Anytime are still kept as a strict
-// partition (see TasksInAnytime).
+// Known gaps (KI-02): a deadline dismissed from Today in the app (dds) still
+// shows because dds is not mirrored; projects scheduled for today are not
+// listed; This Evening is not flagged. "Today" is the UTC calendar day until
+// KI-03 is fixed.
+//
+// Every branch is NULL-safe so that TasksInAnytime can negate it. Arguments:
+// tomorrow, today, tomorrow, tomorrow (see todayConditionArgs).
+const todayCondition = `(
+	(schedule IN (1, 2) AND scheduled_date IS NOT NULL AND scheduled_date < ?)
+	OR (schedule = 1 AND today_index_ref IS NOT NULL AND today_index_ref >= ? AND today_index_ref < ?)
+	OR (scheduled_date IS NULL AND deadline_date IS NOT NULL AND deadline_date < ?)
+)`
+
+func todayConditionArgs(todayUnix, tomorrowUnix int64) []any {
+	return []any{tomorrowUnix, todayUnix, tomorrowUnix, tomorrowUnix}
+}
+
+// TasksInToday returns to-dos in the Today view (see todayCondition).
 func (st *State) TasksInToday(opts QueryOpts) ([]*things.Task, error) {
 	todayUnix, tomorrowUnix := currentUTCDayBounds()
+	return st.tasksInToday(opts, todayUnix, tomorrowUnix)
+}
 
-	query := `SELECT uuid FROM tasks WHERE type = 0 AND deleted = 0
-		AND (
-			(schedule = 1 AND scheduled_date < ?)
-			OR (schedule = 1 AND today_index_ref >= ? AND today_index_ref < ?)
-			OR (schedule != 0 AND deadline_date IS NOT NULL AND deadline_date < ?)
-		)`
-	args := []any{tomorrowUnix, todayUnix, tomorrowUnix, tomorrowUnix}
+func (st *State) tasksInToday(opts QueryOpts, todayUnix, tomorrowUnix int64) ([]*things.Task, error) {
+	query := `SELECT uuid FROM tasks WHERE type = 0 AND deleted = 0 AND ` + todayCondition
+	args := todayConditionArgs(todayUnix, tomorrowUnix)
 	if !opts.IncludeCompleted {
 		query += " AND status NOT IN (2, 3)"
 	}
@@ -205,19 +215,17 @@ func (st *State) TasksInToday(opts QueryOpts) ([]*things.Task, error) {
 	return st.scanTaskUUIDs(rows)
 }
 
-// TasksInAnytime returns tasks in the Anytime view. A task appears in Anytime
-// when schedule=1 and it is not classified into Today (see TasksInToday) —
-// kept as the strict complement of TasksInToday within schedule=1.
+// TasksInAnytime returns started (st=1) to-dos that are not in Today, so Today
+// and Anytime partition st=1.
 func (st *State) TasksInAnytime(opts QueryOpts) ([]*things.Task, error) {
 	todayUnix, tomorrowUnix := currentUTCDayBounds()
+	return st.tasksInAnytime(opts, todayUnix, tomorrowUnix)
+}
 
-	query := `SELECT uuid FROM tasks WHERE type = 0 AND schedule = 1
-		AND NOT (
-			(scheduled_date IS NOT NULL AND scheduled_date < ?)
-			OR (today_index_ref IS NOT NULL AND today_index_ref >= ? AND today_index_ref < ?)
-			OR (deadline_date IS NOT NULL AND deadline_date < ?)
-		) AND deleted = 0`
-	args := []any{tomorrowUnix, todayUnix, tomorrowUnix, tomorrowUnix}
+func (st *State) tasksInAnytime(opts QueryOpts, todayUnix, tomorrowUnix int64) ([]*things.Task, error) {
+	query := `SELECT uuid FROM tasks WHERE type = 0 AND schedule = 1 AND deleted = 0
+		AND NOT ` + todayCondition
+	args := todayConditionArgs(todayUnix, tomorrowUnix)
 	if !opts.IncludeCompleted {
 		query += " AND status NOT IN (2, 3)"
 	}
@@ -229,17 +237,19 @@ func (st *State) TasksInAnytime(opts QueryOpts) ([]*things.Task, error) {
 	return st.queryTasks(query, args...)
 }
 
-// TasksInSomeday returns tasks in the Someday view. A task appears in Someday
-// when schedule=2 and it is not classified into Upcoming at the current time.
+// TasksInSomeday returns deferred (st=2) to-dos without a start date and
+// without a future tir. Items pulled into Today by an overdue deadline stay
+// here as well, as in Things.
 func (st *State) TasksInSomeday(opts QueryOpts) ([]*things.Task, error) {
-	nowUnix := currentUTCUnix()
+	_, tomorrowUnix := currentUTCDayBounds()
+	return st.tasksInSomeday(opts, tomorrowUnix)
+}
 
-	query := `SELECT uuid FROM tasks WHERE type = 0 AND schedule = 2
-		AND NOT (
-			(scheduled_date IS NOT NULL AND scheduled_date > ?)
-			OR (today_index_ref IS NOT NULL AND today_index_ref > ?)
-		) AND deleted = 0`
-	args := []any{nowUnix, nowUnix}
+func (st *State) tasksInSomeday(opts QueryOpts, tomorrowUnix int64) ([]*things.Task, error) {
+	query := `SELECT uuid FROM tasks WHERE type = 0 AND schedule = 2 AND deleted = 0
+		AND scheduled_date IS NULL
+		AND (today_index_ref IS NULL OR today_index_ref < ?)`
+	args := []any{tomorrowUnix}
 	if !opts.IncludeCompleted {
 		query += " AND status NOT IN (2, 3)"
 	}
@@ -251,18 +261,21 @@ func (st *State) TasksInSomeday(opts QueryOpts) ([]*things.Task, error) {
 	return st.queryTasks(query, args...)
 }
 
-// TasksInUpcoming returns tasks in the Upcoming view. A task appears in
-// Upcoming when schedule=2 and either sr (scheduled_date) or tir
-// (today_index_ref) is in the future.
+// TasksInUpcoming returns deferred (st=2) to-dos whose start date is after
+// today, or that have no start date and a future tir. A deferred to-do whose
+// start date has arrived belongs to Today, not here.
 func (st *State) TasksInUpcoming(opts QueryOpts) ([]*things.Task, error) {
-	nowUnix := currentUTCUnix()
+	_, tomorrowUnix := currentUTCDayBounds()
+	return st.tasksInUpcoming(opts, tomorrowUnix)
+}
 
-	query := `SELECT uuid FROM tasks WHERE type = 0 AND schedule = 2
+func (st *State) tasksInUpcoming(opts QueryOpts, tomorrowUnix int64) ([]*things.Task, error) {
+	query := `SELECT uuid FROM tasks WHERE type = 0 AND schedule = 2 AND deleted = 0
 		AND (
-			(scheduled_date IS NOT NULL AND scheduled_date > ?)
-			OR (today_index_ref IS NOT NULL AND today_index_ref > ?)
-		) AND deleted = 0`
-	args := []any{nowUnix, nowUnix}
+			(scheduled_date IS NOT NULL AND scheduled_date >= ?)
+			OR (scheduled_date IS NULL AND today_index_ref IS NOT NULL AND today_index_ref >= ?)
+		)`
+	args := []any{tomorrowUnix, tomorrowUnix}
 	if !opts.IncludeCompleted {
 		query += " AND status NOT IN (2, 3)"
 	}
@@ -395,10 +408,6 @@ func currentUTCDayBounds() (int64, int64) {
 	today := time.Date(nowUTC.Year(), nowUTC.Month(), nowUTC.Day(), 0, 0, 0, 0, time.UTC)
 	tomorrow := today.Add(24 * time.Hour)
 	return today.Unix(), tomorrow.Unix()
-}
-
-func currentUTCUnix() int64 {
-	return time.Now().UTC().Unix()
 }
 
 func paginateQuery(query string, args []any, opts QueryOpts) (string, []any) {

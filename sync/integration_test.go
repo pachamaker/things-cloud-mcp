@@ -329,8 +329,9 @@ func TestTasksInTodayWithTIR(t *testing.T) {
 
 	expected := []string{
 		"sr-only", "tir-only", "both-today", "sr-old-tir-today", "sr-today-tir-old",
-		"both-old",                                         // overdue carry-over: schedule=1 with a past scheduled_date stays in Today
-		"anytime-deadline-today", "someday-deadline-today", // deadline due today, additive inclusion
+		"both-old", // overdue carry-over: schedule=1 with a past scheduled_date stays in Today
+		// no start date and a deadline due today, Inbox included (things.py today())
+		"anytime-deadline-today", "someday-deadline-today", "inbox-deadline-today",
 	}
 	for _, uuid := range expected {
 		if !got[uuid] {
@@ -338,7 +339,7 @@ func TestTasksInTodayWithTIR(t *testing.T) {
 		}
 	}
 
-	notExpected := []string{"no-dates", "inbox-with-tir", "someday-deadline-future", "inbox-deadline-today"}
+	notExpected := []string{"no-dates", "inbox-with-tir", "someday-deadline-future"}
 	for _, uuid := range notExpected {
 		if got[uuid] {
 			t.Errorf("task %q should NOT be in Today", uuid)
@@ -713,16 +714,17 @@ func TestStateQueries(t *testing.T) {
 		}
 	})
 
-	t.Run("TasksInToday includes tir-only tasks", func(t *testing.T) {
+	t.Run("TasksInToday includes tir-only and arrived deferred tasks", func(t *testing.T) {
 		tasks, err := state.TasksInToday(QueryOpts{})
 		if err != nil {
 			t.Fatalf("TasksInToday failed: %v", err)
 		}
-		if len(tasks) != 1 {
-			t.Fatalf("expected 1 today task, got %d", len(tasks))
+		got := map[string]bool{}
+		for _, task := range tasks {
+			got[task.UUID] = true
 		}
-		if tasks[0].UUID != "today-ref-1" {
-			t.Fatalf("expected today-ref-1, got %s", tasks[0].UUID)
+		if len(tasks) != 2 || !got["today-ref-1"] || !got["someday-past-1"] {
+			t.Fatalf("expected today-ref-1 and someday-past-1, got %v", got)
 		}
 	})
 
@@ -739,16 +741,16 @@ func TestStateQueries(t *testing.T) {
 		}
 	})
 
-	t.Run("TasksInSomeday returns deferred tasks that are not upcoming", func(t *testing.T) {
+	t.Run("TasksInSomeday returns deferred tasks without a start date", func(t *testing.T) {
 		tasks, err := state.TasksInSomeday(QueryOpts{})
 		if err != nil {
 			t.Fatalf("TasksInSomeday failed: %v", err)
 		}
-		if len(tasks) != 2 {
-			t.Fatalf("expected 2 someday tasks, got %d", len(tasks))
+		if len(tasks) != 1 {
+			t.Fatalf("expected 1 someday task, got %d", len(tasks))
 		}
-		if tasks[0].UUID != "someday-1" || tasks[1].UUID != "someday-past-1" {
-			t.Fatalf("unexpected someday tasks: %s, %s", tasks[0].UUID, tasks[1].UUID)
+		if tasks[0].UUID != "someday-1" {
+			t.Fatalf("expected someday-1, got %s", tasks[0].UUID)
 		}
 	})
 
