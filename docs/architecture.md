@@ -97,6 +97,7 @@ used to carry: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4.
 | `server/views.go` | View classifier (Inbox/Today/Anytime/Someday/Upcoming) over `State.AllTasks` | UTC-based (KI-03); no `tir`/`dds`/`sb` in the SDK mirror (KI-02) |
 | `server/syncgate.go` | Serialises and coalesces `Syncer.Sync()`, backs off on 429 | The SDK `Syncer` has no lock |
 | `server/json_body.go` | Bounded JSON body decoding for REST | |
+| `server/redact.go` | Hides the URL of a failed Things Cloud request where SDK errors enter the server (sync gate, `historyWrite`, startup) | The URL carries the history key, a bearer capability (KI-35) |
 | SDK `thingscloud` | HTTP client, histories, items, wire types (`Task6`/`Task7`), Base58 codec, notes, account | `History.Write` refuses non-canonical IDs |
 | SDK `sync` | `Syncer`: incremental pull, per-batch cursor, cache replay with backup, SQLite store, `State` queries | Stores no `tir`, `dds`, `sb`, `rr`, `rt` |
 | `tests/*.sh` | Black-box scripts against a deployed server | Hit a real account; must target a sandbox |
