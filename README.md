@@ -226,7 +226,8 @@ THINGS_SANDBOX_ENV_FILE=~/.config/things-cloud-mcp/sandbox.env go test -tags e2e
 ```
 
 The older shell suites call a running server (started with `ENABLE_WRITES=true`) and
-create items in whatever account it is connected to — sandbox only:
+create items in the account it is connected to — sandbox only. The writing suites stop
+before their first write unless the account has the area `MCP E2E SANDBOX`:
 
 ```bash
 ./tests/test-smoke.sh          # Core read/write workflow (11 checks)

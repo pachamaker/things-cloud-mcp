@@ -134,8 +134,10 @@ Agents run the sandbox tests against an account only when the owner asks for tha
 the credentials are the owner's, and so is the day's run. The compile check and the
 offline self-test are always fine.
 
-Black-box scripts in `tests/` call a running server and **create real items** in
-whatever account it is connected to:
+Black-box scripts in `tests/` call a running server and **create real items** in the
+account it is connected to. The writing ones (`test-mcp.sh`, `test-smoke.sh`,
+`test-api.sh`) first check for the sandbox marker area `MCP E2E SANDBOX`
+(`tests/sandbox-guard.sh`) and refuse to write without it:
 
 ```bash
 BASE_URL=http://localhost:8080 ./tests/test-mcp-protocol.sh   # read-only protocol checks

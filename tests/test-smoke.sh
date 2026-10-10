@@ -90,6 +90,9 @@ TAGS=$(mcp_call "things_list_tags" "{}" | extract_text)
 check "list tags returns array" "$(is_array "$TAGS")" "true"
 
 # 3. Write: create a task
+source "${SCRIPT_DIR}/sandbox-guard.sh"
+require_sandbox_mcp "${ENDPOINT}"
+
 echo "--- Create ---"
 RESP=$(mcp_call "things_create_task" "{\"title\":\"[smoke] Test task\",\"when\":\"today\"}" | extract_text)
 TASK_UUID=$(field "$RESP" uuid)

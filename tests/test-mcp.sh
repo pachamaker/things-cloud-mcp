@@ -77,6 +77,9 @@ echo "    Endpoint: ${ENDPOINT}"
 echo "    Prefix:   ${PREFIX}"
 echo ""
 
+source "${SCRIPT_DIR}/sandbox-guard.sh"
+require_sandbox_mcp "${ENDPOINT}"
+
 # 1. Create tag
 echo "--- Create Tag ---"
 RESP=$(mcp_call "things_create_tag" "{\"title\":\"${PREFIX} Tag\",\"shorthand\":\"t${CYCLE}\"}" | extract_text)

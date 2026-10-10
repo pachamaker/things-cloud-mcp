@@ -146,6 +146,9 @@ RESP=$(api_get "/api/sync")
 check "sync returns changes_count" "$([ -n "$(json_field "$RESP" changes_count)" ] && echo ok || echo '')" "ok"
 
 # 13-16. Write endpoints
+source "${SCRIPT_DIR}/sandbox-guard.sh"
+require_sandbox_rest "${BASE}" "${AUTH_HEADER}"
+
 echo "--- Write Endpoints ---"
 RESP=$(api_post "/api/tasks/create" '{"title":"[api-test] Task"}')
 check "create returns status" "$(json_field "$RESP" status)" "created"
