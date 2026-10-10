@@ -343,8 +343,8 @@ workaround can be deleted.
   `go mod tidy -diff`, `go build -o /dev/null ./...`, `go vet ./...` and
   `go test -race ./...` on every pull request and every push to `main`, with the Go
   version from `go.mod`; `.github/Workflows/` (old `go.yml`, Fly.io deploy, nested
-  duplicate) is deleted. `govulncheck` runs since KI-32; `staticcheck` is not in CI
-  yet: it fails on the current code (KI-33) · **Evidence:** confirmed
+  duplicate) is deleted. `govulncheck` runs since KI-32, `staticcheck` since KI-33
+  (phase 0) · **Evidence:** confirmed
 - **Root cause:** workflows live in `.github/Workflows/` (capital `W`) — GitHub only
   reads `.github/workflows/`. There is also a nested duplicate
   `.github/Workflows/.github/Workflows/deploy.yml`. `go.yml` pins Go 1.23 while
@@ -411,7 +411,7 @@ workaround can be deleted.
 | KI-22 | `Host` header set manually and misleadingly | SDK `client.go:117` |
 | KI-23 | 14 CLI tools without tests; several duplicated server write logic with a divergent wire format — resolved: removed with the SDK migration (upstream has its own `things-cli`) | — |
 | KI-24 | Write tools have no MCP annotations beyond defaults (`destructiveHint` defaults to true, so every write asks for confirmation; no `idempotentHint`) | `server/mcp.go:1095-1329` |
-| KI-33 | `staticcheck` (2026.2.1) fails with U1000: `authHandlerMiddleware`, an `API_KEY` bearer check for `http.Handler`, is never used (`/mcp` is registered without it, KI-07). Blocks the `staticcheck` CI job; wire it in or delete it as part of KI-07/ADR-0002 | `server/main.go:302` |
+| KI-33 | ~~`staticcheck` (2026.2.1) fails with U1000: `authHandlerMiddleware` is never used~~ — fixed (phase 0): the dead middleware is deleted (`/mcp` auth stays with KI-07/ADR-0002) and `staticcheck -tags 'e2e fakecloud'` runs in CI | `.github/workflows/ci.yml` |
 
 ## P1 — Resilience against Things Cloud behaviour (reported by other implementations)
 

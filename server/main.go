@@ -299,21 +299,6 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func authHandlerMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		apiKey := os.Getenv("API_KEY")
-		if apiKey == "" {
-			next.ServeHTTP(w, r)
-			return
-		}
-		if r.Header.Get("Authorization") != "Bearer "+apiKey {
-			jsonError(w, "unauthorized", 401)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
 // newThingsClient never sets Client.Debug: upstream dumps whole requests,
 // including "Authorization: Password <plaintext>", and offers no redaction
 // hook (spike report B7, KI-09).

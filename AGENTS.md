@@ -152,7 +152,8 @@ Planned: `THINGS_TIMEZONE` (ADR-0003), OAuth settings (ADR-0002).
 
 Baseline: CI (`.github/workflows/ci.yml`) runs `go mod tidy -diff`, build, vet,
 `go test -race ./...` and `govulncheck` on Go 1.26.9 for every pull request and push to
-`main`; all pass. `staticcheck` is not gated yet (KI-33). Do not add failures.
+`main`; all pass. `staticcheck -tags 'e2e fakecloud'` is gated too (KI-33). Do not add
+failures.
 
 ## 5. Repository map
 

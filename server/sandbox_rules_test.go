@@ -217,9 +217,7 @@ func (r *redactor) add(secret string) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for _, s := range []string{secret, url.PathEscape(secret), url.QueryEscape(secret)} {
-		r.secrets = append(r.secrets, s)
-	}
+	r.secrets = append(r.secrets, secret, url.PathEscape(secret), url.QueryEscape(secret))
 	sort.Slice(r.secrets, func(i, j int) bool { return len(r.secrets[i]) > len(r.secrets[j]) })
 }
 
