@@ -35,8 +35,8 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 
 - **Browse your views** — Today, Inbox, Anytime, Someday, Upcoming, All Tasks, by Project, by Area, Completed (with date filters)
 - **Look things up** — get any task, area, or tag; search by title or note content
-- **Create** — tasks (with notes, dates, deadlines, project, tags, recurrence), projects, areas, tags, headings, and checklist items
-- **Edit** — title, notes, dates, deadlines, project, area, tags, and recurrence
+- **Create** — tasks (with notes, dates, deadlines, project, tags), projects, areas, tags, headings, and checklist items
+- **Edit** — title, notes, dates, deadlines, project, area, and tags (recurrence is not supported, see below)
 - **Organise** — move tasks between Today, Anytime, Someday, and Inbox
 - **Complete & restore** — complete or reopen tasks and checklist items; trash and untrash
 - **Diagnostics** — built-in smoke test covering the full create/read/edit/complete/trash cycle
@@ -48,11 +48,11 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `things_list_today` | Tasks scheduled for today | `limit`, `offset` |
+| `things_list_today` | Today view: start date today or earlier (overdue and scheduled-date-arrived to-dos), placed in Today, or no start date with a deadline today or earlier; "today" is the server's UTC day | `limit`, `offset` |
 | `things_list_inbox` | Tasks in the inbox | `limit`, `offset` |
 | `things_list_anytime` | Tasks in Anytime | `limit`, `offset` |
-| `things_list_someday` | Tasks in Someday | `limit`, `offset` |
-| `things_list_upcoming` | Tasks in Upcoming | `limit`, `offset` |
+| `things_list_someday` | Tasks in Someday (deferred, no start date) | `limit`, `offset` |
+| `things_list_upcoming` | Tasks in Upcoming (start date after today) | `limit`, `offset` |
 | `things_list_all_tasks` | All open tasks | `limit`, `offset` |
 | `things_list_projects` | All projects | `limit`, `offset` |
 | `things_list_areas` | All areas | `limit`, `offset` |
@@ -69,12 +69,12 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `things_create_task` | Create a task | `title` (req), `note`, `when`, `deadline`, `project`, `parent_task`, `tags`, `repeat` |
+| `things_create_task` | Create a task | `title` (req), `note`, `when`, `deadline`, `project`, `parent_task`, `tags` |
 | `things_create_project` | Create a project | `title` (req), `note`, `when`, `deadline`, `area` |
 | `things_create_heading` | Create a heading in a project | `title` (req), `project` |
 | `things_create_area` | Create an area | `title` (req), `tags` |
 | `things_create_tag` | Create a tag | `title` (req), `shorthand`, `parent` |
-| `things_edit_task` | Edit a task | `uuid` (req), `title`, `note`, `when`, `deadline`, `project`, `parent_task`, `area`, `tags`, `repeat` |
+| `things_edit_task` | Edit a task | `uuid` (req), `title`, `note`, `when`, `deadline`, `project`, `parent_task`, `area`, `tags` |
 | `things_complete_task` | Complete a task | `uuid` |
 | `things_uncomplete_task` | Reopen a completed task | `uuid` |
 | `things_trash_task` | Move to trash | `uuid` |
@@ -125,18 +125,14 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 | `YYYY-MM-DD` | Set a hard deadline |
 | `none` | Clear an existing deadline (edit only) |
 
-#### `repeat` — Recurring tasks
+#### Recurring tasks — not supported
 
-| Value | Effect |
-|-------|--------|
-| `daily` | Every day |
-| `weekly` | Every week |
-| `monthly` | Every month |
-| `yearly` | Every year |
-| `every N days/weeks/months/years` | Custom interval |
-| `... until YYYY-MM-DD` | End recurrence on that date |
-| `... after completion` | Repeat-after-completion mode |
-| `none` | Clear recurrence (edit only) |
+Recurrence cannot be set, changed or removed through this server. `repeat` is not part of
+the tool schemas, and any `repeat` value sent to `things_create_task`, `things_edit_task`,
+`/api/tasks/create` or `/api/tasks/edit` — `"none"` included — is rejected with an error
+before anything is written. Recurrence writes have corrupted Things on macOS and iOS
+(incident 2026-08-18, KI-01). Set up or remove recurrence in the Things app. Background:
+[`docs/known-issues/repeat-disabled.md`](docs/known-issues/repeat-disabled.md).
 
 </details>
 

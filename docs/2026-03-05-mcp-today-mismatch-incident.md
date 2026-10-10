@@ -111,8 +111,13 @@ Use 3–5 repetitions to estimate whether residual lag is external (Things Cloud
 
 ## Skill-Level Follow-up (separate)
 
+**Update (see [GitHub issue #7](https://github.com/mattydsmith/things-cloud-mcp/issues/7) and its
+fix): as of the fix for that issue, `things_list_today` itself now includes overdue carry-over,
+scheduled tasks whose date has arrived, and deadline-driven tasks (KI-02) — the two-call
+`scheduled_for < today` workaround described here is no longer necessary and has been removed from
+`docs/skills.md`.** Caveats that remain: "today" is still the server's UTC calendar day, not the
+user's local timezone (KI-03), and dismissed deadlines (`dds`) are not mirrored.
+
 `things-daily` logic should continue to:
 
-- classify overdue by `scheduled_for < today` and `status == "open"`,
-- separate deadline warnings (`deadline < today` with future/no schedule),
 - caveat overdue output as approximate when cloud sync lag is suspected.

@@ -39,6 +39,10 @@ extract_text() {
   python3 -c "import sys,json; r=json.loads(sys.stdin.read()); print(r['result']['content'][0]['text'])" 2>/dev/null || echo ""
 }
 
+is_error() {
+  python3 -c "import sys,json; r=json.loads(sys.stdin.read()); print('true' if r['result'].get('isError') else 'false')" 2>/dev/null || echo ""
+}
+
 field() {
   local json="$1" key="$2"
   echo "$json" | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('$key',''))" 2>/dev/null || echo ""
@@ -150,33 +154,14 @@ check "clear area ok" "$(field "$RESP" status)" "updated"
 TASK=$(mcp_call "things_get_task" "{\"uuid\":\"${CREATED_TASK}\"}" | extract_text)
 check "area cleared" "$(field "$TASK" area_id)" ""
 
-# 12. Create task with repeat
-echo "--- Create Repeating Task ---"
-RESP=$(mcp_call "things_create_task" "{\"title\":\"${PREFIX} Repeat Daily\",\"when\":\"today\",\"repeat\":\"daily\"}" | extract_text)
-REPEAT_TASK=$(field "$RESP" uuid)
-check "repeat task created" "$([ -n "$REPEAT_TASK" ] && echo ok || echo '')" "ok"
-
-# 13. Create task with repeat after completion
-echo "--- Create Repeat After Completion ---"
-RESP=$(mcp_call "things_create_task" "{\"title\":\"${PREFIX} Repeat Weekly AC\",\"when\":\"today\",\"repeat\":\"weekly after completion\"}" | extract_text)
-REPEAT_AC_TASK=$(field "$RESP" uuid)
-check "repeat-ac task created" "$([ -n "$REPEAT_AC_TASK" ] && echo ok || echo '')" "ok"
-
-# 14. Create task with every N interval
-echo "--- Create Every 2 Weeks ---"
-RESP=$(mcp_call "things_create_task" "{\"title\":\"${PREFIX} Every 2 Weeks\",\"when\":\"today\",\"repeat\":\"every 2 weeks\"}" | extract_text)
-REPEAT_2W_TASK=$(field "$RESP" uuid)
-check "every-2-weeks task created" "$([ -n "$REPEAT_2W_TASK" ] && echo ok || echo '')" "ok"
-
-# 15. Edit task to add repeat
-echo "--- Edit Task: Add Repeat ---"
-RESP=$(mcp_call "things_edit_task" "{\"uuid\":\"${CREATED_TASK}\",\"repeat\":\"monthly\"}" | extract_text)
-check "add repeat ok" "$(field "$RESP" status)" "updated"
-
-# 16. Edit task to clear repeat
-echo "--- Edit Task: Clear Repeat ---"
-RESP=$(mcp_call "things_edit_task" "{\"uuid\":\"${CREATED_TASK}\",\"repeat\":\"none\"}" | extract_text)
-check "clear repeat ok" "$(field "$RESP" status)" "updated"
+# 12-16. repeat is rejected on create and edit, "none" included (KI-01)
+echo "--- Repeat Is Rejected ---"
+RESP=$(mcp_call "things_create_task" "{\"title\":\"${PREFIX} Repeat Daily\",\"when\":\"today\",\"repeat\":\"daily\"}")
+check "create with repeat rejected" "$(echo "$RESP" | is_error)" "true"
+RESP=$(mcp_call "things_edit_task" "{\"uuid\":\"${CREATED_TASK}\",\"repeat\":\"monthly\"}")
+check "edit with repeat rejected" "$(echo "$RESP" | is_error)" "true"
+RESP=$(mcp_call "things_edit_task" "{\"uuid\":\"${CREATED_TASK}\",\"repeat\":\"none\"}")
+check "edit with repeat none rejected" "$(echo "$RESP" | is_error)" "true"
 
 # 17. Create subtask
 echo "--- Create Subtask ---"
@@ -292,9 +277,6 @@ mcp_call "things_trash_task" "{\"uuid\":\"${CREATED_TASK}\"}" > /dev/null 2>&1 &
 mcp_call "things_trash_task" "{\"uuid\":\"${CREATED_PROJECT}\"}" > /dev/null 2>&1 && echo "    Trashed project"
 [ -n "$SUBTASK" ] && mcp_call "things_trash_task" "{\"uuid\":\"${SUBTASK}\"}" > /dev/null 2>&1 && echo "    Trashed subtask"
 [ -n "$ORPHAN_TASK" ] && mcp_call "things_trash_task" "{\"uuid\":\"${ORPHAN_TASK}\"}" > /dev/null 2>&1 && echo "    Trashed orphan task"
-[ -n "$REPEAT_TASK" ] && mcp_call "things_trash_task" "{\"uuid\":\"${REPEAT_TASK}\"}" > /dev/null 2>&1 && echo "    Trashed repeat daily task"
-[ -n "$REPEAT_AC_TASK" ] && mcp_call "things_trash_task" "{\"uuid\":\"${REPEAT_AC_TASK}\"}" > /dev/null 2>&1 && echo "    Trashed repeat-ac task"
-[ -n "$REPEAT_2W_TASK" ] && mcp_call "things_trash_task" "{\"uuid\":\"${REPEAT_2W_TASK}\"}" > /dev/null 2>&1 && echo "    Trashed every-2-weeks task"
 echo "    Note: area '${CREATED_AREA}' and tag '${CREATED_TAG}' cannot be trashed via API"
 
 # --- summary & log ---
