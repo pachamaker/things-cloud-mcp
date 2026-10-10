@@ -1,5 +1,8 @@
 # Installation Guide
 
+> **Legacy (Fly.io, unauthenticated `/mcp`).** Kept for reference. The supported target
+> is [`deployment/vps.md`](deployment/vps.md); see KI-07 before exposing the server.
+
 Self-host the Things Cloud MCP server to connect Claude (or any MCP-compatible AI assistant) to your Things 3 task manager.
 
 ## Prerequisites
