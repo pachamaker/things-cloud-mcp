@@ -1093,7 +1093,7 @@ func newMCPHandler() http.Handler {
 	// --- Write tools ---
 
 	s.AddTool(mcp.NewTool("things_create_task",
-		mcp.WithDescription("Create a new task in Things"),
+		mcp.WithDescription("Create a new task in Things. Recurrence cannot be set through this server (KI-01); ask the user to set it up in the Things app."),
 		mcp.WithString("title",
 			mcp.Required(),
 			mcp.Description("Task title"),
@@ -1116,9 +1116,6 @@ func newMCPHandler() http.Handler {
 		mcp.WithString("tags",
 			mcp.Description("Comma-separated tag UUIDs"),
 		),
-		mcp.WithString("repeat",
-			mcp.Description("Recurrence rule. Accepts: 'daily', 'weekly', 'monthly', 'yearly', or 'every N days/weeks/months/years'. Append 'until YYYY-MM-DD' for an inclusive end date and/or 'after completion' for repeat-after-completion mode (e.g. 'daily until 2026-02-24 after completion'). Weekly defaults to the current weekday, monthly to the current day of month. Repeating tasks cannot be created in inbox."),
-		),
 	), mcpCreateTask)
 
 	s.AddTool(mcp.NewTool("things_complete_task",
@@ -1130,7 +1127,7 @@ func newMCPHandler() http.Handler {
 	), mcpCompleteTask)
 
 	s.AddTool(mcp.NewTool("things_edit_task",
-		mcp.WithDescription("Edit an existing Things task"),
+		mcp.WithDescription("Edit an existing Things task. Recurrence cannot be set, changed or removed through this server (KI-01); ask the user to do it in the Things app."),
 		mcp.WithString("uuid",
 			mcp.Required(),
 			mcp.Description("UUID of the task to edit"),
@@ -1158,9 +1155,6 @@ func newMCPHandler() http.Handler {
 		),
 		mcp.WithString("tags",
 			mcp.Description("New comma-separated tag UUIDs (replaces existing)"),
-		),
-		mcp.WithString("repeat",
-			mcp.Description("Recurrence rule. Accepts: 'daily', 'weekly', 'monthly', 'yearly', 'every N days/weeks/months/years', or 'none' to clear. Append 'until YYYY-MM-DD' for an inclusive end date and/or 'after completion' for repeat-after-completion mode. Repeating tasks cannot be moved to inbox."),
 		),
 	), mcpEditTask)
 

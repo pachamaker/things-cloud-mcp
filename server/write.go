@@ -326,7 +326,7 @@ type CreateTaskRequest struct {
 	Project    string `json:"project,omitempty"`     // project UUID
 	ParentTask string `json:"parent_task,omitempty"` // parent task UUID (for subtasks)
 	Tags       string `json:"tags,omitempty"`        // comma-separated tag UUIDs
-	Repeat     string `json:"repeat,omitempty"`      // daily, weekly, monthly, yearly, every N days/weeks/months/years, optional "until YYYY-MM-DD"
+	Repeat     string `json:"repeat,omitempty"`      // always rejected, see rejectRepeat (KI-01)
 }
 
 // EditTaskRequest is the JSON body for POST /api/tasks/edit.
@@ -340,7 +340,7 @@ type EditTaskRequest struct {
 	ParentTask string `json:"parent_task,omitempty"`
 	Area       string `json:"area,omitempty"`
 	Tags       string `json:"tags,omitempty"`
-	Repeat     string `json:"repeat,omitempty"` // daily, weekly, monthly, yearly, every N days/weeks/months/years, optional "until YYYY-MM-DD", none
+	Repeat     string `json:"repeat,omitempty"` // always rejected, see rejectRepeat (KI-01)
 }
 
 // UUIDRequest is the JSON body for complete/trash endpoints.
@@ -352,7 +352,18 @@ type UUIDRequest struct {
 // Repeat rule builder
 // ---------------------------------------------------------------------------
 
+// rejectRepeat refuses every non-empty repeat value, "none" included: clearing
+// a rule still writes rr onto an item that may be a repeating template or
+// instance, which can corrupt Things clients (KI-01, incident 2026-08-18).
+func rejectRepeat(repeat string) error {
+	if repeat == "" {
+		return nil
+	}
+	return invalidInputf("the 'repeat' parameter is not supported (KI-01): recurrence writes, including repeat:\"none\", can corrupt Things on macOS and iOS. Omit 'repeat' and set up or remove recurrence in the Things app")
+}
+
 // buildRepeatRule builds a RepeaterConfiguration JSON from a repeat string.
+// It is not wired into any write path: recurrence writes are forbidden (KI-01).
 // Formats: "daily", "weekly", "monthly", "yearly", "every N days/weeks/months/years"
 // Optional end date: append "until YYYY-MM-DD".
 // Append " after completion" for repeat-after-completion mode (tp=1).
@@ -551,6 +562,9 @@ func parseWhen(when string) (st int, sr, tir *int64, handled bool) {
 }
 
 func createTask(req CreateTaskRequest) (string, error) {
+	if err := rejectRepeat(req.Repeat); err != nil {
+		return "", err
+	}
 	if err := validateOptionalUUID("project", req.Project); err != nil {
 		return "", err
 	}
@@ -577,16 +591,6 @@ func createTask(req CreateTaskRequest) (string, error) {
 		st, sr, tir = s, r, t
 	} else {
 		st = 0 // inbox
-	}
-
-	// Repeating tasks must be triaged; Things behaves inconsistently when repeat+inbox is sent.
-	if req.Repeat != "" {
-		if req.When == "inbox" {
-			return "", invalidInputf("repeat tasks cannot be in inbox; use when:anytime, today, someday, or YYYY-MM-DD")
-		}
-		if req.When == "" {
-			st = 1 // default to Anytime when repeat is requested
-		}
 	}
 
 	if req.Deadline != "" {
@@ -616,19 +620,6 @@ func createTask(req CreateTaskRequest) (string, error) {
 		nt = textNote(req.Note)
 	}
 
-	// Build repeat rule if specified
-	var rr *json.RawMessage
-	if req.Repeat != "" {
-		refDate := time.Now()
-		if sr != nil {
-			refDate = time.Unix(*sr, 0)
-		}
-		rr, err = buildRepeatRule(req.Repeat, refDate)
-		if err != nil {
-			return "", fmt.Errorf("invalid repeat: %w", err)
-		}
-	}
-
 	payload := taskCreatePayload{
 		Tp: 0, Sr: sr, Dds: nil, Rt: []string{}, Rmd: nil,
 		Ss: 0, Tr: false, Dl: []string{}, Icp: false, St: st,
@@ -636,7 +627,7 @@ func createTask(req CreateTaskRequest) (string, error) {
 		Tg: tg, Agr: []string{}, Ix: 0, Cd: now, Lt: false,
 		Icc: 0, Md: nil, Ti: 0, Dd: dd, Ato: nil, Nt: nt,
 		Icsd: nil, Pr: pr, Rp: nil, Acrd: nil, Sp: nil,
-		Sb: 0, Rr: rr, Xx: defaultExtension(),
+		Sb: 0, Rr: nil, Xx: defaultExtension(),
 	}
 
 	env := writeEnvelope{id: taskUUID, action: 0, kind: "Task6", payload: payload}
@@ -675,6 +666,9 @@ func trashTask(uuid string) error {
 }
 
 func editTask(req EditTaskRequest) error {
+	if err := rejectRepeat(req.Repeat); err != nil {
+		return err
+	}
 	if err := validateUUID("uuid", req.UUID); err != nil {
 		return err
 	}
@@ -693,10 +687,6 @@ func editTask(req EditTaskRequest) error {
 	}
 
 	u := newTaskUpdate()
-	if req.Repeat != "" && req.When == "inbox" {
-		return invalidInputf("repeat tasks cannot be in inbox; use when:anytime, today, someday, YYYY-MM-DD, or omit when")
-	}
-
 	if req.Title != "" {
 		u.title(req.Title)
 	}
@@ -742,26 +732,6 @@ func editTask(req EditTaskRequest) error {
 		u.clearArea()
 	} else if req.Area != "" {
 		u.area(req.Area)
-	}
-	if req.Repeat == "none" {
-		u.fields["rr"] = nil
-	} else if req.Repeat != "" {
-		// If no new "when" is provided and the current task lives in Inbox, move it to Anytime.
-		// This avoids an inconsistent repeat+inbox combination in Things.
-		if req.When == "" {
-			if err := syncForRead(); err == nil {
-				if task, tErr := syncer.State().Task(req.UUID); tErr == nil && task != nil && task.Schedule == thingscloud.TaskScheduleInbox {
-					u.schedule(1, nil, nil)
-				}
-			}
-		}
-
-		refDate := time.Now()
-		rr, err := buildRepeatRule(req.Repeat, refDate)
-		if err != nil {
-			return fmt.Errorf("invalid repeat: %w", err)
-		}
-		u.fields["rr"] = rr
 	}
 	env := writeEnvelope{id: req.UUID, action: 1, kind: "Task6", payload: u.build()}
 	if err := historyWrite(env); err != nil {
