@@ -10,6 +10,7 @@ in this repository.
 | Upstream | `v0.6.0`, commit `6919edc`, `go 1.25.0` (latest tag on proxy.golang.org) |
 | Module path on the branch | `github.com/pachamaker/things-cloud-mcp` |
 | Verdict | **Conditional GO** (see [Recommendation](#recommendation)) |
+| Merged | `main` via PR #6 (2026-10-10, `15e5b6b`) |
 | Status | Branch compiles against upstream; `go vet` and `go test ./...` pass (2026-10-11). Phase 2 safety adapters done (2026-10-11, §4). `main` (PRs #1–#3) and the docs (PR #5) merged in; phase 3 view classifier done (2026-10-11) |
 
 ## 1. What was done

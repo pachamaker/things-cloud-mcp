@@ -24,7 +24,7 @@ damage data; fix them before relying on the server again.
 | Merge `main` (PRs #1–#3, these docs) into `spike-upstream-sdk`; keep PR #2 behaviour; prefer the PR #4 ID adapter over PR #3's local `base58.go` | ADR-0001 | ✅ |
 | View classifier over upstream `State.AllTasks` carrying PR #1's rules (upstream `TasksIn*` lose two KI-02 cases) | ADR-0005, spike report §4 B3 | ✅ `server/views.go`; two `tir`-only cases differ (KI-02) |
 | Update docs that still describe the embedded SDK (spike report §8 item 4) | AGENTS.md, architecture.md, KI entries | ✅ (CI workflow stays with KI-15) |
-| PR `spike-upstream-sdk` → `main`; sandbox-account smoke test from an empty `DATA_DIR` | AGENTS.md rule 1 | PR #6 merged; Docker image builds (linux/arm64); sandbox run pending (harness: KI-34) |
+| PR `spike-upstream-sdk` → `main`; sandbox-account smoke test from an empty `DATA_DIR` | AGENTS.md rule 1 | ✅ PR #6 merged; Docker image builds (linux/arm64); sandbox run: see the KI-34 row in Phase 0 |
 
 ## Phase 0 — Make it safe to touch (≈ 1 week)
 
@@ -43,7 +43,7 @@ change is checked automatically.
 | Write preconditions: target exists, right type, not template, not trashed | KI-10, ADR-0004 | M |
 | `ENABLE_WRITES` switch (write tools not registered when off; default off for new installs) | ADR-0004, `legal-and-risk.md` | S |
 | Sandbox Things account + `.env.sandbox` convention; mark `tests/*.sh` sandbox-only | ADR-0007 | S |
-| Sandbox e2e harness: every MCP tool, account guard, pre-send write firewall, 409 test, wire check by an independent client, cleanup, seed list (`docs/testing/sandbox-e2e.md`); first run by the owner, then at most daily via `.github/workflows/e2e.yml` | KI-34, ADR-0007 | M — harness and workflow ready, environment setup and first run pending |
+| Sandbox e2e harness: every MCP tool, account guard, pre-send write firewall, 409 test, wire check by an independent client, cleanup, seed list (`docs/testing/sandbox-e2e.md`); first run by the owner, then at most daily via `.github/workflows/e2e.yml` | KI-34, ADR-0007 | M — first run 2026-10-11: main suite green; seed checks and leftover cleanup hit 429 (KI-27) |
 | ~~Module rename to `github.com/pachamaker/things-cloud-mcp`~~ (done, migration PR); version via ldflags | ADR-0001, KI-16 | S |
 
 **Exit:** CI green on `main`; no route can delete history/account; `repeat` rejected;
@@ -62,7 +62,7 @@ workarounds.
 | Move the classifier from `server/views.go` to `domain/view`; extend it once B4 fields exist (evening, `dds`, templates, projects in Today) | KI-02, KI-05, ADR-0005 | M |
 | Resolve project membership through headings | KI-13 | S |
 | Conformance harness + first snapshots (incl. post-midnight and "Mac closed for a day") | ADR-0005 | M |
-| Freshness-bounded, coalesced sync on read; backoff on 429 | architecture §7, KI-27 | S |
+| ~~Freshness-bounded, coalesced sync on read; backoff on 429~~ (done: `server/syncgate.go`, PR #4) | architecture §7, KI-27 | S |
 | Rebuild mirror on history-key change / 404 AccountIssue; quarantine malformed items | KI-28, KI-29 | S |
 
 **Exit:** conformance suite passes on ≥ 3 snapshots taken at different times of day;
@@ -78,7 +78,7 @@ Goal: Claude (web, desktop, iOS) and ChatGPT reach the server on the VPS securel
 | ~~Upgrade to Go ≥ 1.25 (Dockerfile base image too)~~ (done with the SDK migration); `mcp-go` v1.x | ADR-0002 | S |
 | Resource-server auth on `/mcp`: RFC 9728 metadata, 401 + `WWW-Authenticate`, JWT validation against Pocket ID, scopes `things.read`/`things.write` | KI-07, ADR-0002 | M |
 | End-to-end OAuth test with Claude (web + iOS) and ChatGPT; fall back to built-in AS if Pocket ID fails | ADR-0002 | S–M |
-| `DATA_DIR`, `/healthz` + `/readyz`, `log/slog` structured logs | KI-16 | S |
+| ~~`DATA_DIR`~~ (done, PR #4); `/healthz` + `/readyz`, `log/slog` structured logs | KI-16 | S |
 | Docker image (distroless/static, pure-Go SQLite, tzdata), GHCR release on tag | ADR-0002, ADR-0007 | S |
 | VPS stack: Docker Compose + Caddy (auto-TLS), volume, nightly backup, uptime check | `deployment/vps.md` | S |
 | Connect Claude custom connector and ChatGPT connector; document both | `deployment/vps.md` | S |

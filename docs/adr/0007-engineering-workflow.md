@@ -2,6 +2,8 @@
 
 ## Status
 Proposed (2026-10-10). Addresses KI-15 and the process gaps behind KI-01/KI-02.
+Implemented so far: CI (`ci.yml`, PR #7 and #8), sandbox e2e harness and workflow
+(PR #9, KI-34).
 
 ## Context
 - CI has never run on GitHub (`.github/Workflows` instead of `.github/workflows`), and

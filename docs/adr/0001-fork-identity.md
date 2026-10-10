@@ -2,9 +2,9 @@
 
 ## Status
 Accepted (2026-10-11): option B. Spike verdict "conditional GO" — see
-`docs/2026-10-10-upstream-sdk-spike.md` on branch `spike-upstream-sdk`. Phase 2 safety
-adapters merged there (PR #4); phase 3 (view classifier, ADR-0005) is required before
-deployment.
+`docs/2026-10-10-upstream-sdk-spike.md`. Implemented on `main` by PR #6 (2026-10-10,
+`15e5b6b`), including the phase 2 safety adapters (PR #4) and the phase 3 view
+classifier (ADR-0005). Upstream PRs from the spike report §6 are still open items.
 
 ## Context
 - Lineage: `nicolai86/things-cloud-sdk` (MIT, 2017, Raphael Randschau; dormant since
