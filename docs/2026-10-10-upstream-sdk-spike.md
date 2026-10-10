@@ -74,7 +74,7 @@ Notes:
   `server/syncgate_test.go`: 32 concurrent syncs against a fake syncer that, like
   upstream, mutates unguarded state; without the gate it fails under `-race`.
 - No upstream test suite was run (Task7, replay and fuzz tests were read, not
-  executed). The Docker image was not built (C9 is a one-line change). Nothing was run
+  executed). The Docker image was built on 2026-10-11 (§3.1 C9). Nothing was run
   against a Things account.
 
 ## 3. Compile-level gaps (`server/` against upstream `v0.6.0`)
@@ -114,7 +114,7 @@ About 330 added and 76 removed lines in 11 files, about half of them tests.
 | C6 | `isConflictError`: typed `*thingscloud.HTTPError` 409, or an error message ending in `Write failed: 409` | **Regression vs March 2026**: 409 detection is a string match again (KI-21 style). The test that forbade string matching now asserts the narrow suffix match instead. Remove after the upstream PR (B2) |
 | C7 | Local `neverendingRepeatYear = 4001` | Same |
 | C8 | `/api/debug/history` reads the first page through `HistoryWithID(history.ID).Items(...)` (separate `History`, so the writer's cursor is untouched) and adds `uuid` (upstream's `Item.UUID` is `json:"-"`) | First page of parsed items instead of raw JSON; debug-only (KI-08 removes it) |
-| C9 | `go 1.25.0` in `go.mod`; `Dockerfile` builder `golang:1.25-alpine` | Image not built yet |
+| C9 | `go 1.25.0` in `go.mod`; `Dockerfile` builder `golang:1.25-alpine` | Image builds (2026-10-11, `095f3be`, linux/arm64, 25.6 MB, `alpine` 3.24.2). Offline run (`--network none`) without credentials exits 1 with `THINGS_USERNAME and THINGS_PASSWORD must be set`, so the binary starts. linux/amd64 not built yet |
 
 New tests: `server/readmodel_test.go` (`paginate`, `completedInRange`); updated:
 `write_conflict_test.go`, `mcp_format_test.go`, `write_repeat_test.go`.
@@ -222,5 +222,6 @@ ADR-0001 was accepted on 2026-10-11.
    KI-21, KI-22, KI-23, KI-25, KI-26), and the CI workflow (KI-15). Phase 2 also changes
    configuration: `DATA_DIR` and the cache file name (README, `CLAUDE.md`, `AGENTS.md`
    §4, `docs/installation.md`), and `DEBUG` no longer turns on HTTP dumps.
-5. Build the Docker image once (C9) and run the server against the sandbox account
+5. ~~Build the Docker image once (C9)~~ (done for linux/arm64; an x86_64 VPS needs
+   `docker buildx build --platform linux/amd64`), and run the server against the sandbox account
    only (AGENTS.md rule 1), starting from an empty data directory (B5).

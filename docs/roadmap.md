@@ -24,7 +24,7 @@ damage data; fix them before relying on the server again.
 | Merge `main` (PRs #1–#3, these docs) into `spike-upstream-sdk`; keep PR #2 behaviour; prefer the PR #4 ID adapter over PR #3's local `base58.go` | ADR-0001 | ✅ |
 | View classifier over upstream `State.AllTasks` carrying PR #1's rules (upstream `TasksIn*` lose two KI-02 cases) | ADR-0005, spike report §4 B3 | ✅ `server/views.go`; two `tir`-only cases differ (KI-02) |
 | Update docs that still describe the embedded SDK (spike report §8 item 4) | AGENTS.md, architecture.md, KI entries | ✅ (CI workflow stays with KI-15) |
-| PR `spike-upstream-sdk` → `main`; sandbox-account smoke test from an empty `DATA_DIR` | AGENTS.md rule 1 | PR open; smoke test and Docker build pending |
+| PR `spike-upstream-sdk` → `main`; sandbox-account smoke test from an empty `DATA_DIR` | AGENTS.md rule 1 | PR #6 open; Docker image builds (linux/arm64); sandbox smoke test pending |
 
 ## Phase 0 — Make it safe to touch (≈ 1 week)
 
@@ -73,7 +73,7 @@ Goal: Claude (web, desktop, iOS) and ChatGPT reach the server on the VPS securel
 
 | Item | Refs | Size |
 |---|---|---|
-| Upgrade to Go ≥ 1.25 and `mcp-go` v1.x (Dockerfile base image too) | ADR-0002 | S |
+| ~~Upgrade to Go ≥ 1.25 (Dockerfile base image too)~~ (done with the SDK migration); `mcp-go` v1.x | ADR-0002 | S |
 | Resource-server auth on `/mcp`: RFC 9728 metadata, 401 + `WWW-Authenticate`, JWT validation against Pocket ID, scopes `things.read`/`things.write` | KI-07, ADR-0002 | M |
 | End-to-end OAuth test with Claude (web + iOS) and ChatGPT; fall back to built-in AS if Pocket ID fails | ADR-0002 | S–M |
 | `DATA_DIR`, `/healthz` + `/readyz`, `log/slog` structured logs | KI-16 | S |
