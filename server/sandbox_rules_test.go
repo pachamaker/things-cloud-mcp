@@ -32,7 +32,8 @@ const (
 	// sandboxRunTitleRoot starts every title the harness writes; cleanup of
 	// earlier runs matches on it.
 	sandboxRunTitleRoot = "[e2e-"
-	// smokeTestTitlePrefix is what things_smoke_test writes (server/mcp.go).
+	// smokeTestTitlePrefix is what the removed things_smoke_test wrote (KI-11);
+	// its leftovers are still cleaned up.
 	smokeTestTitlePrefix = "[smoke-test] "
 
 	envSandboxUsername = "THINGS_SANDBOX_USERNAME"

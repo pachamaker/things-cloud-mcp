@@ -187,7 +187,8 @@ workaround can be deleted.
   otherwise.
 
 ### KI-11 · `things_smoke_test` is exposed to the LLM
-- **Status:** open · **Evidence:** confirmed (`server/mcp.go:1333`)
+- **Status:** fixed (phase 0) — the tool is gone; the sandbox e2e harness (KI-34) is the
+  write check, run only against the sandbox account · **Evidence:** confirmed (`server/mcp.go:1333` before the fix)
 - **Symptom:** the model can run a create/edit/complete/trash cycle against the real
   account at any time; leaves trashed `[smoke-test]` tasks behind.
 - **Fix direction:** move to an admin CLI / CI job against the sandbox account.

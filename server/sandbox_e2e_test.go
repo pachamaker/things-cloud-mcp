@@ -272,21 +272,6 @@ func TestSandboxE2E(t *testing.T) {
 				t.Errorf("search for the run id returned %s, which lacks it", o.UUID)
 			}
 		}
-
-		smoke := decodeAs[struct {
-			Passed int          `json:"passed"`
-			Failed int          `json:"failed"`
-			Checks []smokeCheck `json:"checks"`
-		}](t, "things_smoke_test", h.mustCall(t, "things_smoke_test", map[string]any{}))
-		if smoke.Failed != 0 || smoke.Passed == 0 {
-			var failed []string
-			for _, c := range smoke.Checks {
-				if c.Status != "pass" {
-					failed = append(failed, c.Name)
-				}
-			}
-			t.Errorf("things_smoke_test: %d passed, %d failed: %v", smoke.Passed, smoke.Failed, failed)
-		}
 	})
 
 	t.Run("conflict_409", func(t *testing.T) {

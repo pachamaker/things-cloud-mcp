@@ -44,7 +44,7 @@ The server performs an initial sync at startup and now exits if it cannot establ
                                                      Connector
 ```
 
-## MCP tools (36)
+## MCP tools (35)
 
 Once connected, Claude can do pretty much everything you'd do in the Things app:
 
@@ -54,7 +54,6 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 - **Edit** — title, notes, dates, deadlines, project, area, and tags (recurrence is not supported, see below)
 - **Organise** — move tasks between Today, Anytime, Someday, and Inbox
 - **Complete & restore** — complete or reopen tasks and checklist items; trash and untrash
-- **Diagnostics** — built-in smoke test covering the full create/read/edit/complete/trash cycle
 
 <details>
 <summary>Full tool reference</summary>
@@ -113,12 +112,6 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 | `things_complete_checklist_item` | Complete a checklist item | `uuid` |
 | `things_uncomplete_checklist_item` | Reopen a checklist item | `uuid` |
 | `things_delete_checklist_item` | Delete a checklist item | `uuid` |
-
-### Diagnostic tools
-
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `things_smoke_test` | Run a smoke test: create, read, edit, complete, trash | — |
 
 ### Parameter reference
 

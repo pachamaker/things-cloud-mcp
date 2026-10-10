@@ -292,7 +292,7 @@ func startSandboxHarness(t *testing.T, mode harnessMode) *sandboxHarness {
 	var prefixes []string
 	switch mode {
 	case harnessRun:
-		prefixes = []string{h.prefix, smokeTestTitlePrefix}
+		prefixes = []string{h.prefix}
 	case harnessCleanup:
 		prefixes = []string{sandboxRunTitleRoot, smokeTestTitlePrefix}
 	}
