@@ -514,17 +514,18 @@ func historyWrite(env writeEnvelope) error {
 
 	log.Printf("[WRITE] uuid=%s action=%d kind=%s", env.id, env.action, env.kind)
 	if err := history.Sync(); err != nil {
-		return fmt.Errorf("history sync failed: %w", err)
+		return fmt.Errorf("history sync failed: %w", redactRequestURL(err))
 	}
 	err := history.Write(env)
 	if isConflictError(err) {
 		log.Printf("[WRITE] 409 conflict, retrying...")
 		if err2 := history.Sync(); err2 != nil {
-			return fmt.Errorf("history re-sync failed: %w", err2)
+			return fmt.Errorf("history re-sync failed: %w", redactRequestURL(err2))
 		}
 		err = history.Write(env)
 	}
 	if err != nil {
+		err = redactRequestURL(err)
 		log.Printf("[WRITE] FAILED: %v", err)
 		return fmt.Errorf("write failed: %w", err)
 	}

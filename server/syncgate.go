@@ -73,6 +73,7 @@ func (g *syncGate) sync(window time.Duration) ([]sync.Change, error) {
 
 	g.lastStart = start
 	changes, err := g.inner.Sync()
+	err = redactRequestURL(err)
 	if !isRateLimited(err) {
 		g.backoff = 0
 		g.lastErr = err

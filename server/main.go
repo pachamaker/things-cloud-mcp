@@ -373,7 +373,7 @@ func connectThings(username, password, dataDir string) (closeMirror func() error
 	}
 	if err := history.Sync(); err != nil {
 		syncer.Close()
-		return nil, fmt.Errorf("failed to sync history: %w", err)
+		return nil, fmt.Errorf("failed to sync history: %w", redactRequestURL(err))
 	}
 	log.Println("History ready for writes")
 	return syncer.Close, nil

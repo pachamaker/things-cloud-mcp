@@ -141,8 +141,10 @@ workaround can be deleted.
   plus an injectable `http.Client`; a test that the secret never appears in output.
 
 ### KI-35 · Tool errors can echo the history key
-- **Status:** open · **Evidence:** confirmed (sandbox harness offline self-test,
-  2026-10-11: a refused commit surfaced as the tool error below)
+- **Status:** fixed on branch `KI-35-hide-history-key` (pending review) — tool results,
+  REST error bodies and log lines now read `write failed: Post
+  "https://cloud.culturedcode.com/<redacted>": …` · **Evidence:** confirmed (sandbox
+  harness offline self-test, 2026-10-11: a refused commit surfaced as the tool error below)
 - **Symptom:** when a Things Cloud request fails below HTTP (timeout, DNS, refused
   connection), the tool result reads `write failed: Post
   "https://cloud.culturedcode.com/version/1/history/<key>/commit?…": …`, and reads give
@@ -153,9 +155,19 @@ workaround can be deleted.
 - **Root cause:** the SDK's `http.Client` returns a `*url.Error` carrying the full URL;
   `historyWrite` and `syncForRead` (`server/write.go`) wrap it with `%w`, and the MCP and
   REST handlers return `err.Error()`.
-- **Fix direction:** at the tool/REST boundary and in logs, replace the history key (or
-  drop the URL of a `*url.Error`, keeping `Op` and the cause); test with a failing
-  transport. The sandbox harness already redacts it in test output.
+- **Fix (done on the branch):** `redactRequestURL` (`server/redact.go`) replaces the path
+  and query of a `*url.Error` with `<redacted>`, keeping `Op`, the host and the cause,
+  where SDK errors enter the server: the sync gate (all reads, `/api/sync`, the initial
+  sync), `historyWrite` (pull, commit, re-sync after a 409) and the history pull in
+  `connectThings`. `TestHistoryWrite_KI35_ErrorHidesHistoryKey` and its siblings in
+  `server/redact_test.go` drive the MCP and REST handlers through a refusing
+  `http.DefaultTransport` and check the tool result, the REST body and the log. The
+  sandbox harness keeps its own redaction as a second layer.
+- **Remaining:** the debug endpoints (KI-08) still show the key by design:
+  `/api/debug/histories` returns it, `/api/debug/delete-history` logs it, and
+  `/api/debug/history` returns raw SDK errors. Errors of `client.Verify`/`OwnHistory`
+  outside the sync gate (`/api/verify`, `failed to get history` at startup) can carry the
+  account e-mail address, not the key.
 
 ### KI-10 · Writes are accepted for UUIDs that do not exist (or have the wrong type)
 - **Status:** open · **Evidence:** confirmed (`server/write.go:650-852` validate only the
