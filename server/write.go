@@ -1,12 +1,13 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"io"
 	"log"
-	"math/big"
 	"net/http"
 	"strings"
 	gosync "sync"
@@ -120,17 +121,11 @@ func isInvalidInput(err error) bool {
 	return errors.Is(err, errInvalidInput)
 }
 
+// isBase58UUID accepts canonical Base58 encodings of 16 bytes (upstream
+// ValidateUUID) with the 21-22 characters Things emits; native IDs may start
+// with '1' (docs/protocol/things-cloud.md, "Identifiers", KI-26).
 func isBase58UUID(id string) bool {
-	const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-	if len(id) < 20 || len(id) > 32 {
-		return false
-	}
-	for i := 0; i < len(id); i++ {
-		if !strings.ContainsRune(alphabet, rune(id[i])) {
-			return false
-		}
-	}
-	return true
+	return len(id) >= 21 && len(id) <= idLength && thingscloud.ValidateUUID(id) == nil
 }
 
 func validateUUID(name, id string) error {
@@ -184,27 +179,45 @@ func validateUUIDSlice(name string, ids []string) ([]string, error) {
 	return out, nil
 }
 
+const (
+	idLength   = 22
+	maxIDDraws = 64
+)
+
+// generateUUID panics if the system random source fails, like uuid.New.
 func generateUUID() string {
-	u := uuid.New()
-	const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-	n := new(big.Int).SetBytes(u[:])
-	base := big.NewInt(58)
-	mod := new(big.Int)
-	var encoded []byte
-	for n.Sign() > 0 {
-		n.DivMod(n, base, mod)
-		encoded = append(encoded, alphabet[mod.Int64()])
+	id, err := newIDFromReader(rand.Reader)
+	if err != nil {
+		panic(err)
 	}
-	for i, j := 0, len(encoded)-1; i < j; i, j = i+1, j-1 {
-		encoded[i], encoded[j] = encoded[j], encoded[i]
+	return id
+}
+
+// newIDFromReader redraws until the first byte is non-zero and the encoding
+// is 22 characters. Upstream EncodeUUID pads a leading zero byte with '1',
+// which was reported to crash Things (KI-26); 21-character encodings are
+// redrawn too, so generated IDs never sit near either edge. About 3% of
+// draws are rejected, so maxIDDraws failures in a row mean a broken source.
+func newIDFromReader(r io.Reader) (string, error) {
+	for i := 0; i < maxIDDraws; i++ {
+		u, err := uuid.NewRandomFromReader(r)
+		if err != nil {
+			return "", fmt.Errorf("generate identifier: %w", err)
+		}
+		if u[0] == 0 {
+			continue
+		}
+		if id := thingscloud.EncodeUUID(u); len(id) == idLength {
+			return id, nil
+		}
 	}
-	return string(encoded)
+	return "", fmt.Errorf("generate identifier: no safe draw in %d attempts", maxIDDraws)
 }
 
 // syncForRead syncs before a read operation, logging any errors.
 // Returns the error so callers can optionally surface it.
 func syncForRead() error {
-	if _, err := syncer.Sync(); err != nil {
+	if _, err := mirror.Sync(); err != nil {
 		log.Printf("[SYNC] pre-read sync failed: %v", err)
 		return err
 	}
@@ -214,7 +227,7 @@ func syncForRead() error {
 // syncAfterWrite syncs after a write to refresh local state.
 // Errors are logged but not returned (best-effort refresh).
 func syncAfterWrite() {
-	if _, err := syncer.Sync(); err != nil {
+	if _, err := mirror.SyncNow(); err != nil {
 		log.Printf("[SYNC] post-write refresh failed: %v", err)
 	}
 }
@@ -488,12 +501,7 @@ func historyWrite(env writeEnvelope) error {
 	historyMu.Lock()
 	defer historyMu.Unlock()
 
-	if client != nil && client.Debug {
-		bs, _ := json.MarshalIndent(env, "", "  ")
-		log.Printf("[WRITE] uuid=%s action=%d kind=%s payload=%s", env.id, env.action, env.kind, string(bs))
-	} else {
-		log.Printf("[WRITE] uuid=%s action=%d kind=%s", env.id, env.action, env.kind)
-	}
+	log.Printf("[WRITE] uuid=%s action=%d kind=%s", env.id, env.action, env.kind)
 	if err := history.Sync(); err != nil {
 		return fmt.Errorf("history sync failed: %w", err)
 	}

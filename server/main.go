@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -20,12 +21,9 @@ import (
 var (
 	client  *things.Client
 	syncer  *sync.Syncer
+	mirror  *syncGate
 	history *things.History
 )
-
-type initialSyncer interface {
-	Sync() ([]sync.Change, error)
-}
 
 type shutdownServer interface {
 	ListenAndServe() error
@@ -33,6 +31,21 @@ type shutdownServer interface {
 }
 
 const shutdownTimeout = 10 * time.Second
+
+const (
+	defaultDataDir = "/data"
+	// syncDBFile differs from the embedded SDK's things.db (schema v4):
+	// upstream migrate() treats v4 as newer than its own v2 and would skip its
+	// migrations on that file (spike report B5). The cache is disposable.
+	syncDBFile = "things-upstream.db"
+)
+
+func syncDBPath(dataDir string) string {
+	if dataDir == "" {
+		dataDir = defaultDataDir
+	}
+	return filepath.Join(dataDir, syncDBFile)
+}
 
 func jsonResponse(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
@@ -76,7 +89,7 @@ func paginationQueryOpts(r *http.Request) (listOpts, error) {
 }
 
 func handleSync(w http.ResponseWriter, r *http.Request) {
-	changes, err := syncer.Sync()
+	changes, err := mirror.Sync()
 	if err != nil {
 		jsonError(w, fmt.Sprintf("sync failed: %v", err), 500)
 		return
@@ -323,7 +336,14 @@ func debugAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func runInitialSync(s initialSyncer) error {
+// newThingsClient never sets Client.Debug: upstream dumps whole requests,
+// including "Authorization: Password <plaintext>", and offers no redaction
+// hook (spike report B7, KI-09). DEBUG only gates the debug endpoints.
+func newThingsClient(endpoint, username, password string) *things.Client {
+	return things.New(endpoint, username, password)
+}
+
+func runInitialSync(s changeSyncer) error {
 	log.Println("Performing initial sync...")
 	changes, err := s.Sync()
 	if err != nil {
@@ -382,17 +402,23 @@ func main() {
 		port = "8080"
 	}
 
-	client = things.New(things.APIEndpoint, username, password)
-	client.Debug = os.Getenv("DEBUG") == "true"
+	client = newThingsClient(things.APIEndpoint, username, password)
+
+	dbPath := syncDBPath(os.Getenv("DATA_DIR"))
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o700); err != nil {
+		log.Fatalf("failed to create data directory: %v", err)
+	}
+	log.Printf("Sync database: %s", dbPath)
 
 	var err error
-	syncer, err = sync.Open("/data/things.db", client)
+	syncer, err = sync.Open(dbPath, client)
 	if err != nil {
 		log.Fatalf("failed to open sync database: %v", err)
 	}
 	defer syncer.Close()
+	mirror = newSyncGate(syncer, time.Now)
 
-	if err := runInitialSync(syncer); err != nil {
+	if err := runInitialSync(mirror); err != nil {
 		log.Fatal(err)
 	}
 
@@ -508,7 +534,7 @@ func main() {
 		email := client.EMail
 		password := os.Getenv("THINGS_PASSWORD")
 
-		log.Printf("[NUKE] Deleting account %s...", email)
+		log.Printf("[NUKE] Deleting account...")
 		if err := client.Accounts.Delete(); err != nil {
 			jsonError(w, fmt.Sprintf("delete failed: %v", err), 500)
 			return
