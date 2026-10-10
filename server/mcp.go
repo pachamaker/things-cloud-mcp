@@ -78,7 +78,7 @@ func formatTask(t *things.Task) taskOutput {
 	case things.TaskTypeHeading:
 		o.Type = "heading"
 	}
-	if t.DeadlineDate != nil {
+	if t.DeadlineDate != nil && t.DeadlineDate.Year() < things.NeverendingRepeatYear {
 		o.Deadline = t.DeadlineDate.Format("2006-01-02")
 	}
 	if t.CompletionDate != nil {
@@ -890,7 +890,7 @@ func newMCPHandler() http.Handler {
 	// --- Read tools ---
 
 	s.AddTool(mcp.NewTool("things_list_today",
-		mcp.WithDescription("List tasks scheduled for today in Things"),
+		mcp.WithDescription("List to-dos in the Things Today view: to-dos with a start date today or earlier (including overdue ones and scheduled ones whose date has arrived), to-dos placed in Today, and to-dos without a start date whose deadline is today or earlier (Inbox included). \"Today\" is the server's UTC calendar day, not the user's local date, so the list can be a day off around local midnight. Projects scheduled for today are not listed, and overdue deadlines dismissed in the Things app still appear."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximum number of tasks to return"),
@@ -903,7 +903,7 @@ func newMCPHandler() http.Handler {
 	), mcpListToday)
 
 	s.AddTool(mcp.NewTool("things_list_anytime",
-		mcp.WithDescription("List tasks in the Things Anytime view"),
+		mcp.WithDescription("List started to-dos in the Things Anytime view, excluding those shown in Today. \"Today\" is the server's UTC calendar day, not the user's local date."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximum number of tasks to return"),
@@ -929,7 +929,7 @@ func newMCPHandler() http.Handler {
 	), mcpListInbox)
 
 	s.AddTool(mcp.NewTool("things_list_someday",
-		mcp.WithDescription("List tasks in the Things Someday view"),
+		mcp.WithDescription("List to-dos in the Things Someday view: deferred to-dos without a start date. Those with a deadline today or earlier also appear in things_list_today."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximum number of tasks to return"),
@@ -942,7 +942,7 @@ func newMCPHandler() http.Handler {
 	), mcpListSomeday)
 
 	s.AddTool(mcp.NewTool("things_list_upcoming",
-		mcp.WithDescription("List tasks in the Things Upcoming view"),
+		mcp.WithDescription("List to-dos in the Things Upcoming view: deferred to-dos with a start date after today. Scheduled to-dos whose date has arrived are in things_list_today instead. \"Today\" is the server's UTC calendar day, not the user's local date."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximum number of tasks to return"),

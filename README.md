@@ -48,11 +48,11 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `things_list_today` | Tasks scheduled for today | `limit`, `offset` |
+| `things_list_today` | Today view: start date today or earlier (overdue and scheduled-date-arrived to-dos), placed in Today, or no start date with a deadline today or earlier; "today" is the server's UTC day | `limit`, `offset` |
 | `things_list_inbox` | Tasks in the inbox | `limit`, `offset` |
 | `things_list_anytime` | Tasks in Anytime | `limit`, `offset` |
-| `things_list_someday` | Tasks in Someday | `limit`, `offset` |
-| `things_list_upcoming` | Tasks in Upcoming | `limit`, `offset` |
+| `things_list_someday` | Tasks in Someday (deferred, no start date) | `limit`, `offset` |
+| `things_list_upcoming` | Tasks in Upcoming (start date after today) | `limit`, `offset` |
 | `things_list_all_tasks` | All open tasks | `limit`, `offset` |
 | `things_list_projects` | All projects | `limit`, `offset` |
 | `things_list_areas` | All areas | `limit`, `offset` |
