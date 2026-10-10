@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"hash/crc32"
 	"log"
-	"math/big"
 	"net/http"
 	"strings"
 	gosync "sync"
 	"time"
 
 	thingscloud "github.com/arthursoares/things-cloud-sdk"
-	"github.com/google/uuid"
 )
 
 // historyMu serializes all write operations (history.Sync + history.Write)
@@ -121,16 +119,7 @@ func isInvalidInput(err error) bool {
 }
 
 func isBase58UUID(id string) bool {
-	const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-	if len(id) < 20 || len(id) > 32 {
-		return false
-	}
-	for i := 0; i < len(id); i++ {
-		if !strings.ContainsRune(alphabet, rune(id[i])) {
-			return false
-		}
-	}
-	return true
+	return thingscloud.ValidateUUID(id) == nil
 }
 
 func validateUUID(name, id string) error {
@@ -185,20 +174,7 @@ func validateUUIDSlice(name string, ids []string) ([]string, error) {
 }
 
 func generateUUID() string {
-	u := uuid.New()
-	const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-	n := new(big.Int).SetBytes(u[:])
-	base := big.NewInt(58)
-	mod := new(big.Int)
-	var encoded []byte
-	for n.Sign() > 0 {
-		n.DivMod(n, base, mod)
-		encoded = append(encoded, alphabet[mod.Int64()])
-	}
-	for i, j := 0, len(encoded)-1; i < j; i, j = i+1, j-1 {
-		encoded[i], encoded[j] = encoded[j], encoded[i]
-	}
-	return string(encoded)
+	return thingscloud.NewUUID()
 }
 
 // syncForRead syncs before a read operation, logging any errors.
