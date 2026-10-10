@@ -336,6 +336,13 @@ func debugAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// newThingsClient never sets Client.Debug: upstream dumps whole requests,
+// including "Authorization: Password <plaintext>", and offers no redaction
+// hook (spike report B7, KI-09). DEBUG only gates the debug endpoints.
+func newThingsClient(endpoint, username, password string) *things.Client {
+	return things.New(endpoint, username, password)
+}
+
 func runInitialSync(s changeSyncer) error {
 	log.Println("Performing initial sync...")
 	changes, err := s.Sync()
@@ -395,8 +402,7 @@ func main() {
 		port = "8080"
 	}
 
-	client = things.New(things.APIEndpoint, username, password)
-	client.Debug = os.Getenv("DEBUG") == "true"
+	client = newThingsClient(things.APIEndpoint, username, password)
 
 	dbPath := syncDBPath(os.Getenv("DATA_DIR"))
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o700); err != nil {
@@ -528,7 +534,7 @@ func main() {
 		email := client.EMail
 		password := os.Getenv("THINGS_PASSWORD")
 
-		log.Printf("[NUKE] Deleting account %s...", email)
+		log.Printf("[NUKE] Deleting account...")
 		if err := client.Accounts.Delete(); err != nil {
 			jsonError(w, fmt.Sprintf("delete failed: %v", err), 500)
 			return

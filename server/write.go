@@ -501,12 +501,7 @@ func historyWrite(env writeEnvelope) error {
 	historyMu.Lock()
 	defer historyMu.Unlock()
 
-	if client != nil && client.Debug {
-		bs, _ := json.MarshalIndent(env, "", "  ")
-		log.Printf("[WRITE] uuid=%s action=%d kind=%s payload=%s", env.id, env.action, env.kind, string(bs))
-	} else {
-		log.Printf("[WRITE] uuid=%s action=%d kind=%s", env.id, env.action, env.kind)
-	}
+	log.Printf("[WRITE] uuid=%s action=%d kind=%s", env.id, env.action, env.kind)
 	if err := history.Sync(); err != nil {
 		return fmt.Errorf("history sync failed: %w", err)
 	}
