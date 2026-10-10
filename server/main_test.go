@@ -135,3 +135,26 @@ func TestServeWithGracefulShutdown(t *testing.T) {
 		}
 	})
 }
+
+func TestSyncDBPath_KI16(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		dataDir string
+		want    string
+	}{
+		{"default data dir", "", "/data/things-upstream.db"},
+		{"absolute DATA_DIR", "/var/lib/things-mcp", "/var/lib/things-mcp/things-upstream.db"},
+		{"DATA_DIR with trailing slash", "/srv/things/", "/srv/things/things-upstream.db"},
+		{"relative DATA_DIR", "state", "state/things-upstream.db"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := syncDBPath(tt.dataDir); got != tt.want {
+				t.Errorf("syncDBPath(%q) = %q, want %q", tt.dataDir, got, tt.want)
+			}
+		})
+	}
+}

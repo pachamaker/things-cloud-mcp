@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -30,6 +31,21 @@ type shutdownServer interface {
 }
 
 const shutdownTimeout = 10 * time.Second
+
+const (
+	defaultDataDir = "/data"
+	// syncDBFile differs from the embedded SDK's things.db (schema v4):
+	// upstream migrate() treats v4 as newer than its own v2 and would skip its
+	// migrations on that file (spike report B5). The cache is disposable.
+	syncDBFile = "things-upstream.db"
+)
+
+func syncDBPath(dataDir string) string {
+	if dataDir == "" {
+		dataDir = defaultDataDir
+	}
+	return filepath.Join(dataDir, syncDBFile)
+}
 
 func jsonResponse(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
@@ -382,8 +398,14 @@ func main() {
 	client = things.New(things.APIEndpoint, username, password)
 	client.Debug = os.Getenv("DEBUG") == "true"
 
+	dbPath := syncDBPath(os.Getenv("DATA_DIR"))
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o700); err != nil {
+		log.Fatalf("failed to create data directory: %v", err)
+	}
+	log.Printf("Sync database: %s", dbPath)
+
 	var err error
-	syncer, err = sync.Open("/data/things.db", client)
+	syncer, err = sync.Open(dbPath, client)
 	if err != nil {
 		log.Fatalf("failed to open sync database: %v", err)
 	}
