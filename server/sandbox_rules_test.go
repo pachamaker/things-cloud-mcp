@@ -18,6 +18,7 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	gosync "sync"
 	"time"
@@ -42,7 +43,22 @@ const (
 	// envSandboxRunID pins the run ID, so a later CI step can clean up
 	// exactly that run's objects.
 	envSandboxRunID = "THINGS_E2E_RUN_ID"
+	// envSandboxRequireRun turns every skip of a sandbox test into a failure.
+	// CI sets it: a skipped run passes in GitHub and would look green without
+	// touching the account.
+	envSandboxRequireRun = "THINGS_E2E_REQUIRE_RUN"
 )
+
+// sandboxRunRequired reads envSandboxRequireRun. Any value other than empty
+// or a false boolean counts as set, so a typo cannot hide a skipped run.
+func sandboxRunRequired(getenv func(string) string) bool {
+	raw := strings.TrimSpace(getenv(envSandboxRequireRun))
+	if raw == "" {
+		return false
+	}
+	v, err := strconv.ParseBool(raw)
+	return err != nil || v
+}
 
 var errSandboxNotConfigured = errors.New("sandbox credentials not configured: set " +
 	envSandboxEnvFile + " to a file outside the repository, or " +

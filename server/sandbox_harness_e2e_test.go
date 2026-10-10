@@ -272,12 +272,21 @@ type sandboxHarness struct {
 	cleaned bool
 }
 
+// skipOrFail skips the test, or fails it when envSandboxRequireRun is set.
+func skipOrFail(t *testing.T, reason string) {
+	t.Helper()
+	if sandboxRunRequired(os.Getenv) {
+		t.Fatalf("%s (%s is set, so this run fails instead of skipping)", reason, envSandboxRequireRun)
+	}
+	t.Skip(reason)
+}
+
 func startSandboxHarness(t *testing.T, mode harnessMode) *sandboxHarness {
 	t.Helper()
 
 	creds, err := loadSandboxCredentials(os.Getenv, os.ReadFile)
 	if errors.Is(err, errSandboxNotConfigured) {
-		t.Skip(err.Error())
+		skipOrFail(t, err.Error())
 	}
 	if err != nil {
 		t.Fatalf("sandbox credentials: %v", err)
@@ -287,7 +296,7 @@ func startSandboxHarness(t *testing.T, mode harnessMode) *sandboxHarness {
 	now := time.Now().UTC()
 	midnight := now.Truncate(24 * time.Hour)
 	if now.Sub(midnight) < sandboxMidnightMargin || midnight.Add(24*time.Hour).Sub(now) < sandboxMidnightMargin {
-		t.Skip("within 15 minutes of 00:00 UTC: the server's day is the UTC day (KI-03), so a run here could straddle two days; retry later")
+		skipOrFail(t, "within 15 minutes of 00:00 UTC: the server's day is the UTC day (KI-03), so a run here could straddle two days; retry later")
 	}
 
 	interval := sandboxDefaultInterval

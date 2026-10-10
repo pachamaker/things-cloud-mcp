@@ -511,3 +511,32 @@ func TestPublicTask_HidesText(t *testing.T) {
 		t.Errorf("publicTask = %s", publicTask(o))
 	}
 }
+
+func TestSandboxRunRequired_KI34(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		raw  string
+		want bool
+	}{
+		{"", false},
+		{"  ", false},
+		{"0", false},
+		{"false", false},
+		{"1", true},
+		{"true", true},
+		{"TRUE", true},
+		{"yes", true},
+	}
+	for _, tt := range tests {
+		getenv := func(key string) string {
+			if key == envSandboxRequireRun {
+				return tt.raw
+			}
+			return ""
+		}
+		if got := sandboxRunRequired(getenv); got != tt.want {
+			t.Errorf("sandboxRunRequired(%q) = %v, want %v", tt.raw, got, tt.want)
+		}
+	}
+}
