@@ -54,8 +54,8 @@ func handleVerify(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, resp)
 }
 
-func paginationQueryOpts(r *http.Request) (sync.QueryOpts, error) {
-	opts := sync.QueryOpts{}
+func paginationQueryOpts(r *http.Request) (listOpts, error) {
+	opts := listOpts{}
 
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		limit, err := strconv.Atoi(raw)
@@ -96,7 +96,7 @@ func handleInbox(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
-	state := syncer.State()
+	state := readState()
 	tasks, err := state.TasksInInbox(opts)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to get inbox: %v", err), 500)
@@ -119,7 +119,7 @@ func handleToday(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
-	state := syncer.State()
+	state := readState()
 	tasks, err := state.TasksInToday(opts)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to get today: %v", err), 500)
@@ -142,7 +142,7 @@ func handleAnytime(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
-	state := syncer.State()
+	state := readState()
 	tasks, err := state.TasksInAnytime(opts)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to get anytime: %v", err), 500)
@@ -165,7 +165,7 @@ func handleSomeday(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
-	state := syncer.State()
+	state := readState()
 	tasks, err := state.TasksInSomeday(opts)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to get someday: %v", err), 500)
@@ -188,7 +188,7 @@ func handleUpcoming(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
-	state := syncer.State()
+	state := readState()
 	tasks, err := state.TasksInUpcoming(opts)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to get upcoming: %v", err), 500)
@@ -211,7 +211,7 @@ func handleProjects(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
-	state := syncer.State()
+	state := readState()
 	projects, err := state.AllProjects(opts)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to get projects: %v", err), 500)
@@ -234,7 +234,7 @@ func handleAreas(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
-	state := syncer.State()
+	state := readState()
 	areas, err := state.AllAreasWithOpts(opts)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to get areas: %v", err), 500)
@@ -257,7 +257,7 @@ func handleTags(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
-	state := syncer.State()
+	state := readState()
 	tags, err := state.AllTagsWithOpts(opts)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to get tags: %v", err), 500)
@@ -433,13 +433,21 @@ func main() {
 
 	// Debug endpoint — dump raw write history items
 	http.HandleFunc("/api/debug/history", debugAuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		items, err := history.RawItems()
+		items, _, err := client.HistoryWithID(history.ID).Items(things.ItemsOptions{})
 		if err != nil {
 			jsonError(w, err.Error(), 500)
 			return
 		}
+		type debugItem struct {
+			UUID string `json:"uuid"`
+			things.Item
+		}
+		out := make([]debugItem, len(items))
+		for i, item := range items {
+			out[i] = debugItem{UUID: item.UUID, Item: item}
+		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(items)
+		json.NewEncoder(w).Encode(out)
 	}))
 
 	// Debug endpoint — list all history keys (uses SDK method with auth)

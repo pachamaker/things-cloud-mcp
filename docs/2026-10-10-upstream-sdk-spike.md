@@ -10,43 +10,48 @@ in this repository.
 | Upstream | `v0.6.0`, commit `6919edc`, `go 1.25.0` (latest tag on proxy.golang.org) |
 | Module path on the branch | `github.com/pachamaker/things-cloud-mcp` |
 | Verdict | **Conditional GO** (see [Recommendation](#recommendation)) |
+| Status | Branch compiles against upstream; `go vet` and `go test ./...` pass (2026-10-11) |
 
-## 1. What was done, and what was not
+## 1. What was done
 
-Done:
-
-- `go.mod` module renamed to `github.com/pachamaker/things-cloud-mcp`. Imports in
-  `server/` are unchanged (`github.com/arthursoares/things-cloud-sdk[/sync]`).
-- The embedded SDK (root package `thingscloud`, incl. `itemaction_string.go`), `sync/`,
-  `state/`, `syncutil/`, `cmd/`, `tapes/` and `example/` were moved with `git mv` to
-  `_embedded-sdk/`. The Go tool ignores directories starting with `_`, so this code is
-  no longer part of the module. Deleting it outright was refused by the agent's
-  permission policy; once the spike is accepted, `git rm -r _embedded-sdk` finishes
-  the job. `example/` went too: it is an SDK example with its own copy of the KI-26
-  encoder, and upstream ships an updated one.
-- Upstream `v0.6.0` was downloaded into the module cache (`go mod download`) and its
-  source was compared with the embedded copy and with every SDK symbol `server/` uses.
-
-**Not done (blocker):** `go get github.com/arthursoares/things-cloud-sdk@v0.6.0` /
-`go mod tidy`. The agent's permission policy refused to add a third-party dependency
-without the owner's explicit approval. Therefore:
-
-- the branch does **not** compile yet (missing `require`), and
-- the compile-gap table in §3 was derived by reading code, **not** from compiler
-  output. It covers every SDK identifier referenced in `server/*.go`, but the compiler
-  may still add a surprise (e.g. a changed method signature not caught by reading).
-
-Commands to finish the spike once the owner approves (§8).
+1. 2026-10-10, static pass. Upstream `v0.6.0` was downloaded into the module cache and
+   compared with the embedded copy and with every SDK symbol `server/` uses. Adding the
+   dependency was held back by the agent's permission policy until the owner approved
+   it, so §3 and §4 were first written from reading code.
+2. 2026-10-11, after the owner's approval:
+   - `go get github.com/arthursoares/things-cloud-sdk@v0.6.0` + `go mod tidy`
+     (`go` directive 1.24 → 1.25, `golang.org/x/sys` → v0.44.0, `modernc.org/sqlite`
+     becomes indirect).
+   - Module renamed to `github.com/pachamaker/things-cloud-mcp`. Imports in `server/`
+     are unchanged (`github.com/arthursoares/things-cloud-sdk[/sync]`).
+   - Removed from the module: the embedded SDK (root package `thingscloud`, incl.
+     `itemaction_string.go`), `sync/`, `state/`, `syncutil/`, `cmd/`, `tapes/`, and
+     `example/` (an SDK example with its own copy of the KI-26 encoder; upstream ships
+     an updated one). 62 files.
+   - The compiler reported 16 errors in `server/` non-test code, all of them C1–C8 from
+     §3 (no surprises), plus test-only fallout of C5, C6, C7. They are closed with the
+     minimal changes listed in §3, mostly in a new thin layer `server/readmodel.go`.
+   - Only phase 1 of §6 is done. The phase 2 safety adapters (B1, B2 follow-up, B5,
+     B6, B7) and the phase 3 view classifier are **not** implemented: the branch must
+     not be deployed as is.
 
 ## 2. Build, vet and test results
 
 | Tree | `go build ./...` | `go vet ./...` | `go test ./...` |
 |---|---|---|---|
 | Baseline `3164e8a` (clean export, run in a scratch directory) | ok | ok | 1 known failure: `sync: TestIntegration/query_change_log` (KI-15). `server`, root SDK, `state/memory`: ok |
-| `spike-upstream-sdk` | **fails**: `no required module provides package github.com/arthursoares/things-cloud-sdk` (dependency not added, §1) | fails, same reason | not run |
+| `spike-upstream-sdk` | ok | ok | ok (`server` is the only package; `-race` on `server`: ok) |
 
-No upstream code was executed: its own test suite (incl. Task7, replay and fuzz tests)
-was read, not run.
+Notes:
+
+- With a single `main` package, `go build ./...` tries to write a binary named
+  `server` over the directory of the same name; use `go build -o /dev/null ./...` or
+  `go build -o things-server ./server`.
+- The `server` tests do not exercise concurrent syncs, so `-race` passing says nothing
+  about B1.
+- No upstream test suite was run (Task7, replay and fuzz tests were read, not
+  executed). The Docker image was not built (C9 is a one-line change). Nothing was run
+  against a Things account.
 
 ## 3. Compile-level gaps (`server/` against upstream `v0.6.0`)
 
@@ -73,12 +78,29 @@ Every other SDK symbol used by `server/` exists upstream with the same signature
 Dependency overlap is benign: upstream pins the same `google/uuid v1.6.0` and
 `modernc.org/sqlite v1.45.0`; `golang.org/x/sys` resolves to upstream's `v0.44.0` by MVS.
 
+### 3.1 How C1–C9 are closed on the branch
+
+About 330 added and 76 removed lines in 11 files, about half of them tests.
+
+| # | Change | Behaviour vs baseline |
+|---|---|---|
+| C1–C3 | `server/readmodel.go`: `listOpts` (= `sync.QueryOpts` + `Limit`/`Offset`), generic `paginate`, and `readModel`, which embeds `*sync.State` and shadows the list methods with paginated versions. Handlers call `readState()` instead of `syncer.State()` for lists | Same results. Pagination now happens in Go after loading the full list, so every page costs a full N+1 load (KI-18) |
+| C4 | `readModel.CompletedTasksInRange` → pure `completedInRange` over `AllTasks(IncludeCompleted)` | Same filter, order and default limit (50); loads all to-dos |
+| C5 | `today_index_ref` removed from `taskOutput` | **Visible output change** for MCP clients |
+| C6 | `isConflictError`: typed `*thingscloud.HTTPError` 409, or an error message ending in `Write failed: 409` | **Regression vs March 2026**: 409 detection is a string match again (KI-21 style). The test that forbade string matching now asserts the narrow suffix match instead. Remove after the upstream PR (B2) |
+| C7 | Local `neverendingRepeatYear = 4001` | Same |
+| C8 | `/api/debug/history` reads the first page through `HistoryWithID(history.ID).Items(...)` (separate `History`, so the writer's cursor is untouched) and adds `uuid` (upstream's `Item.UUID` is `json:"-"`) | First page of parsed items instead of raw JSON; debug-only (KI-08 removes it) |
+| C9 | `go 1.25.0` in `go.mod`; `Dockerfile` builder `golang:1.25-alpine` | Image not built yet |
+
+New tests: `server/readmodel_test.go` (`paginate`, `completedInRange`); updated:
+`write_conflict_test.go`, `mcp_format_test.go`, `write_repeat_test.go`.
+
 ## 4. Behavioural gaps (compile fine, behave differently)
 
 | # | Area | Embedded copy (`3164e8a`) | Upstream `v0.6.0` | Impact on the server | Closing |
 |---|---|---|---|---|---|
 | B1 | Sync concurrency | `Syncer.mu` serialises `Sync()`, reads take `RLock` (March 2026 incident fix) | No mutex (`sync/sync.go:28-34`). `Sync()` swaps `s.db` to a transaction and mutates `s.history` | Every tool call syncs; parallel calls race on the syncer (double-applied batches, `-race` failures) | Local wrapper that serialises and coalesces `Sync()` (freshness window, architecture principle 5). Reads through `State` use the raw pool and are safe under WAL. 2 h incl. race test |
-| B2 | 409 retry on write | `errors.As(*HTTPStatusError)` → retry once | `Write` returns an untyped error; `isConflictError` never matches | Concurrent edit from a Things app → write fails instead of retrying | Short term: match `"Write failed: 409"` (fragile, cf. KI-21). Upstream PR: return `*HTTPError` from `Write` |
+| B2 | 409 retry on write | `errors.As(*HTTPStatusError)` → retry once | `Write` returns an untyped error; `isConflictError` never matches | Concurrent edit from a Things app → write fails instead of retrying | Done on the branch as a stopgap: suffix match on `Write failed: 409` (fragile, cf. KI-21; §3.1 C6). Upstream PR: return `*HTTPError` from `Write` |
 | B3 | View queries | Today: `st=1` and `sr` **or** `tir` on the current UTC day; Anytime: `st=1` not Today; Someday: `st=2` not Upcoming; Upcoming: `st=2`, `sr`/`tir` > now (UTC) | Today: `st=1`, `sr` within `startOfDay(time.Now())` in the **process time zone**, no `tir`; Anytime: `st=1 AND sr IS NULL`; Someday: `st=2 AND sr IS NULL`; Upcoming: `st=2 AND sr >= tomorrow` (`sync/state.go:120-174`) | Two KI-02 cases disappear from **every** list: `st=1` with a past start date and `st=2` with start date ≤ today. The embedded copy at least shows them in Anytime/Someday. Process time zone: correct for UTC and positive offsets only; with a negative offset Today shows tomorrow's tasks | Do not use upstream `TasksIn*` for views. Implement the ADR-0005 classifier over `State.AllTasks` (it is needed under option A too) |
 | B4 | Persisted task fields | Stores `tir` (`today_index_ref`); drops `rr`, `rt`, `sb`, `dds` | Stores none of `tir`, `dds`, `sb`, `rr`, `rt` (`RecurrenceIDs` is on the struct but not stored; `recurrence_rule` column always NULL) | The classifier cannot honour deadline suppression, This Evening, or hide repeating templates (KI-05); KI-01's "persist `rr`/`rt` read-only" is impossible on this mirror | Upstream PR: add the columns and bump `TaskReplayVersion` — upstream's replay machinery then rebuilds old caches automatically. Fallback: soft fork via `replace` (§7) |
 | B5 | Schema numbering | `schemaVersion = 4` (adds `today_index_ref`, v4 wipes the cache) | `schemaVersion = 2` (`sync/schema.go:3`) + separate `task_replay_state` generation (`TaskReplayVersion = 3`) | Opening an existing `/data/things.db`: `migrate()` is a no-op (4 ≥ 2), replay generation defaults to 1 → backup + full replay on first sync; `today_index_ref` stays stale; any future upstream migration numbered 3–4 would be **silently skipped** on this file | Start upstream on a fresh database file (the cache is disposable), together with `DATA_DIR` (KI-16). 1 h |
@@ -110,7 +132,7 @@ from a fresh file (B5).
 
 | Phase | Scope | Estimate |
 |---|---|---|
-| 1. Compile with parity | C1–C9 | ~0.5 day |
+| 1. Compile with parity | C1–C9 | ~0.5 day — **done on the branch** (§3.1) |
 | 2. Safety adapters (must ship before the first production deploy) | B1 sync wrapper (+coalescing, 429 backoff), B2 conflict detection, B5 fresh DB file, B6 ID generator, B7 debug off | ~0.5–0.75 day |
 | 3. Views on the local read model | ADR-0005 classifier for the cases the upstream mirror supports (`st`, `sr`, `dd`, `ss`, `tr`, type, parents, headings), replacing `TasksIn*`; optional in-memory snapshot keyed by `LastSyncedIndex` to avoid N+1 on every call | ~1 day |
 | **Total to "server runs on upstream, no regression"** | | **~2–2.25 days** |
@@ -143,8 +165,8 @@ guard in `Syncer`.
 
 Conditions:
 
-1. The owner approves adding the dependency; the spike is then finished per §8, and the
-   compiler confirms that C1–C9 are the complete list.
+1. ~~The owner approves adding the dependency and the compiler confirms that C1–C9 are
+   the complete list.~~ Met on 2026-10-11 (§1, §3.1).
 2. The phase 2 safety adapters ship before any production deploy on upstream.
 3. Views never use upstream `TasksIn*`; the read model goes through the local
    classifier (ADR-0005).
@@ -158,17 +180,21 @@ Not a NO-GO: nothing found requires changing upstream before the server can run
 safely. The only hard dependency on upstream is the full ADR-0005 rule set (B4), and it
 has a fallback.
 
-## 8. Finishing the spike (needs the owner's approval)
+## 8. Next steps
 
-```bash
-export GOPROXY=https://proxy.golang.org,direct
-go get github.com/arthursoares/things-cloud-sdk@v0.6.0
-go mod tidy
-go build ./... && go vet ./... && go test ./...
-```
+The spike itself is finished: the dependency is added (approved by the owner on
+2026-10-11), the embedded SDK is gone, and the branch builds, vets and tests green.
 
-Expected result: compile errors exactly at C1–C8. After the minimal fixes from §3, the
-`server` tests from the baseline should pass, except `write_conflict_test.go` (C6/B2),
-`mcp_format_test.go` (C5) and `write_repeat_test.go` (C7), which change with the
-fixes. Then
-`git rm -r _embedded-sdk` and bump the Dockerfile builder image (C9).
+If option B is accepted:
+
+1. Mark ADR-0001 Accepted; keep this branch as the starting point, or redo phase 1 on a
+   fresh branch after open PRs #1 and #2 are merged (ADR-0001 consequences).
+2. Phase 2 safety adapters (§6), then phase 3 view classifier (ADR-0005). Do not deploy
+   before phase 2.
+3. Open the upstream PRs from §6.
+4. Update the documents that still describe the embedded SDK: `CLAUDE.md`, `AGENTS.md`
+   §4–§5 (commands, repository map, baseline), `docs/architecture.md` §4, the KI entries
+   that point to `sync/` and root `*.go` files (KI-09, KI-15, KI-16, KI-18, KI-20,
+   KI-21, KI-22, KI-23, KI-25, KI-26), and the CI workflow (KI-15).
+5. Build the Docker image once (C9) and run the server against the sandbox account
+   only (AGENTS.md rule 1), starting from an empty data directory (B5).

@@ -352,6 +352,9 @@ type UUIDRequest struct {
 // Repeat rule builder
 // ---------------------------------------------------------------------------
 
+// neverendingRepeatYear is the year of Things' "never" sentinel date (4001-01-01, KI-04).
+const neverendingRepeatYear = 4001
+
 // buildRepeatRule builds a RepeaterConfiguration JSON from a repeat string.
 // Formats: "daily", "weekly", "monthly", "yearly", "every N days/weeks/months/years"
 // Optional end date: append "until YYYY-MM-DD".
@@ -433,7 +436,7 @@ func buildRepeatRule(repeat string, refDate time.Time) (*json.RawMessage, error)
 
 	ref := time.Date(refDate.Year(), refDate.Month(), refDate.Day(), 0, 0, 0, 0, time.UTC)
 	srTs := ref.Unix()
-	edTs := time.Date(thingscloud.NeverendingRepeatYear, time.January, 1, 0, 0, 0, 0, time.UTC).Unix()
+	edTs := time.Date(neverendingRepeatYear, time.January, 1, 0, 0, 0, 0, time.UTC).Unix()
 	if endTs != nil {
 		if *endTs < srTs {
 			return nil, fmt.Errorf("repeat end date must be on or after start date")
@@ -511,8 +514,16 @@ func historyWrite(env writeEnvelope) error {
 }
 
 func isConflictError(err error) bool {
-	var statusErr *thingscloud.HTTPStatusError
-	return errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusConflict
+	if err == nil {
+		return false
+	}
+	var httpErr *thingscloud.HTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.StatusCode == http.StatusConflict
+	}
+	// things-cloud-sdk v0.6.0 History.Write reports a rejected commit only as
+	// the untyped error "Write failed: <status>" (histories.go:283).
+	return strings.HasSuffix(err.Error(), "Write failed: 409")
 }
 
 // parseWhen interprets the when parameter. Returns (st, sr, tir, handled).

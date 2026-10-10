@@ -11,18 +11,16 @@ import (
 func TestFormatTaskJSONShape(t *testing.T) {
 	t.Parallel()
 
-	t.Run("includes completed_at and today_index_ref", func(t *testing.T) {
+	t.Run("includes completed_at", func(t *testing.T) {
 		t.Parallel()
 
 		completedAt := time.Date(2026, 3, 5, 10, 30, 0, 0, time.FixedZone("UTC+1", 3600))
-		todayRef := time.Date(2026, 3, 6, 12, 0, 0, 0, time.FixedZone("UTC-5", -5*3600))
 		task := &things.Task{
-			UUID:                "task-1",
-			Title:               "Completed task",
-			Status:              things.TaskStatusCompleted,
-			Type:                things.TaskTypeTask,
-			CompletionDate:      &completedAt,
-			TodayIndexReference: &todayRef,
+			UUID:           "task-1",
+			Title:          "Completed task",
+			Status:         things.TaskStatusCompleted,
+			Type:           things.TaskTypeTask,
+			CompletionDate: &completedAt,
 		}
 
 		b, err := json.Marshal(formatTask(task))
@@ -38,8 +36,8 @@ func TestFormatTaskJSONShape(t *testing.T) {
 		if got["completed_at"] != "2026-03-05T09:30:00Z" {
 			t.Fatalf("expected completed_at to be normalized to UTC, got %v", got["completed_at"])
 		}
-		if got["today_index_ref"] != "2026-03-06" {
-			t.Fatalf("expected today_index_ref date string, got %v", got["today_index_ref"])
+		if _, ok := got["today_index_ref"]; ok {
+			t.Fatal("did not expect today_index_ref: the SDK does not persist tir")
 		}
 	})
 

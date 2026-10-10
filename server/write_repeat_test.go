@@ -5,8 +5,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	things "github.com/arthursoares/things-cloud-sdk"
 )
 
 func decodeRepeatConfig(t *testing.T, raw *json.RawMessage) map[string]any {
@@ -114,7 +112,7 @@ func TestBuildRepeatRule_DefaultsToNeverendingSentinel(t *testing.T) {
 	}
 	cfg := decodeRepeatConfig(t, raw)
 
-	wantEnd := float64(time.Date(things.NeverendingRepeatYear, time.January, 1, 0, 0, 0, 0, time.UTC).Unix())
+	wantEnd := float64(time.Date(neverendingRepeatYear, time.January, 1, 0, 0, 0, 0, time.UTC).Unix())
 	if got := numberField(t, cfg, "ed"); got != wantEnd {
 		t.Fatalf("expected ed=%.0f, got %.0f", wantEnd, got)
 	}
