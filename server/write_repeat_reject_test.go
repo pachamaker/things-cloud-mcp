@@ -1,74 +1,53 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// repeat is currently rejected on both createTask and editTask; see
-// docs/known-issues/repeat-disabled.md. These tests confirm the guard fires
-// for every real recurrence value, leaves "" and "none" untouched, and never
-// reaches the network write path: `history` (server/main.go) is left nil in
-// this test binary, so a call that reached historyWrite() would panic on a
-// nil dereference rather than return an error. A clean error return with no
-// panic is itself proof no write was attempted.
-//
-// Full end-to-end verification that repeat-free requests still succeed, and
-// that repeat:"none" still clears an existing rule, is blocked by the
-// pre-existing absence of a `history` test double in this repo and is out of
-// scope for this hotfix.
+// Recurrence writes are forbidden (KI-01). The server globals `history` and
+// `syncer` stay nil in this test binary, so any request that slipped past the
+// guard and reached historyWrite() would panic instead of returning an error.
 
-func TestRepeatValueRequestsRule(t *testing.T) {
-	t.Parallel()
+var ki01RepeatValues = []string{
+	"daily",
+	"every 3 weeks",
+	"daily until 2026-02-24 after completion",
+	"garbage-value",
+	"none",
+	"None",
+	" ",
+}
 
-	cases := []struct {
-		repeat string
-		want   bool
-	}{
-		{"", false},
-		{"none", false},
-		{"None", true}, // case-sensitive, matches buildRepeatRule's existing semantics
-		{"daily", true},
-		{"every 2 days", true},
-		{"daily until 2026-02-24 after completion", true},
-		{"garbage", true},
+func assertRepeatRejected(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
-
-	for _, tc := range cases {
-		t.Run(tc.repeat, func(t *testing.T) {
-			t.Parallel()
-			if got := repeatValueRequestsRule(tc.repeat); got != tc.want {
-				t.Fatalf("repeatValueRequestsRule(%q) = %v, want %v", tc.repeat, got, tc.want)
-			}
-		})
+	if !isInvalidInput(err) {
+		t.Fatalf("expected invalid-input error, got: %v", err)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "repeat") || !strings.Contains(msg, "KI-01") {
+		t.Fatalf("expected error naming repeat and KI-01, got: %v", err)
 	}
 }
 
-func TestCreateTask_RejectsRepeat(t *testing.T) {
+func TestCreateTask_KI01_RejectsAnyRepeat(t *testing.T) {
 	t.Parallel()
 
-	repeats := []string{
-		"daily",
-		"every 3 weeks",
-		"daily until 2026-02-24 after completion",
-		"garbage-value",
-	}
-
-	for _, repeat := range repeats {
+	for _, repeat := range ki01RepeatValues {
 		t.Run(repeat, func(t *testing.T) {
 			t.Parallel()
 
-			uuid, err := createTask(CreateTaskRequest{Title: "Test task", Repeat: repeat})
-			if err == nil {
-				t.Fatal("expected error, got nil")
-			}
-			if !isInvalidInput(err) {
-				t.Fatalf("expected invalid-input error, got: %v", err)
-			}
-			msg := strings.ToLower(err.Error())
-			if !strings.Contains(msg, "repeat") || !strings.Contains(msg, "unsupported") {
-				t.Fatalf("expected error mentioning repeat/unsupported, got: %v", err)
-			}
+			uuid, err := createTask(CreateTaskRequest{Title: "Test task", When: "anytime", Repeat: repeat})
+			assertRepeatRejected(t, err)
 			if uuid != "" {
 				t.Fatalf("expected empty uuid on rejection, got %q", uuid)
 			}
@@ -76,31 +55,125 @@ func TestCreateTask_RejectsRepeat(t *testing.T) {
 	}
 }
 
-func TestEditTask_RejectsRepeat(t *testing.T) {
+func TestEditTask_KI01_RejectsAnyRepeat(t *testing.T) {
 	t.Parallel()
 
-	repeats := []string{
-		"daily",
-		"every 3 weeks",
-		"daily until 2026-02-24 after completion",
-		"garbage-value",
-	}
-
-	for _, repeat := range repeats {
+	for _, repeat := range ki01RepeatValues {
 		t.Run(repeat, func(t *testing.T) {
 			t.Parallel()
 
-			err := editTask(EditTaskRequest{UUID: generateUUID(), Repeat: repeat})
-			if err == nil {
-				t.Fatal("expected error, got nil")
+			err := editTask(EditTaskRequest{UUID: generateUUID(), Title: "Renamed", Repeat: repeat})
+			assertRepeatRejected(t, err)
+		})
+	}
+}
+
+func TestRESTWrites_KI01_RejectRepeat(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		handler http.HandlerFunc
+		body    string
+	}{
+		{"create daily", handleCreateTask, `{"title":"Test task","repeat":"daily"}`},
+		{"create none", handleCreateTask, `{"title":"Test task","repeat":"none"}`},
+		{"edit weekly", handleEditTask, `{"uuid":"` + generateUUID() + `","repeat":"weekly"}`},
+		{"edit none", handleEditTask, `{"uuid":"` + generateUUID() + `","repeat":"none"}`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			req := httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(tc.body))
+			rec := httptest.NewRecorder()
+			tc.handler(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d (body %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
 			}
-			if !isInvalidInput(err) {
-				t.Fatalf("expected invalid-input error, got: %v", err)
+			var resp map[string]string
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode response: %v", err)
 			}
-			msg := strings.ToLower(err.Error())
-			if !strings.Contains(msg, "repeat") || !strings.Contains(msg, "unsupported") {
-				t.Fatalf("expected error mentioning repeat/unsupported, got: %v", err)
+			if !strings.Contains(resp["error"], "KI-01") {
+				t.Fatalf("expected KI-01 in error, got %q", resp["error"])
 			}
 		})
+	}
+}
+
+func TestMCPWrites_KI01_RejectRepeat(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		handler func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)
+		args    map[string]any
+	}{
+		{"create daily", mcpCreateTask, map[string]any{"title": "Test task", "repeat": "daily"}},
+		{"create none", mcpCreateTask, map[string]any{"title": "Test task", "repeat": "none"}},
+		{"edit monthly", mcpEditTask, map[string]any{"uuid": generateUUID(), "repeat": "monthly"}},
+		{"edit none", mcpEditTask, map[string]any{"uuid": generateUUID(), "repeat": "none"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var req mcp.CallToolRequest
+			req.Params.Arguments = tc.args
+			result, err := tc.handler(context.Background(), req)
+			if err != nil {
+				t.Fatalf("handler returned error: %v", err)
+			}
+			if !result.IsError {
+				t.Fatal("expected error result")
+			}
+			text, ok := result.Content[0].(mcp.TextContent)
+			if !ok {
+				t.Fatalf("expected text content, got %T", result.Content[0])
+			}
+			if !strings.Contains(text.Text, "KI-01") {
+				t.Fatalf("expected KI-01 in error, got %q", text.Text)
+			}
+		})
+	}
+}
+
+func TestMCPToolSchemas_KI01_NoRepeatParameter(t *testing.T) {
+	t.Parallel()
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	rec := httptest.NewRecorder()
+	newMCPHandler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("tools/list status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Result struct {
+			Tools []mcp.Tool `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode tools/list: %v (body %s)", err, rec.Body.String())
+	}
+
+	seen := map[string]bool{}
+	for _, tool := range resp.Result.Tools {
+		if _, ok := tool.InputSchema.Properties["repeat"]; ok {
+			t.Errorf("tool %s still exposes a repeat parameter", tool.Name)
+		}
+		seen[tool.Name] = true
+	}
+	for _, name := range []string{"things_create_task", "things_edit_task"} {
+		if !seen[name] {
+			t.Errorf("tools/list did not return %s", name)
+		}
 	}
 }

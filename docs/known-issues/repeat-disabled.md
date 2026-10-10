@@ -1,7 +1,13 @@
 # `repeat` is temporarily disabled
 
-**Status:** `repeat` is rejected with an error on `things_create_task` and `things_edit_task`
-(both MCP and REST). `repeat: "none"` (clearing an existing rule on `things_edit_task`) still works.
+Register entry: **KI-01** in `docs/known-issues.md`; decision: ADR-0004.
+
+**Status:** any `repeat` value is rejected with an error on `things_create_task` and
+`things_edit_task` (both MCP and REST), **including `repeat: "none"`**. Clearing a rule still
+writes `rr: null` onto an item that may be a repeating template or instance, which is itself a
+recurrence write. `repeat` is no longer part of the MCP tool schemas; the handlers still read it
+so that a stray value is rejected instead of silently ignored. The guard is `rejectRepeat`
+(`server/write.go`), called first in `createTask()` and `editTask()`; no write path sets `rr`.
 
 ## Why
 
@@ -26,7 +32,7 @@ it speaks the **Things Cloud HTTP/JSON wire protocol**, which represents a repea
 `rt1_*` anywhere in this codebase.
 
 This SDK already has a working, unit-tested implementation of that wire-format rule:
-`buildRepeatRule` (`server/write.go:360-476`, tests in `server/write_repeat_test.go`) and a typed
+`buildRepeatRule` (`server/write.go`, tests in `server/write_repeat_test.go`; no longer called by any write path) and a typed
 `RepeaterConfiguration` model (`repeat.go`, tests in `repeat_test.go`). `repeat` is not an
 unimplemented or misleading parameter — it's a deliberately shipped feature
 (see `docs/BACKLOG.md`: "Add recurring task support (Done)").
@@ -50,7 +56,7 @@ Independent of that contradiction, two real risk factors remain unaddressed in t
 - **No payload validation exists anywhere** in this codebase (confirmed by grep for `Validate`).
 - Three payload fields — `icsd` (instance-creation-start-date), `icc` (instance-creation-count), and
   `rp` — are hardcoded to `nil`/`0` in every task-create/edit call regardless of whether `repeat` is
-  set (`server/write.go:636-638`). Nothing in this codebase confirms whether Things.app requires
+  set (`taskCreatePayload` in `createTask`, `server/write.go`). Nothing in this codebase confirms whether Things.app requires
   these populated alongside a non-null `rr`. Suspicious signal: `repeat.go`'s own occurrence-math
   methods (`NextScheduledAt`, `ComputeFirstScheduledAt`) — exactly the kind of logic that would
   compute these values — are currently dead code, called by nothing outside their own tests.
@@ -66,8 +72,10 @@ both open questions:
 2. Does the Cloud wire protocol need two linked `Task6` records (template + instance) for a repeating
    task, or does a single record with `rr` set (as this repo already sends) fully satisfy it?
 
-Until that capture exists, do not remove the guards in `createTask()`/`editTask()`
-(`server/write.go`).
+Until that capture exists and a sandbox round trip passes on Mac and iOS, do not remove
+`rejectRepeat` from `createTask()`/`editTask()` (`server/write.go`) and do not re-add `repeat` to
+the tool schemas. Re-enabling also needs the mirror to store `rr`/`rt`, so the server can refuse
+edits to templates and instances (KI-01 fix direction).
 
 ## Read-path gap (separate, lower-risk, unrelated to the crash)
 

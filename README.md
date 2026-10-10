@@ -35,8 +35,8 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 
 - **Browse your views** — Today, Inbox, Anytime, Someday, Upcoming, All Tasks, by Project, by Area, Completed (with date filters)
 - **Look things up** — get any task, area, or tag; search by title or note content
-- **Create** — tasks (with notes, dates, deadlines, project, tags, recurrence), projects, areas, tags, headings, and checklist items
-- **Edit** — title, notes, dates, deadlines, project, area, tags, and recurrence
+- **Create** — tasks (with notes, dates, deadlines, project, tags), projects, areas, tags, headings, and checklist items
+- **Edit** — title, notes, dates, deadlines, project, area, and tags (recurrence is not supported, see below)
 - **Organise** — move tasks between Today, Anytime, Someday, and Inbox
 - **Complete & restore** — complete or reopen tasks and checklist items; trash and untrash
 - **Diagnostics** — built-in smoke test covering the full create/read/edit/complete/trash cycle
@@ -69,12 +69,12 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `things_create_task` | Create a task | `title` (req), `note`, `when`, `deadline`, `project`, `parent_task`, `tags`, `repeat` (unsupported, see below) |
+| `things_create_task` | Create a task | `title` (req), `note`, `when`, `deadline`, `project`, `parent_task`, `tags` |
 | `things_create_project` | Create a project | `title` (req), `note`, `when`, `deadline`, `area` |
 | `things_create_heading` | Create a heading in a project | `title` (req), `project` |
 | `things_create_area` | Create an area | `title` (req), `tags` |
 | `things_create_tag` | Create a tag | `title` (req), `shorthand`, `parent` |
-| `things_edit_task` | Edit a task | `uuid` (req), `title`, `note`, `when`, `deadline`, `project`, `parent_task`, `area`, `tags`, `repeat` (unsupported, see below) |
+| `things_edit_task` | Edit a task | `uuid` (req), `title`, `note`, `when`, `deadline`, `project`, `parent_task`, `area`, `tags` |
 | `things_complete_task` | Complete a task | `uuid` |
 | `things_uncomplete_task` | Reopen a completed task | `uuid` |
 | `things_trash_task` | Move to trash | `uuid` |
@@ -125,27 +125,14 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 | `YYYY-MM-DD` | Set a hard deadline |
 | `none` | Clear an existing deadline (edit only) |
 
-#### `repeat` — Recurring tasks (currently disabled)
+#### Recurring tasks — not supported
 
-**`repeat` is rejected with an error on both `things_create_task` and `things_edit_task`.**
-Setting a recurrence rule through this API has been reported to corrupt Things Cloud history and
-crash Things 3 on macOS and iOS, with no local recovery path on iOS. See
-[`docs/known-issues/repeat-disabled.md`](docs/known-issues/repeat-disabled.md) for the full
-investigation and what's needed to re-enable it.
-
-`repeat: "none"` on `things_edit_task` still works, to clear a recurrence rule from an existing
-task. Everything else below describes the disabled format for reference:
-
-| Value | Effect |
-|-------|--------|
-| `daily` | Every day |
-| `weekly` | Every week |
-| `monthly` | Every month |
-| `yearly` | Every year |
-| `every N days/weeks/months/years` | Custom interval |
-| `... until YYYY-MM-DD` | End recurrence on that date |
-| `... after completion` | Repeat-after-completion mode |
-| `none` | Clear recurrence (edit only) |
+Recurrence cannot be set, changed or removed through this server. `repeat` is not part of
+the tool schemas, and any `repeat` value sent to `things_create_task`, `things_edit_task`,
+`/api/tasks/create` or `/api/tasks/edit` — `"none"` included — is rejected with an error
+before anything is written. Recurrence writes have corrupted Things on macOS and iOS
+(incident 2026-08-18, KI-01). Set up or remove recurrence in the Things app. Background:
+[`docs/known-issues/repeat-disabled.md`](docs/known-issues/repeat-disabled.md).
 
 </details>
 
