@@ -140,6 +140,23 @@ workaround can be deleted.
 - **Fix direction:** upstream PR: redact `Authorization` and `password` fields in dumps,
   plus an injectable `http.Client`; a test that the secret never appears in output.
 
+### KI-35 · Tool errors can echo the history key
+- **Status:** open · **Evidence:** confirmed (sandbox harness offline self-test,
+  2026-10-11: a refused commit surfaced as the tool error below)
+- **Symptom:** when a Things Cloud request fails below HTTP (timeout, DNS, refused
+  connection), the tool result reads `write failed: Post
+  "https://cloud.culturedcode.com/version/1/history/<key>/commit?…": …`, and reads give
+  `pre-read sync failed: Get "…/history/<key>/items…"`. The same text goes to the log.
+  History endpoints take no `Authorization` header (`docs/protocol/things-cloud.md` §1),
+  so the key is a bearer capability for the whole task database, and the error lands in
+  the LLM client's transcript.
+- **Root cause:** the SDK's `http.Client` returns a `*url.Error` carrying the full URL;
+  `historyWrite` and `syncForRead` (`server/write.go`) wrap it with `%w`, and the MCP and
+  REST handlers return `err.Error()`.
+- **Fix direction:** at the tool/REST boundary and in logs, replace the history key (or
+  drop the URL of a `*url.Error`, keeping `Op` and the cause); test with a failing
+  transport. The sandbox harness already redacts it in test output.
+
 ### KI-10 · Writes are accepted for UUIDs that do not exist (or have the wrong type)
 - **Status:** open · **Evidence:** confirmed (`server/write.go:650-852` validate only the
   Base58 shape)
@@ -323,6 +340,31 @@ workaround can be deleted.
   hard-coded in `server/mcp.go`; Dockerfile uses `alpine:latest` and `CGO_ENABLED=1`
   although `modernc.org/sqlite` is pure Go.
 - **Fix direction:** ADR-0001 (fork identity) and ADR-0002 (deployment).
+
+### KI-34 · The write path has no automated end-to-end check on a real account
+- **Status:** in-progress — harness ready (`server/sandbox_*_test.go`,
+  `docs/testing/sandbox-e2e.md`); the sandbox account, its seed list and the first run
+  are pending the owner · **Evidence:** confirmed
+- **Symptom:** the only end-to-end checks were the shell scripts in `tests/`. They write
+  into whatever account the server uses, cover part of the tools, check nothing on the
+  wire, and leave areas and tags behind. A payload regression of the KI-01/KI-26/KI-31
+  kind would first show up as broken Things apps.
+- **Fix direction (done on the branch):** Go tests behind build tag `e2e`: the server
+  in-process on a temp `DATA_DIR`, a real MCP client on `/mcp`, credentials only from
+  `THINGS_SANDBOX_*` or `THINGS_SANDBOX_ENV_FILE`, an account guard (area
+  `MCP E2E SANDBOX`, username ≠ `THINGS_USERNAME`), a write firewall that refuses any
+  commit outside the verified write set or outside the run's own objects before it is
+  sent, a deterministic 409 retry test, an independent observer client that checks the
+  stored history and its own mirror, run-prefix titles with cleanup (also on failure)
+  and a leftover cleanup test, a 1 request/s throttle, and read-only checks of a manual
+  seed list (`Task7`, repeating to-dos). Offline self-test against an in-memory fake:
+  `go test -tags 'e2e fakecloud' -run '^TestSandbox' ./server`.
+- **Remaining:** first sandbox run, then a Mac + iOS round trip (ADR-0004). The nightly
+  workflow `.github/workflows/e2e.yml` (environment `things-sandbox`, manual approval) is
+  ready; it needs the owner's one-time environment and secrets setup. `things_edit_task` with `when: "none"`
+  writes `sr`/`tir` without `st`, which is not a verified placement: the firewall refuses
+  it, so the harness does not exercise it; capture what the official client sends, or
+  write `st` explicitly.
 
 ### KI-17 · Global mutable state in the server package
 - **Status:** open · **Evidence:** confirmed (`server/main.go:20-24`, `server/write.go:21`)

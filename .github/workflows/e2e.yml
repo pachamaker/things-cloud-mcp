@@ -1,0 +1,75 @@
+# Sandbox end-to-end tests against the dedicated sandbox Things account (KI-34).
+# docs/testing/sandbox-e2e.md describes the harness, its safety model and the
+# one-time setup of the `things-sandbox` environment (required reviewer, `main`
+# only, secrets THINGS_SANDBOX_USERNAME and THINGS_SANDBOX_PASSWORD).
+#
+# Never add push, pull_request or pull_request_target triggers: the job runs
+# repository code with the sandbox credentials. The logs are public; the
+# harness prints IDs, statuses and its own strings, never account e-mails,
+# titles or notes.
+# Actions are pinned to a full commit SHA; the comment names the release.
+name: Sandbox e2e
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Once a day, far from 00:00 UTC: the server's "today" is the UTC day
+    # (KI-03) and the harness skips itself near midnight.
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: things-sandbox
+  cancel-in-progress: false
+
+jobs:
+  sandbox-e2e:
+    name: Sandbox e2e
+    runs-on: ubuntu-latest
+    environment: things-sandbox
+    timeout-minutes: 70
+    env:
+      # The cleanup step trashes exactly this run's objects.
+      THINGS_E2E_RUN_ID: e2e-gh${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # In-memory fake of Things Cloud, no credentials: a broken harness
+      # fails here before it touches the account.
+      - name: Harness self-test (offline)
+        timeout-minutes: 10
+        run: go test -tags 'e2e fakecloud' -run '^TestSandbox' -count=1 ./server
+
+      - name: Sandbox e2e
+        id: e2e
+        timeout-minutes: 30
+        env:
+          THINGS_SANDBOX_USERNAME: ${{ secrets.THINGS_SANDBOX_USERNAME }}
+          THINGS_SANDBOX_PASSWORD: ${{ secrets.THINGS_SANDBOX_PASSWORD }}
+        run: go test -tags e2e -run '^TestSandboxE2E$' -count=1 -v -timeout 25m ./server
+
+      - name: Seed checks (read-only)
+        timeout-minutes: 10
+        env:
+          THINGS_SANDBOX_USERNAME: ${{ secrets.THINGS_SANDBOX_USERNAME }}
+          THINGS_SANDBOX_PASSWORD: ${{ secrets.THINGS_SANDBOX_PASSWORD }}
+        run: go test -tags e2e -run '^TestSandboxSeedChecks$' -count=1 -v -timeout 8m ./server
+
+      # Runs after failures and cancellations too (a -timeout kill skips the
+      # test's own cleanup); skipped only when the e2e step never started.
+      - name: Trash this run's objects
+        if: ${{ always() && steps.e2e.outcome != 'skipped' }}
+        timeout-minutes: 10
+        env:
+          THINGS_SANDBOX_USERNAME: ${{ secrets.THINGS_SANDBOX_USERNAME }}
+          THINGS_SANDBOX_PASSWORD: ${{ secrets.THINGS_SANDBOX_PASSWORD }}
+        run: go test -tags e2e -run '^TestSandboxCleanupLeftovers$' -count=1 -v -timeout 8m ./server

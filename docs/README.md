@@ -12,6 +12,7 @@ Start with [`../AGENTS.md`](../AGENTS.md) if you are about to change code.
 | [`roadmap.md`](roadmap.md) | Phased plan with exit criteria |
 | [`adr/`](adr/README.md) | Architecture decision records |
 | [`deployment/vps.md`](deployment/vps.md) | Self-hosting on a VPS for Claude and ChatGPT |
+| [`testing/sandbox-e2e.md`](testing/sandbox-e2e.md) | Sandbox end-to-end tests: safety model, setup, seed list, cadence |
 | [`legal-and-risk.md`](legal-and-risk.md) | Legal and Terms-of-Service risk notes (not legal advice) |
 | [`installation.md`](installation.md) | Legacy Fly.io installation guide (superseded by `deployment/vps.md`) |
 | [`skills.md`](skills.md) | Writing Claude Skills on top of the tools |

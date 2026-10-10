@@ -47,7 +47,8 @@ Error responses observed (here and in other implementations):
 | 404 `AccountIssue` / 404 without `Authorization` | Stale history key after account reset, or missing auth header on account endpoints | Rebuild mirror / add header |
 | 500 | `start-index` beyond head | Check head first |
 
-The shell integration tests wait 1 s between calls to avoid 429.
+The shell integration tests wait 1 s between calls to avoid 429; the sandbox e2e harness
+sends at most one Things Cloud request per second (`docs/testing/sandbox-e2e.md`).
 
 ## 2. Endpoints
 
@@ -264,6 +265,7 @@ talks to the cloud sees an instance only after some Things app has created it.
    `testdata/captures/<feature>-<date>.json` with the Things app version.
 3. Write a test that builds the payload with server code and diffs it against the
    capture (key set, value types, null vs absent).
-4. Round-trip on the sandbox account: write via the server, then open Things on Mac
+4. Round-trip on the sandbox account: cover the write in `TestSandboxE2E` and extend the
+   harness's wire rules (`server/sandbox_rules_test.go`), run it, then open Things on Mac
    **and** iOS and confirm nothing breaks after a full sync and app restart.
 5. Update this document (evidence ✅) and the capability table in `AGENTS.md`.

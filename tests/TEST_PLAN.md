@@ -1,5 +1,10 @@
 # Things Cloud API — Test Plan
 
+> **Superseded for sandbox runs** by the Go harness in `server/sandbox_*_test.go`
+> (`docs/testing/sandbox-e2e.md`, KI-34): it covers every MCP tool, guards the account,
+> inspects every commit before it is sent and cleans up. The scripts below remain for
+> black-box checks of a deployed server; they create items in whatever account it uses.
+
 ## Overview
 
 All tests live in the `tests/` directory and run against a deployed server URL that you provide via a script argument or `BASE_URL`. All tests use real Things Cloud sync — there are no mocks. A 1-second delay between calls avoids Things Cloud 429 rate limiting.

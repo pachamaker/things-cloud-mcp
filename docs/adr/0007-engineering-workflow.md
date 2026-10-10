@@ -28,7 +28,7 @@ Proposed (2026-10-10). Addresses KI-15 and the process gaps behind KI-01/KI-02.
 | Tape | SDK HTTP behaviour against recorded responses | `tapes/`, `*_test.go` | every push |
 | Capture | our payloads vs official-client captures | `testdata/captures/` | every push |
 | Conformance | classifier vs real Things DB snapshots | `testdata/conformance/` | every push |
-| Sandbox e2e | full MCP round trip on a dedicated Things account | `tests/*.sh`, manual or nightly | before release |
+| Sandbox e2e | full MCP round trip on a dedicated Things account | `server/sandbox_*_test.go` (tag `e2e`, `docs/testing/sandbox-e2e.md`); `tests/*.sh` for a deployed server | before merging write-path changes; at most daily |
 | Prod smoke | read-only health of the deployed server | `GET /readyz`, `things_list(view=today)` | after deploy |
 
 Rules:
