@@ -6,11 +6,11 @@ in this repository.
 
 | | |
 |---|---|
-| Branch | `spike-upstream-sdk` (from `3164e8a`) |
+| Branch | `spike-upstream-sdk` (from `3164e8a`); phase 2 on `claude/upstream-sdk-safety-adapters-015b47` (from `ebb1284`) |
 | Upstream | `v0.6.0`, commit `6919edc`, `go 1.25.0` (latest tag on proxy.golang.org) |
 | Module path on the branch | `github.com/pachamaker/things-cloud-mcp` |
 | Verdict | **Conditional GO** (see [Recommendation](#recommendation)) |
-| Status | Branch compiles against upstream; `go vet` and `go test ./...` pass (2026-10-11) |
+| Status | Branch compiles against upstream; `go vet` and `go test ./...` pass (2026-10-11). Phase 2 safety adapters done (2026-10-11, §4); phase 3 open |
 
 ## 1. What was done
 
@@ -34,6 +34,10 @@ in this repository.
    - Only phase 1 of §6 is done. The phase 2 safety adapters (B1, B2 follow-up, B5,
      B6, B7) and the phase 3 view classifier are **not** implemented: the branch must
      not be deployed as is.
+3. 2026-10-11, phase 2 on `claude/upstream-sdk-safety-adapters-015b47`: B1 (with the B8 429 backoff), B5, B6 and B7 are
+   closed locally in `server/` (details in the "Closing" column of §4). B2 stays the
+   suffix match. Phase 3 is still open: views use upstream `TasksIn*` (B3), so §7
+   condition 3 is not met and the branch is still not ready for production.
 
 ## 2. Build, vet and test results
 
@@ -41,14 +45,17 @@ in this repository.
 |---|---|---|---|
 | Baseline `3164e8a` (clean export, run in a scratch directory) | ok | ok | 1 known failure: `sync: TestIntegration/query_change_log` (KI-15). `server`, root SDK, `state/memory`: ok |
 | `spike-upstream-sdk` | ok | ok | ok (`server` is the only package; `-race` on `server`: ok) |
+| `claude/upstream-sdk-safety-adapters-015b47` | ok | ok | ok; `-race` on `server`: ok, now including concurrent syncs |
 
 Notes:
 
 - With a single `main` package, `go build ./...` tries to write a binary named
   `server` over the directory of the same name; use `go build -o /dev/null ./...` or
   `go build -o things-server ./server`.
-- The `server` tests do not exercise concurrent syncs, so `-race` passing says nothing
-  about B1.
+- On `spike-upstream-sdk` the `server` tests do not exercise concurrent syncs, so
+  `-race` passing there says nothing about B1. Phase 2 adds
+  `server/syncgate_test.go`: 32 concurrent syncs against a fake syncer that, like
+  upstream, mutates unguarded state; without the gate it fails under `-race`.
 - No upstream test suite was run (Task7, replay and fuzz tests were read, not
   executed). The Docker image was not built (C9 is a one-line change). Nothing was run
   against a Things account.
@@ -99,14 +106,14 @@ New tests: `server/readmodel_test.go` (`paginate`, `completedInRange`); updated:
 
 | # | Area | Embedded copy (`3164e8a`) | Upstream `v0.6.0` | Impact on the server | Closing |
 |---|---|---|---|---|---|
-| B1 | Sync concurrency | `Syncer.mu` serialises `Sync()`, reads take `RLock` (March 2026 incident fix) | No mutex (`sync/sync.go:28-34`). `Sync()` swaps `s.db` to a transaction and mutates `s.history` | Every tool call syncs; parallel calls race on the syncer (double-applied batches, `-race` failures) | Local wrapper that serialises and coalesces `Sync()` (freshness window, architecture principle 5). Reads through `State` use the raw pool and are safe under WAL. 2 h incl. race test |
+| B1 | Sync concurrency | `Syncer.mu` serialises `Sync()`, reads take `RLock` (March 2026 incident fix) | No mutex (`sync/sync.go:28-34`). `Sync()` swaps `s.db` to a transaction and mutates `s.history` | Every tool call syncs; parallel calls race on the syncer (double-applied batches, `-race` failures) | ✅ Done (phase 2): `server/syncgate.go`. One mutex serialises every `Sync()`; reads share the outcome (including an error) of a sync that started less than 2 s before the call; post-write syncs (`SyncNow`) only share a sync that started after the call; injectable clock. Reads through `State` use the raw pool and are safe under WAL (`State()` holds only `rawDB`), so they bypass the gate |
 | B2 | 409 retry on write | `errors.As(*HTTPStatusError)` → retry once | `Write` returns an untyped error; `isConflictError` never matches | Concurrent edit from a Things app → write fails instead of retrying | Done on the branch as a stopgap: suffix match on `Write failed: 409` (fragile, cf. KI-21; §3.1 C6). Upstream PR: return `*HTTPError` from `Write` |
 | B3 | View queries | Today: `st=1` and `sr` **or** `tir` on the current UTC day; Anytime: `st=1` not Today; Someday: `st=2` not Upcoming; Upcoming: `st=2`, `sr`/`tir` > now (UTC) | Today: `st=1`, `sr` within `startOfDay(time.Now())` in the **process time zone**, no `tir`; Anytime: `st=1 AND sr IS NULL`; Someday: `st=2 AND sr IS NULL`; Upcoming: `st=2 AND sr >= tomorrow` (`sync/state.go:120-174`) | Two KI-02 cases disappear from **every** list: `st=1` with a past start date and `st=2` with start date ≤ today. The embedded copy at least shows them in Anytime/Someday. Process time zone: correct for UTC and positive offsets only; with a negative offset Today shows tomorrow's tasks | Do not use upstream `TasksIn*` for views. Implement the ADR-0005 classifier over `State.AllTasks` (it is needed under option A too) |
 | B4 | Persisted task fields | Stores `tir` (`today_index_ref`); drops `rr`, `rt`, `sb`, `dds` | Stores none of `tir`, `dds`, `sb`, `rr`, `rt` (`RecurrenceIDs` is on the struct but not stored; `recurrence_rule` column always NULL) | The classifier cannot honour deadline suppression, This Evening, or hide repeating templates (KI-05); KI-01's "persist `rr`/`rt` read-only" is impossible on this mirror | Upstream PR: add the columns and bump `TaskReplayVersion` — upstream's replay machinery then rebuilds old caches automatically. Fallback: soft fork via `replace` (§7) |
-| B5 | Schema numbering | `schemaVersion = 4` (adds `today_index_ref`, v4 wipes the cache) | `schemaVersion = 2` (`sync/schema.go:3`) + separate `task_replay_state` generation (`TaskReplayVersion = 3`) | Opening an existing `/data/things.db`: `migrate()` is a no-op (4 ≥ 2), replay generation defaults to 1 → backup + full replay on first sync; `today_index_ref` stays stale; any future upstream migration numbered 3–4 would be **silently skipped** on this file | Start upstream on a fresh database file (the cache is disposable), together with `DATA_DIR` (KI-16). 1 h |
-| B6 | ID generation | `generateUUID` drops a leading zero byte (KI-26) | `History.Write` refuses non-canonical or duplicate UUIDs (`histories.go:233`); `NewUUID` pads leading zero bytes with `1` (`base58.go:20-41,139`) | With the current server generator ~1/256 creates now fail with an error instead of poisoning the account. Upstream's padding contradicts AGENTS.md rule 4 and the ZhehanZhang crash report (see §5) | Local `newID()`: redraw until byte 0 ≠ 0, then `things.EncodeUUID`; replace `isBase58UUID` with `things.ValidateUUID`. 1 h |
-| B7 | Debug logging | Dumps bounded, but still include `Authorization` (KI-09) | `Client.Debug` dumps full requests incl. `Authorization: Password …` (`client.go:135-146`); `Write` logs a full response dump on non-200 (`histories.go:281-282`); the `http.Client` is unexported, no injection point | KI-09 unchanged or worse; no transport-level hook for redaction or 429 backoff (KI-27) | Never set `client.Debug` in the server (`server/main.go:386`, `server/write.go:488`). Upstream PR: redaction + `WithHTTPClient` option. 15 min locally |
-| B8 | Retry classification | substring match on `500`…`504` (KI-21) | typed `*HTTPError`, 500–504 only | KI-21 fixed for reads; 429 still not retried (KI-27) | Backoff in the B1 wrapper |
+| B5 | Schema numbering | `schemaVersion = 4` (adds `today_index_ref`, v4 wipes the cache) | `schemaVersion = 2` (`sync/schema.go:3`) + separate `task_replay_state` generation (`TaskReplayVersion = 3`) | Opening an existing `/data/things.db`: `migrate()` is a no-op (4 ≥ 2), replay generation defaults to 1 → backup + full replay on first sync; `today_index_ref` stays stale; any future upstream migration numbered 3–4 would be **silently skipped** on this file | ✅ Done (phase 2): the cache is `$DATA_DIR/things-upstream.db` (`DATA_DIR` defaults to `/data`, created with mode 0700). Upstream never opens the old `things.db`, which stays as is for a rollback; a fresh file starts at the current replay generation, so no backup is written |
+| B6 | ID generation | `generateUUID` drops a leading zero byte (KI-26) | `History.Write` refuses non-canonical or duplicate UUIDs (`histories.go:233`); `NewUUID` pads leading zero bytes with `1` (`base58.go:20-41,139`) | With the current server generator ~1/256 creates now fail with an error instead of poisoning the account. Upstream's padding contradicts AGENTS.md rule 4 and the ZhehanZhang crash report (see §5) | ✅ Done (phase 2): `generateUUID` → `newIDFromReader` redraws until byte 0 ≠ 0 **and** the `EncodeUUID` result is 22 characters (the rule of the KI-26 fix merged on `main`, PR #3); byte 0 = 0 alone is not enough because the canonical encoding of such a draw is 22 characters starting with `1`. `isBase58UUID` = `things.ValidateUUID` + length 21–22 |
+| B7 | Debug logging | Dumps bounded, but still include `Authorization` (KI-09) | `Client.Debug` dumps full requests incl. `Authorization: Password …` (`client.go:135-146`); `Write` logs a full response dump on non-200 (`histories.go:281-282`); the `http.Client` is unexported, no injection point | KI-09 unchanged or worse; no transport-level hook for redaction or 429 backoff (KI-27) | ✅ Done (phase 2): `newThingsClient` never sets `Debug`; `DEBUG` only gates the debug endpoints. `historyWrite` no longer logs payloads (titles, notes), the nuke endpoint no longer logs the account email. Remaining: upstream's unconditional response dump on a rejected commit (no request headers). Upstream PR: redaction + `WithHTTPClient` option |
+| B8 | Retry classification | substring match on `500`…`504` (KI-21) | typed `*HTTPError`, 500–504 only | KI-21 fixed for reads; 429 still not retried (KI-27) | ✅ Done (phase 2) in the B1 gate: a typed `*HTTPError` 429 from `Sync()` pauses all syncs for 10 s, doubling to 5 min, reset by any other outcome. Writes (`History.Sync`/`Write` in `historyWrite`) are not gated |
 | B9 | Cursor persistence | saved after the whole sync | saved per batch inside the batch transaction; `validateReplayPage` rejects non-advancing pages | Better: a failed sync resumes exactly after the last committed batch, no double-applied note deltas | — |
 | B10 | Unknown entity kinds | any unknown kind → `UnknownChange`, cursor advances (KI-25 root cause) | unknown `Task*` kind → `UnsupportedTaskKindError`, the whole batch is rejected before any mutation; non-task kinds (`Settings5`, `Command`) still advance | Desired fail-loud behaviour (KI-25). Operationally a future `Task8` stops all reads until the SDK is upgraded | Surface the error in tool results; alert on it |
 | B11 | Soft-deleted rows | purged after each sync | never purged | Unbounded growth of deleted rows (queries filter `deleted = 0`); negligible for one user | Optional upstream PR |
@@ -133,7 +140,7 @@ from a fresh file (B5).
 | Phase | Scope | Estimate |
 |---|---|---|
 | 1. Compile with parity | C1–C9 | ~0.5 day — **done on the branch** (§3.1) |
-| 2. Safety adapters (must ship before the first production deploy) | B1 sync wrapper (+coalescing, 429 backoff), B2 conflict detection, B5 fresh DB file, B6 ID generator, B7 debug off | ~0.5–0.75 day |
+| 2. Safety adapters (must ship before the first production deploy) | B1 sync wrapper (+coalescing, 429 backoff), B2 conflict detection, B5 fresh DB file, B6 ID generator, B7 debug off | ~0.5–0.75 day — **done** (B2 kept as the stopgap suffix match) |
 | 3. Views on the local read model | ADR-0005 classifier for the cases the upstream mirror supports (`st`, `sr`, `dd`, `ss`, `tr`, type, parents, headings), replacing `TasksIn*`; optional in-memory snapshot keyed by `LastSyncedIndex` to avoid N+1 on every call | ~1 day |
 | **Total to "server runs on upstream, no regression"** | | **~2–2.25 days** |
 | Blocked on upstream | B4 fields (`dds`, `sb`, `rr`, `rt`, `tir`) for the full ADR-0005 rule set and KI-05/KI-01 | calendar time |
@@ -167,7 +174,8 @@ Conditions:
 
 1. ~~The owner approves adding the dependency and the compiler confirms that C1–C9 are
    the complete list.~~ Met on 2026-10-11 (§1, §3.1).
-2. The phase 2 safety adapters ship before any production deploy on upstream.
+2. ~~The phase 2 safety adapters ship before any production deploy on upstream.~~
+   Implemented on 2026-10-11 (§1, §4); they must be merged together with the switch.
 3. Views never use upstream `TasksIn*`; the read model goes through the local
    classifier (ADR-0005).
 4. Pin `v0.6.0` exactly; upgrades go through CI and the conformance suite (ADR-0001).
@@ -189,12 +197,14 @@ If option B is accepted:
 
 1. Mark ADR-0001 Accepted; keep this branch as the starting point, or redo phase 1 on a
    fresh branch after open PRs #1 and #2 are merged (ADR-0001 consequences).
-2. Phase 2 safety adapters (§6), then phase 3 view classifier (ADR-0005). Do not deploy
-   before phase 2.
+2. ~~Phase 2 safety adapters (§6)~~ (done), then phase 3 view classifier (ADR-0005).
+   Do not deploy before phase 3.
 3. Open the upstream PRs from §6.
 4. Update the documents that still describe the embedded SDK: `CLAUDE.md`, `AGENTS.md`
    §4–§5 (commands, repository map, baseline), `docs/architecture.md` §4, the KI entries
    that point to `sync/` and root `*.go` files (KI-09, KI-15, KI-16, KI-18, KI-20,
-   KI-21, KI-22, KI-23, KI-25, KI-26), and the CI workflow (KI-15).
+   KI-21, KI-22, KI-23, KI-25, KI-26), and the CI workflow (KI-15). Phase 2 also changes
+   configuration: `DATA_DIR` and the cache file name (README, `CLAUDE.md`, `AGENTS.md`
+   §4, `docs/installation.md`), and `DEBUG` no longer turns on HTTP dumps.
 5. Build the Docker image once (C9) and run the server against the sandbox account
    only (AGENTS.md rule 1), starting from an empty data directory (B5).
