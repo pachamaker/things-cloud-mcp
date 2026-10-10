@@ -79,7 +79,9 @@ go test -race ./...                  # includes the concurrent-sync gate tests
 go test -run TestName ./server       # single test
 go mod tidy -diff                    # go.mod/go.sum must be tidy; prints the needed change
 go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...   # vulnerabilities in reachable code, as in CI
-go build -o things-server ./server   # build the server binary
+go build -o things-server ./server   # build the server binary (version "dev")
+go build -ldflags "-X main.version=v2.0.0" -o things-server ./server   # release build
+docker build --build-arg VERSION=v2.0.0 -t things-cloud-mcp:v2.0.0 .     # image
 ```
 
 If the default Go proxy is unreachable (e.g. a corporate proxy), prefix commands with

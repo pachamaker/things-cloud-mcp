@@ -18,6 +18,9 @@ import (
 	"github.com/arthursoares/things-cloud-sdk/sync"
 )
 
+// version is set at build time: go build -ldflags "-X main.version=v2.0.0" (KI-16).
+var version = "dev"
+
 var (
 	client  *things.Client
 	syncer  *sync.Syncer
@@ -412,7 +415,7 @@ func main() {
 			jsonError(w, "not found", 404)
 			return
 		}
-		jsonResponse(w, map[string]string{"service": "things-cloud-api", "status": "ok"})
+		jsonResponse(w, map[string]string{"service": "things-cloud-api", "status": "ok", "version": version})
 	})
 
 	http.HandleFunc("/api/verify", authMiddleware(handleVerify))
@@ -439,7 +442,7 @@ func main() {
 	defer stop()
 	server := &http.Server{Addr: ":" + port}
 
-	log.Printf("Starting server on :%s", port)
+	log.Printf("Starting server %s on :%s", version, port)
 	if err := serveWithGracefulShutdown(shutdownCtx, server, shutdownTimeout); err != nil {
 		log.Fatal(err)
 	}

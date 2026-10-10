@@ -741,7 +741,7 @@ func mcpDeleteChecklistItem(_ context.Context, req mcp.CallToolRequest) (*mcp.Ca
 // ---------------------------------------------------------------------------
 
 func newMCPHandler() http.Handler {
-	s := server.NewMCPServer("Things Cloud", "1.1.0")
+	s := server.NewMCPServer("Things Cloud", version)
 
 	// --- Read tools ---
 

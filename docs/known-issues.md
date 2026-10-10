@@ -354,10 +354,11 @@ workaround can be deleted.
 
 ### KI-16 · Hard-coded runtime assumptions from the Fly.io era
 - **Status:** partially fixed — cache at `$DATA_DIR/things-upstream.db` (PR #4); module
-  renamed to `github.com/pachamaker/things-cloud-mcp` (SDK migration) · **Evidence:** confirmed
-- **Remaining:** server version string `1.1.0`
-  hard-coded in `server/mcp.go`; Dockerfile uses `alpine:latest` and `CGO_ENABLED=1`
-  although `modernc.org/sqlite` is pure Go.
+  renamed to `github.com/pachamaker/things-cloud-mcp` (SDK migration); the version comes
+  from `-ldflags "-X main.version=…"` (Dockerfile `ARG VERSION`, default `dev`) and is
+  reported in MCP `serverInfo` and on `/` (phase 0) · **Evidence:** confirmed
+- **Remaining:** Dockerfile uses `alpine:latest` and `CGO_ENABLED=1` although
+  `modernc.org/sqlite` is pure Go.
 - **Fix direction:** ADR-0001 (fork identity) and ADR-0002 (deployment).
 
 ### KI-34 · The write path has no automated end-to-end check on a real account
