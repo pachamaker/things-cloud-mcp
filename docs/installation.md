@@ -141,6 +141,7 @@ Fly.io doesn't bill you if your monthly usage is under $5. The server scales to 
 | `API_KEY` | No | Bearer token for REST API endpoints (`/api/*`). If unset, no auth required. |
 | `PORT` | No | Server port (default: `8080`) |
 | `DATA_DIR` | No | Directory of the SQLite cache `things-upstream.db` (default: `/data`) |
+| `ENABLE_WRITES` | No | `true` enables the write tools and endpoints; read-only otherwise |
 
 ## Updating
 

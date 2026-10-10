@@ -740,8 +740,15 @@ func mcpDeleteChecklistItem(_ context.Context, req mcp.CallToolRequest) (*mcp.Ca
 // MCP server setup
 // ---------------------------------------------------------------------------
 
-func newMCPHandler() http.Handler {
+// newMCPHandler registers the write tools only when writes is true
+// (ENABLE_WRITES, ADR-0004); a read-only server does not even list them.
+func newMCPHandler(writes bool) http.Handler {
 	s := server.NewMCPServer("Things Cloud", version)
+	addWrite := func(tool mcp.Tool, handler server.ToolHandlerFunc) {
+		if writes {
+			s.AddTool(tool, handler)
+		}
+	}
 
 	// --- Read tools ---
 
@@ -948,7 +955,7 @@ func newMCPHandler() http.Handler {
 
 	// --- Write tools ---
 
-	s.AddTool(mcp.NewTool("things_create_task",
+	addWrite(mcp.NewTool("things_create_task",
 		mcp.WithDescription("Create a new task in Things. Recurrence cannot be set through this server (KI-01); ask the user to set it up in the Things app."),
 		mcp.WithString("title",
 			mcp.Required(),
@@ -974,7 +981,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpCreateTask)
 
-	s.AddTool(mcp.NewTool("things_complete_task",
+	addWrite(mcp.NewTool("things_complete_task",
 		mcp.WithDescription("Mark a Things task as completed"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -982,7 +989,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpCompleteTask)
 
-	s.AddTool(mcp.NewTool("things_edit_task",
+	addWrite(mcp.NewTool("things_edit_task",
 		mcp.WithDescription("Edit an existing Things task. Recurrence cannot be set, changed or removed through this server (KI-01); ask the user to do it in the Things app."),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1014,7 +1021,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpEditTask)
 
-	s.AddTool(mcp.NewTool("things_trash_task",
+	addWrite(mcp.NewTool("things_trash_task",
 		mcp.WithDescription("Move a Things task to the trash"),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithString("uuid",
@@ -1023,7 +1030,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpTrashTask)
 
-	s.AddTool(mcp.NewTool("things_move_to_today",
+	addWrite(mcp.NewTool("things_move_to_today",
 		mcp.WithDescription("Move a Things task to the Today view"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1031,7 +1038,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpMoveToToday)
 
-	s.AddTool(mcp.NewTool("things_move_to_anytime",
+	addWrite(mcp.NewTool("things_move_to_anytime",
 		mcp.WithDescription("Move a Things task to the Anytime view"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1039,7 +1046,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpMoveToAnytime)
 
-	s.AddTool(mcp.NewTool("things_move_to_someday",
+	addWrite(mcp.NewTool("things_move_to_someday",
 		mcp.WithDescription("Move a Things task to the Someday view"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1047,7 +1054,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpMoveToSomeday)
 
-	s.AddTool(mcp.NewTool("things_move_to_inbox",
+	addWrite(mcp.NewTool("things_move_to_inbox",
 		mcp.WithDescription("Move a Things task back to the Inbox"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1055,7 +1062,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpMoveToInbox)
 
-	s.AddTool(mcp.NewTool("things_uncomplete_task",
+	addWrite(mcp.NewTool("things_uncomplete_task",
 		mcp.WithDescription("Mark a completed Things task as open again"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1063,7 +1070,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpUncompleteTask)
 
-	s.AddTool(mcp.NewTool("things_untrash_task",
+	addWrite(mcp.NewTool("things_untrash_task",
 		mcp.WithDescription("Restore a Things task from the trash"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1071,7 +1078,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpUntrashTask)
 
-	s.AddTool(mcp.NewTool("things_create_area",
+	addWrite(mcp.NewTool("things_create_area",
 		mcp.WithDescription("Create a new area in Things"),
 		mcp.WithString("title",
 			mcp.Required(),
@@ -1082,7 +1089,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpCreateArea)
 
-	s.AddTool(mcp.NewTool("things_create_tag",
+	addWrite(mcp.NewTool("things_create_tag",
 		mcp.WithDescription("Create a new tag in Things"),
 		mcp.WithString("title",
 			mcp.Required(),
@@ -1096,7 +1103,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpCreateTag)
 
-	s.AddTool(mcp.NewTool("things_create_heading",
+	addWrite(mcp.NewTool("things_create_heading",
 		mcp.WithDescription("Create a heading within a project in Things"),
 		mcp.WithString("title",
 			mcp.Required(),
@@ -1107,7 +1114,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpCreateHeading)
 
-	s.AddTool(mcp.NewTool("things_create_project",
+	addWrite(mcp.NewTool("things_create_project",
 		mcp.WithDescription("Create a new project in Things"),
 		mcp.WithString("title",
 			mcp.Required(),
@@ -1141,7 +1148,7 @@ func newMCPHandler() http.Handler {
 
 	// --- Checklist item tools ---
 
-	s.AddTool(mcp.NewTool("things_create_checklist_item",
+	addWrite(mcp.NewTool("things_create_checklist_item",
 		mcp.WithDescription("Add a checklist item (lightweight checkbox) to a task. Checklist items are simple checkboxes within a task's detail view — they cannot have their own dates, tags, or notes. For full nested tasks with independent scheduling, use things_create_task with parent_task instead."),
 		mcp.WithString("title",
 			mcp.Required(),
@@ -1153,7 +1160,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpCreateChecklistItem)
 
-	s.AddTool(mcp.NewTool("things_complete_checklist_item",
+	addWrite(mcp.NewTool("things_complete_checklist_item",
 		mcp.WithDescription("Mark a checklist item (checkbox) as completed"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1161,7 +1168,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpCompleteChecklistItem)
 
-	s.AddTool(mcp.NewTool("things_uncomplete_checklist_item",
+	addWrite(mcp.NewTool("things_uncomplete_checklist_item",
 		mcp.WithDescription("Mark a completed checklist item (checkbox) as open again"),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -1169,7 +1176,7 @@ func newMCPHandler() http.Handler {
 		),
 	), mcpUncompleteChecklistItem)
 
-	s.AddTool(mcp.NewTool("things_delete_checklist_item",
+	addWrite(mcp.NewTool("things_delete_checklist_item",
 		mcp.WithDescription("Delete a checklist item (checkbox) from a task"),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithString("uuid",

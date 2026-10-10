@@ -150,7 +150,7 @@ func TestMCPToolSchemas_KI01_NoRepeatParameter(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	rec := httptest.NewRecorder()
-	newMCPHandler().ServeHTTP(rec, req)
+	newMCPHandler(true).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("tools/list status = %d, body %s", rec.Code, rec.Body.String())

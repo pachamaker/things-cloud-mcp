@@ -302,6 +302,19 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// writesEnabled parses ENABLE_WRITES. Writes are off unless explicitly enabled,
+// so a new install cannot change the account by accident (ADR-0004).
+func writesEnabled(raw string) (bool, error) {
+	if raw == "" {
+		return false, nil
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, fmt.Errorf("ENABLE_WRITES must be true or false, got %q", raw)
+	}
+	return v, nil
+}
+
 // newThingsClient never sets Client.Debug: upstream dumps whole requests,
 // including "Authorization: Password <plaintext>", and offers no redaction
 // hook (spike report B7, KI-09).
@@ -404,6 +417,16 @@ func main() {
 		port = "8080"
 	}
 
+	writes, err := writesEnabled(os.Getenv("ENABLE_WRITES"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	if writes {
+		log.Println("Writes enabled (ENABLE_WRITES=true)")
+	} else {
+		log.Println("Read-only: write tools and endpoints are off; set ENABLE_WRITES=true to enable them")
+	}
+
 	closeMirror, err := connectThings(username, password, os.Getenv("DATA_DIR"))
 	if err != nil {
 		log.Fatal(err)
@@ -429,14 +452,15 @@ func main() {
 	http.HandleFunc("/api/areas", authMiddleware(handleAreas))
 	http.HandleFunc("/api/tags", authMiddleware(handleTags))
 
-	// Write endpoints
-	http.HandleFunc("/api/tasks/create", authMiddleware(handleCreateTask))
-	http.HandleFunc("/api/tasks/complete", authMiddleware(handleCompleteTask))
-	http.HandleFunc("/api/tasks/trash", authMiddleware(handleTrashTask))
-	http.HandleFunc("/api/tasks/edit", authMiddleware(handleEditTask))
+	if writes {
+		http.HandleFunc("/api/tasks/create", authMiddleware(handleCreateTask))
+		http.HandleFunc("/api/tasks/complete", authMiddleware(handleCompleteTask))
+		http.HandleFunc("/api/tasks/trash", authMiddleware(handleTrashTask))
+		http.HandleFunc("/api/tasks/edit", authMiddleware(handleEditTask))
+	}
 
 	// MCP endpoint (no bearer auth — claude.ai connectors use OAuth which we don't implement)
-	http.Handle("/mcp", newMCPHandler())
+	http.Handle("/mcp", newMCPHandler(writes))
 
 	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

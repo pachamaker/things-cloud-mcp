@@ -178,6 +178,8 @@ See **[docs/skills.md](docs/skills.md)** for a step-by-step guide to creating yo
 ## REST API
 
 All `/api/*` endpoints require `Authorization: Bearer <API_KEY>` when `API_KEY` is set.
+The write endpoints and write tools exist only when the server runs with
+`ENABLE_WRITES=true`; by default it is read-only.
 
 See **[docs/endpoints-and-things-cloud.md](docs/endpoints-and-things-cloud.md)** for how the REST and MCP surfaces sync from Things Cloud history, answer reads from the local SQLite mirror, and commit writes back to the cloud.
 
@@ -223,8 +225,8 @@ daily) are in [docs/testing/sandbox-e2e.md](docs/testing/sandbox-e2e.md):
 THINGS_SANDBOX_ENV_FILE=~/.config/things-cloud-mcp/sandbox.env go test -tags e2e -run '^TestSandboxE2E$' -count=1 -v -timeout 30m ./server
 ```
 
-The older shell suites call a running server and create items in whatever account it is
-connected to — sandbox only:
+The older shell suites call a running server (started with `ENABLE_WRITES=true`) and
+create items in whatever account it is connected to — sandbox only:
 
 ```bash
 ./tests/test-smoke.sh          # Core read/write workflow (11 checks)
@@ -240,6 +242,7 @@ API_KEY=your-key ./tests/test-api.sh  # All REST endpoints (18 checks)
 go build -v -o things-server ./server/
 export THINGS_USERNAME='...' THINGS_PASSWORD='...'   # sandbox account, never your real one
 export DATA_DIR="$PWD/.data"   # SQLite cache things-upstream.db; default /data
+export ENABLE_WRITES=true      # write tools are off unless this is true
 ./things-server
 
 go test -race ./...

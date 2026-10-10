@@ -2,6 +2,7 @@
 set -euo pipefail
 
 # MCP protocol-level tests — verifies JSON-RPC handshake and error handling.
+# Expects a server started with ENABLE_WRITES=true (35 tools; read-only lists 17).
 # Usage: ./test-mcp-protocol.sh [base_url]
 
 BASE="${1:-${BASE_URL:-}}"

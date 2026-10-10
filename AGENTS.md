@@ -97,6 +97,7 @@ Run the server locally **against the sandbox account only**:
 ```bash
 export THINGS_USERNAME="$THINGS_SANDBOX_USERNAME" THINGS_PASSWORD="$THINGS_SANDBOX_PASSWORD"
 export DATA_DIR="$PWD/.data"            # empty directory; the cache is $DATA_DIR/things-upstream.db
+export ENABLE_WRITES=true               # writes are off by default
 go run ./server
 ```
 
@@ -148,6 +149,7 @@ Configuration (environment variables):
 | `THINGS_USERNAME` / `THINGS_PASSWORD` | yes | Things Cloud account the server syncs |
 | `API_KEY` | no | Static bearer for `/api/*` (no effect on `/mcp`, KI-07) |
 | `PORT` | no | Listen port, default `8080` |
+| `ENABLE_WRITES` | no | `true` registers the write tools and REST write endpoints. Unset or `false`: read-only, the write tools are not even listed (ADR-0004). Any other value stops the server at startup |
 | `DATA_DIR` | no | Directory of the SQLite cache `things-upstream.db`, default `/data` (created with mode 0700). The cache is disposable: delete the file to force a full resync |
 
 Planned: `THINGS_TIMEZONE` (ADR-0003), OAuth settings (ADR-0002).
@@ -216,6 +218,8 @@ Anytime `st1,∅,∅` · Someday `st2,∅,∅` · Upcoming `st2,sr=D>today,tir�
 Never write `st=2` with today's date.
 
 ## 8. Write capability status
+
+All write tools exist only when the server runs with `ENABLE_WRITES=true` (ADR-0004).
 
 | Capability | Tool(s) | Status |
 |---|---|---|

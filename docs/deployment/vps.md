@@ -77,6 +77,8 @@ adduser deploy && usermod -aG sudo,docker deploy
 ```bash
 THINGS_USERNAME=you@example.com
 THINGS_PASSWORD=change-me
+# Off by default: without it the server is read-only (ADR-0004).
+ENABLE_WRITES=true
 # planned (ADR-0002 / ADR-0003):
 # THINGS_TIMEZONE=Europe/Moscow
 # MCP_PUBLIC_URL=https://mcp.example.com/mcp

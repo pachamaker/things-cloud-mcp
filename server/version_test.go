@@ -16,7 +16,7 @@ func TestMCPServerInfo_KI16_ReportsBuildVersion(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	rec := httptest.NewRecorder()
-	newMCPHandler().ServeHTTP(rec, req)
+	newMCPHandler(false).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("initialize status = %d, body %s", rec.Code, rec.Body.String())

@@ -41,7 +41,7 @@ change is checked automatically.
 | ~~Redact `Authorization`/passwords in debug dumps + test~~ (done for the server: no SDK dumps, no debug mode; the SDK's own dump on a rejected commit needs an upstream PR) | KI-09 | S |
 | ~~Remove `things_smoke_test` from MCP; keep as sandbox-only CLI~~ (done, phase 0; the sandbox e2e harness replaces it) | KI-11 | S |
 | Write preconditions: target exists, right type, not template, not trashed | KI-10, ADR-0004 | M |
-| `ENABLE_WRITES` switch (write tools not registered when off; default off for new installs) | ADR-0004, `legal-and-risk.md` | S |
+| ~~`ENABLE_WRITES` switch (write tools not registered when off; default off for new installs)~~ (done, phase 0) | ADR-0004, `legal-and-risk.md` | S |
 | Sandbox Things account + `.env.sandbox` convention; mark `tests/*.sh` sandbox-only | ADR-0007 | S |
 | Sandbox e2e harness: every MCP tool, account guard, pre-send write firewall, 409 test, wire check by an independent client, cleanup, seed list (`docs/testing/sandbox-e2e.md`); first run by the owner, then at most daily via `.github/workflows/e2e.yml` | KI-34, ADR-0007 | M — first run 2026-10-11: main suite green; seed checks and leftover cleanup hit 429 (KI-27) |
 | ~~Module rename to `github.com/pachamaker/things-cloud-mcp`~~ (done, migration PR); ~~version via ldflags~~ (done, phase 0) | ADR-0001, KI-16 | S |
