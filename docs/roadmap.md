@@ -34,7 +34,8 @@ change is checked automatically.
 | Item | Refs | Size |
 |---|---|---|
 | ~~Adopt upstream SDK per spike result, or port its fixes~~ (done, migration PR) | ADR-0001 | M |
-| Move workflows to `.github/workflows/`, drop Fly.io deploy and nested duplicate, Go version from `go.mod`, add `-race`, `staticcheck`, `govulncheck` | KI-15, ADR-0007 | S |
+| ~~Move workflows to `.github/workflows/`, drop Fly.io deploy and nested duplicate, Go version from `go.mod`, add `-race`~~ (done, `ci.yml`); add `staticcheck` and `govulncheck` once KI-33 and KI-32 are fixed | KI-15, ADR-0007 | S |
+| Build and test on a supported Go release (Go 1.25 is out of support; 9 reachable stdlib vulnerabilities) | KI-32 | S |
 | ~~Reject `repeat` on all surfaces; remove it from tool schemas~~ (done, PR #2) | KI-01, ADR-0004 | S |
 | Remove debug endpoints (`delete-history`, `nuke-account`, `confirm-account`) from the server | KI-08 | S |
 | Redact `Authorization`/passwords in debug dumps + test | KI-09 | S |

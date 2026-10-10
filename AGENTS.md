@@ -77,6 +77,7 @@ go vet ./...                         # static checks
 go test ./...                        # unit tests (no network)
 go test -race ./...                  # includes the concurrent-sync gate tests
 go test -run TestName ./server       # single test
+go mod tidy -diff                    # go.mod/go.sum must be tidy; prints the needed change
 go build -o things-server ./server   # build the server binary
 ```
 
@@ -111,9 +112,9 @@ Configuration (environment variables):
 
 Planned: `THINGS_TIMEZONE` (ADR-0003), OAuth settings (ADR-0002).
 
-Baseline on `spike-upstream-sdk` after the upstream migration (phase 3, 2026-10-11):
-build, vet and `go test -race ./...` pass locally. CI does not run yet (KI-15). Do not
-add failures.
+Baseline: CI (`.github/workflows/ci.yml`) runs `go mod tidy -diff`, build, vet and
+`go test -race ./...` on every pull request and on pushes to `main`; all pass.
+`staticcheck` and `govulncheck` are not gated yet (KI-33, KI-32). Do not add failures.
 
 ## 5. Repository map
 
@@ -126,6 +127,7 @@ add failures.
 | `server/views.go` | View classifier (Inbox/Today/Anytime/Someday/Upcoming), ADR-0005 | live |
 | `server/syncgate.go` | Serialises and coalesces syncs, 429 backoff | live |
 | `tests/` | Shell e2e scripts against a running server | sandbox only |
+| `.github/workflows/ci.yml` | PR and `main` checks: tidy, build, vet, race tests; no secrets, no network to Things | live |
 | `docs/` | See `docs/README.md` for the index | |
 
 The module is `github.com/pachamaker/things-cloud-mcp`. The SDK packages are imported
@@ -200,7 +202,8 @@ Never write `st=2` with today's date.
 ## 10. Definition of done
 
 - [ ] Change is scoped to one KI/ADR item; unrelated refactors are not mixed in.
-- [ ] `go build -o /dev/null ./...`, `go vet ./...`, `go test -race ./...` pass (no new failures).
+- [ ] `go mod tidy -diff`, `go build -o /dev/null ./...`, `go vet ./...`, `go test -race ./...`
+      pass (no new failures); CI is green on the PR.
 - [ ] New or changed behaviour has tests; wire changes have capture fixtures.
 - [ ] Docs updated: KI status, protocol evidence, README tool tables, ADR status.
 - [ ] Final report lists changed files with one line each, what was verified, and what
