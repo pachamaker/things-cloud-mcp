@@ -157,6 +157,31 @@ workaround can be deleted.
   account at any time; leaves trashed `[smoke-test]` tasks behind.
 - **Fix direction:** move to an admin CLI / CI job against the sandbox account.
 
+### KI-32 · The server is built with Go 1.25, which no longer gets security fixes
+- **Status:** fixed on branch `KI-32-go-1-26-toolchain`: `go.mod` keeps `go 1.25.0` as
+  the minimum and adds `toolchain go1.26.9`, which `setup-go` installs in CI and a local
+  `go` older than 1.26.9 switches to (`GOTOOLCHAIN=auto`); the `Dockerfile` builder is
+  `golang:1.26.9-alpine`; the CI job `govulncheck` runs govulncheck v1.8.0 (which itself
+  needs Go ≥ 1.26) and fails on reachable vulnerabilities (checked: exit 3 on go1.25.14). GO-2026-4514 stays: `buger/jsonparser` v1.1.2 is not a one-line fix
+  but bundles parser rewrites (integer parsing, key lookup, `null` handling) that
+  `mcp-go` v0.44.0 is not tested with, `Delete` is not reachable, and `mcp-go` v1.x
+  (ADR-0002) no longer depends on `invopop/jsonschema` or `jsonparser` ·
+  **Evidence:** confirmed (`govulncheck` v1.8.0, 2026-10-11)
+- **Symptom:** with the newest Go 1.25 patch (1.25.14) `govulncheck ./...` reports 9
+  standard-library vulnerabilities the server's code reaches (`net/http` HTTP/1 and
+  HTTP/2 server and client, `net/textproto`, `crypto/tls`; GO-2026-6603 … GO-2026-6617),
+  fixed only in Go 1.26.9. With Go 1.26.9 the scan reports none; the only remaining
+  entry is GO-2026-4514 in `github.com/buger/jsonparser` v1.1.1 (indirect via
+  `mcp-go` → `invopop/jsonschema`), imported but not called.
+- **Root cause:** Go supports the two newest major releases (1.27 and 1.26 since
+  August 2026). `Dockerfile` builds with `golang:1.25-alpine`; `go.mod` says `go 1.25.0`
+  without a `toolchain` line, so CI (`setup-go` with `go-version-file: go.mod`) tests
+  on Go 1.25.0.
+- **Fix direction:** build and test with a supported release: a `toolchain go1.26.x`
+  line in `go.mod` (`setup-go` reads it) and the matching `Dockerfile` base image; keep
+  `go 1.25.0` as the minimum while the SDK allows it. Then add the `govulncheck` CI job
+  (ADR-0007).
+
 ---
 
 ## P1 — Read correctness (the "Today is wrong" family)
@@ -278,7 +303,12 @@ workaround can be deleted.
   stays a separate, explicit tool.
 
 ### KI-15 · CI never runs
-- **Status:** open · **Evidence:** confirmed
+- **Status:** fixed on branch `KI-15-github-actions-ci`: `.github/workflows/ci.yml` runs
+  `go mod tidy -diff`, `go build -o /dev/null ./...`, `go vet ./...` and
+  `go test -race ./...` on every pull request and every push to `main`, with the Go
+  version from `go.mod`; `.github/Workflows/` (old `go.yml`, Fly.io deploy, nested
+  duplicate) is deleted. `govulncheck` runs since KI-32; `staticcheck` is not in CI
+  yet: it fails on the current code (KI-33) · **Evidence:** confirmed
 - **Root cause:** workflows live in `.github/Workflows/` (capital `W`) — GitHub only
   reads `.github/workflows/`. There is also a nested duplicate
   `.github/Workflows/.github/Workflows/deploy.yml`. `go.yml` pins Go 1.23 while
@@ -289,7 +319,7 @@ workaround can be deleted.
 ### KI-16 · Hard-coded runtime assumptions from the Fly.io era
 - **Status:** partially fixed — cache at `$DATA_DIR/things-upstream.db` (PR #4); module
   renamed to `github.com/pachamaker/things-cloud-mcp` (SDK migration) · **Evidence:** confirmed
-- **Remaining:** deploy workflow targets Fly.io; server version string `1.1.0`
+- **Remaining:** server version string `1.1.0`
   hard-coded in `server/mcp.go`; Dockerfile uses `alpine:latest` and `CGO_ENABLED=1`
   although `modernc.org/sqlite` is pure Go.
 - **Fix direction:** ADR-0001 (fork identity) and ADR-0002 (deployment).
@@ -314,6 +344,7 @@ workaround can be deleted.
 | KI-22 | `Host` header set manually and misleadingly | SDK `client.go:117` |
 | KI-23 | 14 CLI tools without tests; several duplicated server write logic with a divergent wire format — resolved: removed with the SDK migration (upstream has its own `things-cli`) | — |
 | KI-24 | Write tools have no MCP annotations beyond defaults (`destructiveHint` defaults to true, so every write asks for confirmation; no `idempotentHint`) | `server/mcp.go:1095-1329` |
+| KI-33 | `staticcheck` (2026.2.1) fails with U1000: `authHandlerMiddleware`, an `API_KEY` bearer check for `http.Handler`, is never used (`/mcp` is registered without it, KI-07). Blocks the `staticcheck` CI job; wire it in or delete it as part of KI-07/ADR-0002 | `server/main.go:302` |
 
 ## P1 — Resilience against Things Cloud behaviour (reported by other implementations)
 
