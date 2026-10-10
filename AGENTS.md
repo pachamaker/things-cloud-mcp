@@ -220,11 +220,14 @@ Never write `st=2` with today's date.
 ## 8. Write capability status
 
 All write tools exist only when the server runs with `ENABLE_WRITES=true` (ADR-0004).
+Every write first checks its target and references against a freshly synced mirror
+(`server/preconditions.go`, KI-10) and sends nothing when a check fails. Repeating
+templates are not recognised yet (the SDK does not store `rr`/`rt`).
 
 | Capability | Tool(s) | Status |
 |---|---|---|
 | Create to-do (title, notes, when, deadline, project, parent, tags) | `things_create_task` | ✅ verified |
-| Edit title / notes / when / deadline / project / area / tags | `things_edit_task` | ✅ verified (no target precondition yet, KI-10) |
+| Edit title / notes / when / deadline / project / area / tags | `things_edit_task` | ✅ verified; to-dos only, target and references checked first (KI-10) |
 | Complete / reopen / trash / untrash to-do | `things_*_task` | ✅ verified |
 | Move to Today / Anytime / Someday / Inbox | `things_move_to_*` | ✅ verified (Today uses UTC date, KI-03) |
 | Create project / area / tag / heading | `things_create_*` | ✅ create only |

@@ -595,6 +595,11 @@ func createTask(req CreateTaskRequest) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if err := precheck(func(m mirrorLookup) error {
+		return checkRefs(m, taskRefs{Project: req.Project, ParentTask: req.ParentTask, Tags: tg})
+	}); err != nil {
+		return "", err
+	}
 
 	taskUUID := generateUUID()
 	now := nowTs()
@@ -662,6 +667,9 @@ func completeTask(uuid string) error {
 	if err := validateUUID("uuid", uuid); err != nil {
 		return err
 	}
+	if err := precheck(func(m mirrorLookup) error { return checkComplete(m, uuid) }); err != nil {
+		return err
+	}
 	ts := nowTs()
 	u := newTaskUpdate().status(3).stopDate(ts)
 	env := writeEnvelope{id: uuid, action: 1, kind: "Task6", payload: u.build()}
@@ -674,6 +682,9 @@ func completeTask(uuid string) error {
 
 func trashTask(uuid string) error {
 	if err := validateUUID("uuid", uuid); err != nil {
+		return err
+	}
+	if err := precheck(func(m mirrorLookup) error { return checkTrash(m, uuid) }); err != nil {
 		return err
 	}
 	u := newTaskUpdate().trash(true)
@@ -703,6 +714,18 @@ func editTask(req EditTaskRequest) error {
 	}
 	tags, err := parseUUIDList("tags", req.Tags)
 	if err != nil {
+		return err
+	}
+	refs := taskRefs{Project: req.Project, ParentTask: req.ParentTask, Tags: tags}
+	if req.Area != "none" {
+		refs.Area = req.Area
+	}
+	if err := precheck(func(m mirrorLookup) error {
+		if _, err := requireActiveToDo(m, req.UUID); err != nil {
+			return err
+		}
+		return checkRefs(m, refs)
+	}); err != nil {
 		return err
 	}
 
@@ -765,6 +788,12 @@ func moveTaskToToday(uuid string) error {
 	if err := validateUUID("uuid", uuid); err != nil {
 		return err
 	}
+	if err := precheck(func(m mirrorLookup) error {
+		_, err := requireActiveToDo(m, uuid)
+		return err
+	}); err != nil {
+		return err
+	}
 	today := todayMidnightUTC()
 	u := newTaskUpdate().schedule(1, today, today)
 	env := writeEnvelope{id: uuid, action: 1, kind: "Task6", payload: u.build()}
@@ -777,6 +806,12 @@ func moveTaskToToday(uuid string) error {
 
 func moveTaskToAnytime(uuid string) error {
 	if err := validateUUID("uuid", uuid); err != nil {
+		return err
+	}
+	if err := precheck(func(m mirrorLookup) error {
+		_, err := requireActiveToDo(m, uuid)
+		return err
+	}); err != nil {
 		return err
 	}
 	u := newTaskUpdate().schedule(1, nil, nil)
@@ -792,6 +827,12 @@ func moveTaskToSomeday(uuid string) error {
 	if err := validateUUID("uuid", uuid); err != nil {
 		return err
 	}
+	if err := precheck(func(m mirrorLookup) error {
+		_, err := requireActiveToDo(m, uuid)
+		return err
+	}); err != nil {
+		return err
+	}
 	u := newTaskUpdate().schedule(2, nil, nil)
 	env := writeEnvelope{id: uuid, action: 1, kind: "Task6", payload: u.build()}
 	if err := historyWrite(env); err != nil {
@@ -805,6 +846,12 @@ func moveTaskToInbox(uuid string) error {
 	if err := validateUUID("uuid", uuid); err != nil {
 		return err
 	}
+	if err := precheck(func(m mirrorLookup) error {
+		_, err := requireActiveToDo(m, uuid)
+		return err
+	}); err != nil {
+		return err
+	}
 	u := newTaskUpdate().schedule(0, nil, nil)
 	env := writeEnvelope{id: uuid, action: 1, kind: "Task6", payload: u.build()}
 	if err := historyWrite(env); err != nil {
@@ -816,6 +863,9 @@ func moveTaskToInbox(uuid string) error {
 
 func uncompleteTask(uuid string) error {
 	if err := validateUUID("uuid", uuid); err != nil {
+		return err
+	}
+	if err := precheck(func(m mirrorLookup) error { return checkUncomplete(m, uuid) }); err != nil {
 		return err
 	}
 	u := newTaskUpdate().status(0)
@@ -832,6 +882,9 @@ func untrashTask(uuid string) error {
 	if err := validateUUID("uuid", uuid); err != nil {
 		return err
 	}
+	if err := precheck(func(m mirrorLookup) error { return checkUntrash(m, uuid) }); err != nil {
+		return err
+	}
 	u := newTaskUpdate().trash(false)
 	env := writeEnvelope{id: uuid, action: 1, kind: "Task6", payload: u.build()}
 	if err := historyWrite(env); err != nil {
@@ -845,6 +898,9 @@ func createArea(title string, tagUUIDs []string) (string, error) {
 	areaUUID := generateUUID()
 	validatedTags, err := validateUUIDSlice("tags", tagUUIDs)
 	if err != nil {
+		return "", err
+	}
+	if err := precheck(func(m mirrorLookup) error { return checkRefs(m, taskRefs{Tags: validatedTags}) }); err != nil {
 		return "", err
 	}
 	payload := map[string]any{
@@ -864,6 +920,11 @@ func createArea(title string, tagUUIDs []string) (string, error) {
 func createTag(title, shorthand, parentUUID string) (string, error) {
 	if err := validateOptionalUUID("parent", parentUUID); err != nil {
 		return "", err
+	}
+	if parentUUID != "" {
+		if err := precheck(func(m mirrorLookup) error { return checkRefs(m, taskRefs{Tags: []string{parentUUID}}) }); err != nil {
+			return "", err
+		}
 	}
 	tagUUID := generateUUID()
 	pn := []string{}
@@ -891,6 +952,9 @@ func createTag(title, shorthand, parentUUID string) (string, error) {
 
 func createHeading(title, projectUUID string) (string, error) {
 	if err := validateOptionalUUID("project", projectUUID); err != nil {
+		return "", err
+	}
+	if err := precheck(func(m mirrorLookup) error { return checkRefs(m, taskRefs{Project: projectUUID}) }); err != nil {
 		return "", err
 	}
 	headingUUID := generateUUID()
@@ -921,6 +985,9 @@ func createHeading(title, projectUUID string) (string, error) {
 
 func createProject(title, note, when, deadline, areaUUID string) (string, error) {
 	if err := validateOptionalUUID("area", areaUUID); err != nil {
+		return "", err
+	}
+	if err := precheck(func(m mirrorLookup) error { return checkRefs(m, taskRefs{Area: areaUUID}) }); err != nil {
 		return "", err
 	}
 	projectUUID := generateUUID()
@@ -992,6 +1059,12 @@ func createChecklistItem(title, taskUUID string) (string, error) {
 	if err := validateUUID("task_uuid", taskUUID); err != nil {
 		return "", err
 	}
+	if err := precheck(func(m mirrorLookup) error {
+		_, err := requireActiveToDo(m, taskUUID)
+		return err
+	}); err != nil {
+		return "", err
+	}
 	itemUUID := generateUUID()
 	now := nowTs()
 	payload := map[string]any{
@@ -1017,6 +1090,9 @@ func completeChecklistItem(uuid string) error {
 	if err := validateUUID("uuid", uuid); err != nil {
 		return err
 	}
+	if err := precheck(func(m mirrorLookup) error { return checkChecklistStatus(m, uuid, thingscloud.TaskStatusCompleted) }); err != nil {
+		return err
+	}
 	ts := nowTs()
 	payload := map[string]any{
 		"md": ts,
@@ -1035,6 +1111,9 @@ func uncompleteChecklistItem(uuid string) error {
 	if err := validateUUID("uuid", uuid); err != nil {
 		return err
 	}
+	if err := precheck(func(m mirrorLookup) error { return checkChecklistStatus(m, uuid, thingscloud.TaskStatusPending) }); err != nil {
+		return err
+	}
 	payload := map[string]any{
 		"md": nowTs(),
 		"ss": 0,
@@ -1050,6 +1129,12 @@ func uncompleteChecklistItem(uuid string) error {
 
 func deleteChecklistItem(uuid string) error {
 	if err := validateUUID("uuid", uuid); err != nil {
+		return err
+	}
+	if err := precheck(func(m mirrorLookup) error {
+		_, err := findChecklistItem(m, uuid)
+		return err
+	}); err != nil {
 		return err
 	}
 	// Delete via Tombstone2

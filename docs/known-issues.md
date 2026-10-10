@@ -176,8 +176,19 @@ workaround can be deleted.
   account e-mail address, not the key.
 
 ### KI-10 · Writes are accepted for UUIDs that do not exist (or have the wrong type)
-- **Status:** open · **Evidence:** confirmed (`server/write.go:650-852` validate only the
-  Base58 shape)
+- **Status:** fixed except templates (phase 0) — every write syncs and resolves its
+  target and references in the mirror first (`server/preconditions.go`): the target
+  exists and is a to-do (trash/untrash also accept projects and headings, since `tr`
+  is verified for every type); trashed to-dos are refused except by untrash; complete
+  needs an open to-do, uncomplete a completed or canceled one; project, parent to-do,
+  area, tags, heading project and checklist items must exist (a trashed project or
+  parent is refused). A refused write sends nothing and returns an invalid-input error
+  (REST 400). Side effect: `project: "none"` used to write `pr=["none"]` and is now
+  refused · **Evidence:** confirmed (before the fix `server/write.go:650-852` validated
+  only the Base58 shape)
+- **Remaining:** repeating templates and instances cannot be recognised: the SDK
+  mirror does not store `rr`/`rt` (spike report §4 B4). Checklist writes find the item
+  by scanning every to-do's checklist (the SDK has no lookup by item UUID).
 - **Symptom:** a hallucinated or mistyped UUID produces a modify-item for an unknown
   object in the cloud history. Clients receive a partial entity with no creation
   payload. `things_edit_task` can also modify a project, heading, or repeating
