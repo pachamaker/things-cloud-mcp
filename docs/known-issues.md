@@ -399,7 +399,9 @@ workaround can be deleted.
 - **Remaining:** a green seed-check run, then a Mac + iOS round trip (ADR-0004). Since
   phase 0 the harness retries a GET after a 429 (30 s, 1 min, 2 min, or `Retry-After`;
   commits are never retried) and the workflow gives the seed and cleanup steps room for
-  it; not yet confirmed against Things Cloud. `things_edit_task` with `when: "none"`
+  it; not yet confirmed against Things Cloud. The second CI run (2026-10-10, 23:44 UTC)
+  was green but skipped every test inside the midnight window; since then CI sets
+  `THINGS_E2E_REQUIRE_RUN=1`, which turns a skip into a failure. `things_edit_task` with `when: "none"`
   writes `sr`/`tir` without `st`, which is not a verified placement: the firewall refuses
   it, so the harness does not exercise it; capture what the official client sends, or
   write `st` explicitly.

@@ -58,7 +58,9 @@ send a write the official apps might choke on (rule 2). Layers, in the order the
    then waits a minute first. Each CI step is a new process with a full initial sync, so
    the step after a long run can start rate-limited (KI-27).
 7. **Time.** The server's "today" is the UTC day (KI-03), so the harness skips itself
-   within 15 minutes of 00:00 UTC.
+   within 15 minutes of 00:00 UTC. With `THINGS_E2E_REQUIRE_RUN` set (CI sets it) this
+   and the missing-credentials skip fail the test instead: a skipped run passes in
+   GitHub and would look green without touching the account.
 8. **Public logs.** CI logs of this public repository are readable by anyone, and GitHub
    masks only exact secret values. The harness prints UUIDs, field names, statuses,
    dates, entity kinds and its own strings (run-prefixed titles it wrote, seed titles from
@@ -153,7 +155,9 @@ go test -tags 'e2e fakecloud' -run '^TestSandbox' -count=1 ./server
 ## CI (GitHub Actions)
 
 `.github/workflows/e2e.yml` runs on `workflow_dispatch` and nightly at 03:17 UTC, never
-on push or pull requests. The job runs in the environment `things-sandbox`, holds the
+on push or pull requests. Every test step sets `THINGS_E2E_REQUIRE_RUN=1`, so a skip
+fails the job; a dispatch inside the midnight window stops at the offline self-test,
+before the account is touched. The job runs in the environment `things-sandbox`, holds the
 concurrency group `things-sandbox` (one run at a time, none cancelled), and passes the
 secrets only to the steps that run tests. Steps: the offline self-test (no secrets),
 `TestSandboxE2E`, `TestSandboxSeedChecks`, then a cleanup of the run's own objects that
