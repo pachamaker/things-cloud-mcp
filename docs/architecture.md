@@ -1,6 +1,7 @@
 # Architecture
 
-Current state (baseline `3164e8a`) and target state of the Things Cloud MCP server.
+Current state (after the upstream SDK migration, ADR-0001, 2026-10-11) and target state
+of the Things Cloud MCP server.
 Decisions that move us from one to the other live in [`docs/adr/`](adr/).
 
 ## 1. Goal and constraints
@@ -60,7 +61,7 @@ flowchart TB
       syncer[Sync engine<br/>history → SQLite]
       writer[History writer<br/>commit · 409 retry]
     end
-    db[(SQLite WAL<br/>/data/things.db)]
+    db[(SQLite WAL<br/>$DATA_DIR/things-upstream.db)]
     audit[(Write audit log<br/>/data/audit.jsonl)]
   end
   cloud[(Things Cloud)]
@@ -81,24 +82,24 @@ in §7.
 
 ## 4. Code map (current)
 
+This module (`github.com/pachamaker/things-cloud-mcp`) contains only the server. The
+protocol client and the sync engine are the
+[`arthursoares/things-cloud-sdk`](https://github.com/arthursoares/things-cloud-sdk)
+dependency, pinned in `go.mod` (v0.6.0). Differences from the embedded copy this repo
+used to carry: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4.
+
 | Path | Role | Notes |
 |---|---|---|
-| `server/main.go` | Process wiring, REST handlers, debug endpoints, graceful shutdown | Globals `client`, `syncer`, `history`; hard-coded `/data/things.db` |
-| `server/mcp.go` | MCP tool registry (36 tools) and read handlers, output formatting | `mark3labs/mcp-go` v0.44, Streamable HTTP, stateless |
-| `server/write.go` | All write commands, wire payload builders, `historyWrite` | One item per commit; global `historyMu` |
+| `server/main.go` | Process wiring, REST handlers, debug endpoints, graceful shutdown | Globals `client`, `syncer`, `history`; cache at `$DATA_DIR/things-upstream.db` |
+| `server/mcp.go` | MCP tool registry and read handlers, output formatting | `mark3labs/mcp-go` v0.44, Streamable HTTP, stateless |
+| `server/write.go` | All write commands, wire payload builders, ID generator, `historyWrite` | One item per commit; global `historyMu`; `repeat` always rejected (KI-01) |
+| `server/readmodel.go` | Read model over SDK `State`: pagination, open-list filtering (canceled excluded), completed range | Loads full lists, then pages in Go (KI-18) |
+| `server/views.go` | View classifier (Inbox/Today/Anytime/Someday/Upcoming) over `State.AllTasks` | UTC-based (KI-03); no `tir`/`dds`/`sb` in the SDK mirror (KI-02) |
+| `server/syncgate.go` | Serialises and coalesces `Syncer.Sync()`, backs off on 429 | The SDK `Syncer` has no lock |
 | `server/json_body.go` | Bounded JSON body decoding for REST | |
-| `sync/sync.go` | `Syncer`: incremental pull, paging, retries, cursor persistence | Serialised by `Syncer.mu` |
-| `sync/process.go` | Applies history items to SQLite inside one transaction; tombstones | Field-by-field merge in `applyTaskPayload` |
-| `sync/store.go` | Row ⇄ `things.Task` mapping | Drops `rr`, `rt`, `sb`, `dds` |
-| `sync/state.go` | Read model: view queries (Inbox/Today/Anytime/Someday/Upcoming/…) | UTC-based; see KI-02/KI-03 |
-| `sync/detect.go`, `sync/changes.go` | Semantic change detection (40+ change types) | Used by `thingsync`, not by the MCP tools |
-| `sync/schema.go` | SQLite schema v4 and migrations | v4 wipes the cache to force resync |
-| `*.go` (root, package `thingscloud`) | SDK: HTTP client, histories, items, wire types, notes, repeat maths, account | Module path still `github.com/arthursoares/things-cloud-sdk` |
-| `state/memory/` | In-memory aggregation of items | Used by CLI tools and tests only |
-| `syncutil/` | Helpers for CLI analytics | |
-| `cmd/` | 14 CLI/debug tools (`things-cli`, `thingsync`, tracers, dumpers) | Some duplicate the server's wire format (divergence risk) |
+| SDK `thingscloud` | HTTP client, histories, items, wire types (`Task6`/`Task7`), Base58 codec, notes, account | `History.Write` refuses non-canonical IDs |
+| SDK `sync` | `Syncer`: incremental pull, per-batch cursor, cache replay with backup, SQLite store, `State` queries | Stores no `tir`, `dds`, `sb`, `rr`, `rt` |
 | `tests/*.sh` | Black-box scripts against a deployed server | Hit a real account; must target a sandbox |
-| `tapes/` | Recorded HTTP responses for SDK unit tests | |
 
 ## 5. Runtime flows (current)
 
@@ -108,22 +109,27 @@ in §7.
 sequenceDiagram
   participant A as Assistant
   participant M as MCP handler
-  participant S as Syncer
+  participant G as Sync gate
+  participant S as SDK Syncer
   participant C as Things Cloud
   participant D as SQLite
   A->>M: tools/call things_list_today
-  M->>S: Sync()
-  S->>C: GET /history/{id} (head index)
-  alt new slots
-    S->>C: GET /history/{id}/items?start-index=N (paged)
-    S->>D: apply items (one transaction)
+  M->>G: Sync()
+  alt no sync in the last 2 s and no 429 backoff
+    G->>S: Sync()
+    S->>C: GET /history/{id} (head index)
+    alt new slots
+      S->>C: GET /history/{id}/items?start-index=N (paged)
+      S->>D: apply each batch and its cursor (one transaction per batch)
+    end
   end
-  M->>D: view query (State.TasksInToday)
+  M->>D: State.AllTasks
   D-->>M: rows (+1 query per task for tags)
+  M->>M: classify (server/views.go), drop canceled, paginate
   M-->>A: JSON text
 ```
 
-Every read costs at least one round trip to Things Cloud. Sync failures surface as
+A burst of reads costs one round trip to Things Cloud. Sync failures surface as
 tool errors (since 2026-03-05) instead of stale data.
 
 ### 5.2 Write
@@ -172,9 +178,9 @@ Ubiquitous language (use these words in code, tools and docs):
 
 | Term | Meaning | Wire |
 |---|---|---|
-| To-do / task | Actionable item | `Task6`, `tp=0` |
-| Project | Container of to-dos with an outcome | `Task6`, `tp=1` |
-| Heading | Section inside a project | `Task6`, `tp=2` |
+| To-do / task | Actionable item | `Task6`/`Task7`, `tp=0` |
+| Project | Container of to-dos with an outcome | `Task6`/`Task7`, `tp=1` |
+| Heading | Section inside a project | `Task6`/`Task7`, `tp=2` |
 | Area | Long-lived responsibility containing projects and to-dos | `Area3` |
 | Start state | Inbox / started / deferred | `st` |
 | When / start date | Day the item becomes active | `sr` (+`tir` for Today) |
@@ -244,4 +250,4 @@ See [`roadmap.md`](roadmap.md).
 | Time | UTC everywhere | owner's IANA timezone, injectable clock (ADR-0003) |
 | Observability | `log.Printf` | structured logs (`log/slog`), request id, write audit log, `/healthz` + `/readyz` |
 | Backups | none | nightly copy of SQLite + audit log; the cloud stays the source of truth |
-| Testing | unit + tapes; shell scripts against real account | unit, captures, conformance snapshots, sandbox e2e (ADR-0005, ADR-0007) |
+| Testing | unit tests in `server/`; shell scripts against real account | unit, captures, conformance snapshots, sandbox e2e (ADR-0005, ADR-0007) |

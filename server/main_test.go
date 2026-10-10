@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -134,4 +138,49 @@ func TestServeWithGracefulShutdown(t *testing.T) {
 		default:
 		}
 	})
+}
+
+func TestSyncDBPath_KI16(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		dataDir string
+		want    string
+	}{
+		{"default data dir", "", "/data/things-upstream.db"},
+		{"absolute DATA_DIR", "/var/lib/things-mcp", "/var/lib/things-mcp/things-upstream.db"},
+		{"DATA_DIR with trailing slash", "/srv/things/", "/srv/things/things-upstream.db"},
+		{"relative DATA_DIR", "state", "state/things-upstream.db"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := syncDBPath(tt.dataDir); got != tt.want {
+				t.Errorf("syncDBPath(%q) = %q, want %q", tt.dataDir, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNewThingsClient_KI09_DebugEnvDoesNotDumpPassword(t *testing.T) {
+	t.Setenv("DEBUG", "true")
+	var logs bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&logs)
+	t.Cleanup(func() { log.SetOutput(prev) })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	const fakePassword = "not-a-real-password-ki09"
+	c := newThingsClient(srv.URL, "owner@example.com", fakePassword)
+	if _, err := c.Verify(); err != nil {
+		t.Fatalf("Verify() error = %v", err)
+	}
+	if strings.Contains(logs.String(), fakePassword) {
+		t.Error("log output contains the Things password")
+	}
 }

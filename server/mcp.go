@@ -12,7 +12,6 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	things "github.com/arthursoares/things-cloud-sdk"
-	"github.com/arthursoares/things-cloud-sdk/sync"
 )
 
 // ---------------------------------------------------------------------------
@@ -20,18 +19,17 @@ import (
 // ---------------------------------------------------------------------------
 
 type taskOutput struct {
-	UUID          string   `json:"uuid"`
-	Title         string   `json:"title"`
-	Note          string   `json:"note,omitempty"`
-	Status        string   `json:"status"`
-	Type          string   `json:"type"`
-	CompletedAt   string   `json:"completed_at,omitempty"`
-	Deadline      string   `json:"deadline,omitempty"`
-	ScheduledFor  string   `json:"scheduled_for,omitempty"`
-	TodayIndexRef string   `json:"today_index_ref,omitempty"`
-	ProjectID     string   `json:"project_id,omitempty"`
-	AreaID        string   `json:"area_id,omitempty"`
-	Tags          []string `json:"tags,omitempty"`
+	UUID         string   `json:"uuid"`
+	Title        string   `json:"title"`
+	Note         string   `json:"note,omitempty"`
+	Status       string   `json:"status"`
+	Type         string   `json:"type"`
+	CompletedAt  string   `json:"completed_at,omitempty"`
+	Deadline     string   `json:"deadline,omitempty"`
+	ScheduledFor string   `json:"scheduled_for,omitempty"`
+	ProjectID    string   `json:"project_id,omitempty"`
+	AreaID       string   `json:"area_id,omitempty"`
+	Tags         []string `json:"tags,omitempty"`
 }
 
 type areaOutput struct {
@@ -78,7 +76,7 @@ func formatTask(t *things.Task) taskOutput {
 	case things.TaskTypeHeading:
 		o.Type = "heading"
 	}
-	if t.DeadlineDate != nil && t.DeadlineDate.Year() < things.NeverendingRepeatYear {
+	if t.DeadlineDate != nil && t.DeadlineDate.Year() < neverendingRepeatYear {
 		o.Deadline = t.DeadlineDate.Format("2006-01-02")
 	}
 	if t.CompletionDate != nil {
@@ -86,9 +84,6 @@ func formatTask(t *things.Task) taskOutput {
 	}
 	if t.ScheduledDate != nil {
 		o.ScheduledFor = t.ScheduledDate.Format("2006-01-02")
-	}
-	if t.TodayIndexReference != nil {
-		o.TodayIndexRef = t.TodayIndexReference.Format("2006-01-02")
 	}
 	if len(t.ParentTaskIDs) > 0 {
 		o.ProjectID = t.ParentTaskIDs[0]
@@ -182,16 +177,16 @@ func parseDateOrRFC3339(raw, name string) (*time.Time, error) {
 	return nil, fmt.Errorf("%s must be RFC3339 or YYYY-MM-DD", name)
 }
 
-func mcpPaginationOpts(req mcp.CallToolRequest) (sync.QueryOpts, error) {
-	opts := sync.QueryOpts{
+func mcpPaginationOpts(req mcp.CallToolRequest) (listOpts, error) {
+	opts := listOpts{
 		Limit:  req.GetInt("limit", 0),
 		Offset: req.GetInt("offset", 0),
 	}
 	if opts.Limit < 0 {
-		return sync.QueryOpts{}, fmt.Errorf("limit must be a non-negative integer")
+		return listOpts{}, fmt.Errorf("limit must be a non-negative integer")
 	}
 	if opts.Offset < 0 {
-		return sync.QueryOpts{}, fmt.Errorf("offset must be a non-negative integer")
+		return listOpts{}, fmt.Errorf("offset must be a non-negative integer")
 	}
 	return opts, nil
 }
@@ -208,7 +203,7 @@ func mcpListToday(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResu
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	tasks, err := syncer.State().TasksInToday(opts)
+	tasks, err := readState().TasksInToday(opts)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -223,7 +218,7 @@ func mcpListAnytime(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolRe
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	tasks, err := syncer.State().TasksInAnytime(opts)
+	tasks, err := readState().TasksInAnytime(opts)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -238,7 +233,7 @@ func mcpListInbox(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResu
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	tasks, err := syncer.State().TasksInInbox(opts)
+	tasks, err := readState().TasksInInbox(opts)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -253,7 +248,7 @@ func mcpListSomeday(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolRe
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	tasks, err := syncer.State().TasksInSomeday(opts)
+	tasks, err := readState().TasksInSomeday(opts)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -268,7 +263,7 @@ func mcpListUpcoming(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolR
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	tasks, err := syncer.State().TasksInUpcoming(opts)
+	tasks, err := readState().TasksInUpcoming(opts)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -283,7 +278,7 @@ func mcpListProjects(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolR
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	projects, err := syncer.State().AllProjects(opts)
+	projects, err := readState().AllProjects(opts)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -298,7 +293,7 @@ func mcpListAreas(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResu
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	areas, err := syncer.State().AllAreasWithOpts(opts)
+	areas, err := readState().AllAreasWithOpts(opts)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -313,7 +308,7 @@ func mcpListTags(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResul
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	tags, err := syncer.State().AllTagsWithOpts(opts)
+	tags, err := readState().AllTagsWithOpts(opts)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -328,7 +323,7 @@ func mcpListAllTasks(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolR
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	tasks, err := syncer.State().AllTasks(opts)
+	tasks, err := readState().AllTasks(opts)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -347,7 +342,7 @@ func mcpListProjectTasks(_ context.Context, req mcp.CallToolRequest) (*mcp.CallT
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	tasks, err := syncer.State().TasksInProject(projectUUID, opts)
+	tasks, err := readState().TasksInProject(projectUUID, opts)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -366,7 +361,7 @@ func mcpListAreaTasks(_ context.Context, req mcp.CallToolRequest) (*mcp.CallTool
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	tasks, err := syncer.State().TasksInArea(areaUUID, opts)
+	tasks, err := readState().TasksInArea(areaUUID, opts)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -390,7 +385,7 @@ func mcpListCompleted(_ context.Context, req mcp.CallToolRequest) (*mcp.CallTool
 		return mcp.NewToolResultError("completed_after must be earlier than completed_before"), nil
 	}
 
-	tasks, err := syncer.State().CompletedTasksInRange(limit, completedAfter, completedBefore)
+	tasks, err := readState().CompletedTasksInRange(limit, completedAfter, completedBefore)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -671,7 +666,7 @@ func mcpSearchTasks(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolRe
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	tasks, err := syncer.State().AllTasks(sync.QueryOpts{})
+	tasks, err := readState().AllTasks(listOpts{})
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -764,19 +759,19 @@ func mcpSmokeTest(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult
 
 	// 1. Sync
 	check("sync", func() error {
-		_, err := syncer.Sync()
+		_, err := mirror.Sync()
 		return err
 	})
 
 	// 2. List today
 	check("list_today", func() error {
-		_, err := syncer.State().TasksInToday(sync.QueryOpts{})
+		_, err := readState().TasksInToday(listOpts{})
 		return err
 	})
 
 	// 3. List projects
 	check("list_projects", func() error {
-		_, err := syncer.State().AllProjects(sync.QueryOpts{})
+		_, err := readState().AllProjects(listOpts{})
 		return err
 	})
 

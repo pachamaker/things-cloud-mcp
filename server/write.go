@@ -1,10 +1,12 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	thingscloud "github.com/arthursoares/things-cloud-sdk"
+	"github.com/google/uuid"
 )
 
 // historyMu serializes all write operations (history.Sync + history.Write)
@@ -118,8 +121,11 @@ func isInvalidInput(err error) bool {
 	return errors.Is(err, errInvalidInput)
 }
 
+// isBase58UUID accepts canonical Base58 encodings of 16 bytes (upstream
+// ValidateUUID) with the 21-22 characters Things emits; native IDs may start
+// with '1' (docs/protocol/things-cloud.md, "Identifiers", KI-26).
 func isBase58UUID(id string) bool {
-	return thingscloud.ValidateUUID(id) == nil
+	return len(id) >= 21 && len(id) <= idLength && thingscloud.ValidateUUID(id) == nil
 }
 
 func validateUUID(name, id string) error {
@@ -173,14 +179,45 @@ func validateUUIDSlice(name string, ids []string) ([]string, error) {
 	return out, nil
 }
 
+const (
+	idLength   = 22
+	maxIDDraws = 64
+)
+
+// generateUUID panics if the system random source fails, like uuid.New.
 func generateUUID() string {
-	return thingscloud.NewUUID()
+	id, err := newIDFromReader(rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
+// newIDFromReader redraws until the first byte is non-zero and the encoding
+// is 22 characters. Upstream EncodeUUID pads a leading zero byte with '1',
+// which was reported to crash Things (KI-26); 21-character encodings are
+// redrawn too, so generated IDs never sit near either edge. About 3% of
+// draws are rejected, so maxIDDraws failures in a row mean a broken source.
+func newIDFromReader(r io.Reader) (string, error) {
+	for i := 0; i < maxIDDraws; i++ {
+		u, err := uuid.NewRandomFromReader(r)
+		if err != nil {
+			return "", fmt.Errorf("generate identifier: %w", err)
+		}
+		if u[0] == 0 {
+			continue
+		}
+		if id := thingscloud.EncodeUUID(u); len(id) == idLength {
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("generate identifier: no safe draw in %d attempts", maxIDDraws)
 }
 
 // syncForRead syncs before a read operation, logging any errors.
 // Returns the error so callers can optionally surface it.
 func syncForRead() error {
-	if _, err := syncer.Sync(); err != nil {
+	if _, err := mirror.Sync(); err != nil {
 		log.Printf("[SYNC] pre-read sync failed: %v", err)
 		return err
 	}
@@ -190,7 +227,7 @@ func syncForRead() error {
 // syncAfterWrite syncs after a write to refresh local state.
 // Errors are logged but not returned (best-effort refresh).
 func syncAfterWrite() {
-	if _, err := syncer.Sync(); err != nil {
+	if _, err := mirror.SyncNow(); err != nil {
 		log.Printf("[SYNC] post-write refresh failed: %v", err)
 	}
 }
@@ -328,6 +365,9 @@ type UUIDRequest struct {
 // Repeat rule builder
 // ---------------------------------------------------------------------------
 
+// neverendingRepeatYear is the year of Things' "never" sentinel date (4001-01-01, KI-04).
+const neverendingRepeatYear = 4001
+
 // rejectRepeat refuses every non-empty repeat value, "none" included: clearing
 // a rule still writes rr onto an item that may be a repeating template or
 // instance, which can corrupt Things clients (KI-01, incident 2026-08-18).
@@ -420,7 +460,7 @@ func buildRepeatRule(repeat string, refDate time.Time) (*json.RawMessage, error)
 
 	ref := time.Date(refDate.Year(), refDate.Month(), refDate.Day(), 0, 0, 0, 0, time.UTC)
 	srTs := ref.Unix()
-	edTs := time.Date(thingscloud.NeverendingRepeatYear, time.January, 1, 0, 0, 0, 0, time.UTC).Unix()
+	edTs := time.Date(neverendingRepeatYear, time.January, 1, 0, 0, 0, 0, time.UTC).Unix()
 	if endTs != nil {
 		if *endTs < srTs {
 			return nil, fmt.Errorf("repeat end date must be on or after start date")
@@ -472,12 +512,7 @@ func historyWrite(env writeEnvelope) error {
 	historyMu.Lock()
 	defer historyMu.Unlock()
 
-	if client != nil && client.Debug {
-		bs, _ := json.MarshalIndent(env, "", "  ")
-		log.Printf("[WRITE] uuid=%s action=%d kind=%s payload=%s", env.id, env.action, env.kind, string(bs))
-	} else {
-		log.Printf("[WRITE] uuid=%s action=%d kind=%s", env.id, env.action, env.kind)
-	}
+	log.Printf("[WRITE] uuid=%s action=%d kind=%s", env.id, env.action, env.kind)
 	if err := history.Sync(); err != nil {
 		return fmt.Errorf("history sync failed: %w", err)
 	}
@@ -498,8 +533,16 @@ func historyWrite(env writeEnvelope) error {
 }
 
 func isConflictError(err error) bool {
-	var statusErr *thingscloud.HTTPStatusError
-	return errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusConflict
+	if err == nil {
+		return false
+	}
+	var httpErr *thingscloud.HTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.StatusCode == http.StatusConflict
+	}
+	// things-cloud-sdk v0.6.0 History.Write reports a rejected commit only as
+	// the untyped error "Write failed: <status>" (histories.go:283).
+	return strings.HasSuffix(err.Error(), "Write failed: 409")
 }
 
 // parseWhen interprets the when parameter. Returns (st, sr, tir, handled).

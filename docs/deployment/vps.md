@@ -197,7 +197,7 @@ Things Cloud unreachable).
 |---|---|---|
 | `things-data` volume | OAuth state, write audit log (`audit.jsonl`); the SQLite mirror itself is a rebuildable cache | Nightly `VACUUM INTO` copy or Litestream to S3-compatible storage; copy off the box |
 | `pocket-id-data` | Users, passkeys, clients | Nightly volume snapshot |
-| Things history export (planned, read-only job based on `cmd/dump-history`) | Independent copy of the account history for diagnosing a bad write | Nightly JSON dump, 30-day retention |
+| Things history export (planned, read-only job built on the SDK's `History.Items`) | Independent copy of the account history for diagnosing a bad write | Nightly JSON dump, 30-day retention |
 | Things itself | Source of truth | Things for Mac keeps local backups; keep them enabled |
 
 Test a restore once: stop the stack, restore volumes on a fresh VM, start, verify.

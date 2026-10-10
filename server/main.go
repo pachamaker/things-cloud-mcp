@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -20,12 +21,9 @@ import (
 var (
 	client  *things.Client
 	syncer  *sync.Syncer
+	mirror  *syncGate
 	history *things.History
 )
-
-type initialSyncer interface {
-	Sync() ([]sync.Change, error)
-}
 
 type shutdownServer interface {
 	ListenAndServe() error
@@ -33,6 +31,21 @@ type shutdownServer interface {
 }
 
 const shutdownTimeout = 10 * time.Second
+
+const (
+	defaultDataDir = "/data"
+	// syncDBFile differs from the embedded SDK's things.db (schema v4):
+	// upstream migrate() treats v4 as newer than its own v2 and would skip its
+	// migrations on that file (spike report B5). The cache is disposable.
+	syncDBFile = "things-upstream.db"
+)
+
+func syncDBPath(dataDir string) string {
+	if dataDir == "" {
+		dataDir = defaultDataDir
+	}
+	return filepath.Join(dataDir, syncDBFile)
+}
 
 func jsonResponse(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
@@ -54,8 +67,8 @@ func handleVerify(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, resp)
 }
 
-func paginationQueryOpts(r *http.Request) (sync.QueryOpts, error) {
-	opts := sync.QueryOpts{}
+func paginationQueryOpts(r *http.Request) (listOpts, error) {
+	opts := listOpts{}
 
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		limit, err := strconv.Atoi(raw)
@@ -76,7 +89,7 @@ func paginationQueryOpts(r *http.Request) (sync.QueryOpts, error) {
 }
 
 func handleSync(w http.ResponseWriter, r *http.Request) {
-	changes, err := syncer.Sync()
+	changes, err := mirror.Sync()
 	if err != nil {
 		jsonError(w, fmt.Sprintf("sync failed: %v", err), 500)
 		return
@@ -96,7 +109,7 @@ func handleInbox(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
-	state := syncer.State()
+	state := readState()
 	tasks, err := state.TasksInInbox(opts)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to get inbox: %v", err), 500)
@@ -119,7 +132,7 @@ func handleToday(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
-	state := syncer.State()
+	state := readState()
 	tasks, err := state.TasksInToday(opts)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to get today: %v", err), 500)
@@ -142,7 +155,7 @@ func handleAnytime(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
-	state := syncer.State()
+	state := readState()
 	tasks, err := state.TasksInAnytime(opts)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to get anytime: %v", err), 500)
@@ -165,7 +178,7 @@ func handleSomeday(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
-	state := syncer.State()
+	state := readState()
 	tasks, err := state.TasksInSomeday(opts)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to get someday: %v", err), 500)
@@ -188,7 +201,7 @@ func handleUpcoming(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
-	state := syncer.State()
+	state := readState()
 	tasks, err := state.TasksInUpcoming(opts)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to get upcoming: %v", err), 500)
@@ -211,7 +224,7 @@ func handleProjects(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
-	state := syncer.State()
+	state := readState()
 	projects, err := state.AllProjects(opts)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to get projects: %v", err), 500)
@@ -234,7 +247,7 @@ func handleAreas(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
-	state := syncer.State()
+	state := readState()
 	areas, err := state.AllAreasWithOpts(opts)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to get areas: %v", err), 500)
@@ -257,7 +270,7 @@ func handleTags(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
 		return
 	}
-	state := syncer.State()
+	state := readState()
 	tags, err := state.AllTagsWithOpts(opts)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to get tags: %v", err), 500)
@@ -323,7 +336,14 @@ func debugAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func runInitialSync(s initialSyncer) error {
+// newThingsClient never sets Client.Debug: upstream dumps whole requests,
+// including "Authorization: Password <plaintext>", and offers no redaction
+// hook (spike report B7, KI-09). DEBUG only gates the debug endpoints.
+func newThingsClient(endpoint, username, password string) *things.Client {
+	return things.New(endpoint, username, password)
+}
+
+func runInitialSync(s changeSyncer) error {
 	log.Println("Performing initial sync...")
 	changes, err := s.Sync()
 	if err != nil {
@@ -382,17 +402,23 @@ func main() {
 		port = "8080"
 	}
 
-	client = things.New(things.APIEndpoint, username, password)
-	client.Debug = os.Getenv("DEBUG") == "true"
+	client = newThingsClient(things.APIEndpoint, username, password)
+
+	dbPath := syncDBPath(os.Getenv("DATA_DIR"))
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o700); err != nil {
+		log.Fatalf("failed to create data directory: %v", err)
+	}
+	log.Printf("Sync database: %s", dbPath)
 
 	var err error
-	syncer, err = sync.Open("/data/things.db", client)
+	syncer, err = sync.Open(dbPath, client)
 	if err != nil {
 		log.Fatalf("failed to open sync database: %v", err)
 	}
 	defer syncer.Close()
+	mirror = newSyncGate(syncer, time.Now)
 
-	if err := runInitialSync(syncer); err != nil {
+	if err := runInitialSync(mirror); err != nil {
 		log.Fatal(err)
 	}
 
@@ -433,13 +459,21 @@ func main() {
 
 	// Debug endpoint — dump raw write history items
 	http.HandleFunc("/api/debug/history", debugAuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		items, err := history.RawItems()
+		items, _, err := client.HistoryWithID(history.ID).Items(things.ItemsOptions{})
 		if err != nil {
 			jsonError(w, err.Error(), 500)
 			return
 		}
+		type debugItem struct {
+			UUID string `json:"uuid"`
+			things.Item
+		}
+		out := make([]debugItem, len(items))
+		for i, item := range items {
+			out[i] = debugItem{UUID: item.UUID, Item: item}
+		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(items)
+		json.NewEncoder(w).Encode(out)
 	}))
 
 	// Debug endpoint — list all history keys (uses SDK method with auth)
@@ -500,7 +534,7 @@ func main() {
 		email := client.EMail
 		password := os.Getenv("THINGS_PASSWORD")
 
-		log.Printf("[NUKE] Deleting account %s...", email)
+		log.Printf("[NUKE] Deleting account...")
 		if err := client.Accounts.Delete(); err != nil {
 			jsonError(w, fmt.Sprintf("delete failed: %v", err), 500)
 			return

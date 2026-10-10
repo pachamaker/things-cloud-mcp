@@ -16,7 +16,9 @@ apps never break because of something this server wrote.
 
 **Lineage:** `nicolai86/things-cloud-sdk` → `arthursoares/things-cloud-sdk` →
 `mattydsmith/things-cloud-mcp` (archived) → this fork (`pachamaker/things-cloud-mcp`).
-Upstream is dead; we own everything. See `docs/adr/0001-fork-identity.md`.
+The protocol layer is the maintained `arthursoares/things-cloud-sdk`, used as a pinned Go
+dependency; this repo owns the MCP server, its read model and its safety rules. See
+`docs/adr/0001-fork-identity.md`.
 
 ## 2. Non-negotiable rules
 
@@ -35,7 +37,9 @@ feature unimplemented.
    modify repeating templates or instances, do not re-enable the `repeat` parameter.
    Incident 2026-08-18 (KI-01, ADR-0004).
 4. **IDs must be safe Base58.** Never emit an identifier whose natural encoding drops a
-   leading zero byte (KI-26). Never write `Task7` items until a validated encoder exists.
+   leading zero byte (KI-26): generate IDs only with `generateUUID` (`server/write.go`),
+   never with the SDK's `NewUUID`. Never write `Task7` items until a validated encoder
+   exists.
 5. **Never weaken authentication.** No unauthenticated route may read or write task
    data on a publicly reachable deployment.
 6. **Never log secrets or personal data:** Things password, `Authorization` headers,
@@ -43,13 +47,17 @@ feature unimplemented.
 7. **Calendar dates are civil dates in the owner's timezone.** Do not call
    `time.Now()` or `.UTC()` to decide "today" in new code; use the clock and timezone
    from config (ADR-0003). Until ADR-0003 lands, do not add new UTC-based date logic.
-8. **Do not hand-edit generated code** (`itemaction_string.go`); run `go generate`.
+8. **Do not copy or patch SDK code in this repo.** The SDK is the
+   `github.com/arthursoares/things-cloud-sdk` dependency, pinned in `go.mod`; generic
+   fixes go upstream as PRs, or through a `replace` soft fork (ADR-0001). Upgrades go
+   through a PR with the full test suite.
 9. **Do not edit `.env` files, deployment secrets, or anything under `/migrations`**
    without an explicit instruction.
 
-**Current top risks** (read before touching sync or writes): KI-25 (`Task7` from
-Things ≥ 3.23 is silently dropped on `main`; fixed by the upstream-SDK migration in
-progress, ADR-0001), KI-01 (recurrence), KI-07 (no auth on `/mcp`).
+**Current top risks** (read before touching sync or writes): KI-01 (recurrence), KI-07
+(no auth on `/mcp`), KI-03 ("today" is the UTC day). KI-25 (`Task7`) is fixed by the
+upstream SDK; an unknown task kind now stops the sync with an error instead of being
+skipped.
 
 ## 3. Before you start a task
 
@@ -64,12 +72,11 @@ progress, ADR-0001), KI-01 (recurrence), KI-07 (no auth on `/mcp`).
 ## 4. Commands
 
 ```bash
-go build ./...                       # build everything
+go build -o /dev/null ./...          # build everything (plain `go build ./...` collides with the server/ directory)
 go vet ./...                         # static checks
-go test ./...                        # unit + tape tests (no network)
-go test -race ./sync ./server        # concurrency-sensitive packages
-go test -run TestName ./sync         # single test
-go generate                          # regenerate stringer output after enum changes
+go test ./...                        # unit tests (no network)
+go test -race ./...                  # includes the concurrent-sync gate tests
+go test -run TestName ./server       # single test
 go build -o things-server ./server   # build the server binary
 ```
 
@@ -80,7 +87,8 @@ Run the server locally **against the sandbox account only**:
 
 ```bash
 export THINGS_USERNAME="$THINGS_SANDBOX_USERNAME" THINGS_PASSWORD="$THINGS_SANDBOX_PASSWORD"
-mkdir -p /data && go run ./server     # DB path is currently hard-coded to /data/things.db (KI-16)
+export DATA_DIR="$PWD/.data"            # empty directory; the cache is $DATA_DIR/things-upstream.db
+go run ./server
 ```
 
 Black-box scripts in `tests/` call a running server and **create real items** in
@@ -98,42 +106,49 @@ Configuration (environment variables):
 | `THINGS_USERNAME` / `THINGS_PASSWORD` | yes | Things Cloud account the server syncs |
 | `API_KEY` | no | Static bearer for `/api/*` (no effect on `/mcp`, KI-07) |
 | `PORT` | no | Listen port, default `8080` |
-| `DEBUG` | no | `true` enables HTTP dumps (currently leaks the password, KI-09) and debug endpoints (KI-08) — never in production |
+| `DATA_DIR` | no | Directory of the SQLite cache `things-upstream.db`, default `/data` (created with mode 0700). The cache is disposable: delete the file to force a full resync |
+| `DEBUG` | no | `true` enables the debug endpoints (KI-08) — never in production. It no longer turns on SDK HTTP dumps, which would log the password (KI-09) |
 
-Planned: `THINGS_TIMEZONE` (ADR-0003), `DATA_DIR` (KI-16), OAuth settings (ADR-0002).
+Planned: `THINGS_TIMEZONE` (ADR-0003), OAuth settings (ADR-0002).
 
-Baseline at `c622fdb` (after PRs #1–#3): build, vet and `go test ./...` pass locally.
-CI does not run yet (KI-15). Do not add failures.
+Baseline on `spike-upstream-sdk` after the upstream migration (phase 3, 2026-10-11):
+build, vet and `go test -race ./...` pass locally. CI does not run yet (KI-15). Do not
+add failures.
 
 ## 5. Repository map
 
 | Path | What | Status |
 |---|---|---|
-| `server/` | The product: HTTP server, MCP tools (`mcp.go`), writes (`write.go`), REST | live |
-| `sync/` | Persistent sync engine: history → SQLite, view queries (`state.go`), change detection | live |
-| `*.go` at root | SDK (`package thingscloud`): HTTP client, histories, items, wire types, notes, repeat maths | live |
-| `state/memory/` | In-memory aggregation, used by CLIs/tests | support |
-| `syncutil/` | Analytics helpers for CLIs | support |
-| `cmd/` | CLI and debugging tools | support; some duplicate write logic (KI-23) |
-| `tapes/` | Recorded HTTP responses for SDK tests | test data |
+| `server/main.go` | Process wiring, REST handlers, debug endpoints, `DATA_DIR` | live |
+| `server/mcp.go` | MCP tool registry, read handlers, output formatting | live |
+| `server/write.go` | Write commands, wire payload builders, ID generator, `historyWrite` | live |
+| `server/readmodel.go` | Read model over the SDK `State`: pagination, open-list filtering, completed range | live |
+| `server/views.go` | View classifier (Inbox/Today/Anytime/Someday/Upcoming), ADR-0005 | live |
+| `server/syncgate.go` | Serialises and coalesces syncs, 429 backoff | live |
 | `tests/` | Shell e2e scripts against a running server | sandbox only |
 | `docs/` | See `docs/README.md` for the index | |
 
-The module path is still `github.com/arthursoares/things-cloud-sdk` (to be renamed,
-ADR-0001). Imports in new code must match `go.mod`.
+The module is `github.com/pachamaker/things-cloud-mcp`. The SDK packages are imported
+as `github.com/arthursoares/things-cloud-sdk` (`things`/`thingscloud`) and
+`github.com/arthursoares/things-cloud-sdk/sync`. What the SDK version differs in from
+the old embedded copy: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4.
 
 ## 6. Architecture in one minute
 
-- **Read path:** tool call → `syncer.Sync()` (incremental pull from Things Cloud) →
-  SQL query in `sync/state.go` → JSON. Views (Today, Upcoming, …) are *derived
-  locally*; Things Cloud has no view endpoints.
+- **Read path:** tool call → sync gate (`server/syncgate.go`: one sync at a time, reuse
+  of a sync younger than 2 s, backoff on 429) → SDK `Syncer.Sync()` (incremental pull)
+  → SDK `State.AllTasks` → classifier in `server/views.go` → JSON. Views (Today,
+  Upcoming, …) are *derived locally*; Things Cloud has no view endpoints, and the SDK's
+  own `TasksIn*` queries are not used.
 - **Write path:** tool call → input validation → Things wire payload in
   `server/write.go` → `history.Write()` commit with `ancestor-index` (retry once on
   409) → post-write sync.
-- **Source of truth** is the Things Cloud history; SQLite is a disposable cache (schema
-  migrations may wipe and resync it).
-- **Concurrency:** `Syncer.mu` serialises syncs; `historyMu` serialises writes. Package
-  globals (`client`, `syncer`, `history`) are a known smell (KI-17).
+- **Source of truth** is the Things Cloud history; SQLite (`$DATA_DIR/things-upstream.db`)
+  is a disposable cache. The SDK replays it from scratch after reader fixes, keeping a
+  backup next to it.
+- **Concurrency:** the sync gate serialises syncs (the SDK `Syncer` has no lock);
+  `historyMu` serialises writes. Package globals (`client`, `syncer`, `history`) are a
+  known smell (KI-17).
 
 Details and target architecture: `docs/architecture.md`.
 
@@ -141,7 +156,7 @@ Details and target architecture: `docs/architecture.md`.
 
 | Concept | Wire | Notes |
 |---|---|---|
-| To-do / Project / Heading | `Task6` with `tp` = 0 / 1 / 2 | |
+| To-do / Project / Heading | `Task6`/`Task7` with `tp` = 0 / 1 / 2 | the server reads both and writes `Task6` |
 | Status | `ss`: 0 open, 2 canceled, 3 completed | `sp` = stop instant, never `0` |
 | Start state | `st`: 0 Inbox, 1 started, 2 deferred | |
 | Start date ("when") | `sr` (+ `tir` when placed in Today) | civil date as midnight UTC |
@@ -150,7 +165,7 @@ Details and target architecture: `docs/architecture.md`.
 | Project / subtask parent | `pr` | heading membership in `agr` (KI-13) |
 | Area / Tags | `ar` / `tg` | arrays of UUIDs |
 | Recurrence | `rr` on hidden template, `rt` on instances | read-only, ⛔ write |
-| IDs | 21–22 char Base58 | non-Base58 IDs crash Things |
+| IDs | 21–22 char Base58 (generated: 22) | non-canonical IDs crash Things (KI-26) |
 
 Verified placement writes: Inbox `st0,sr∅,tir∅` · Today `st1,sr=today,tir=today` ·
 Anytime `st1,∅,∅` · Someday `st2,∅,∅` · Upcoming `st2,sr=D>today,tir∅`.
@@ -185,7 +200,7 @@ Never write `st=2` with today's date.
 ## 10. Definition of done
 
 - [ ] Change is scoped to one KI/ADR item; unrelated refactors are not mixed in.
-- [ ] `go build ./...`, `go vet ./...`, `go test ./...` pass (no new failures).
+- [ ] `go build -o /dev/null ./...`, `go vet ./...`, `go test -race ./...` pass (no new failures).
 - [ ] New or changed behaviour has tests; wire changes have capture fixtures.
 - [ ] Docs updated: KI status, protocol evidence, README tool tables, ADR status.
 - [ ] Final report lists changed files with one line each, what was verified, and what

@@ -40,8 +40,9 @@ Rules:
 
 ### CI (GitHub Actions)
 - Move workflows to `.github/workflows/`; delete the nested duplicate and Fly.io deploy.
-- Jobs: `go build ./...`, `go vet ./...`, `go test -race ./...`, `staticcheck`,
-  `govulncheck`, `go mod tidy` diff check, `go generate` diff check.
+- Jobs: `go build -o /dev/null ./...` (plain `go build ./...` collides with the
+  `server/` directory), `go vet ./...`, `go test -race ./...`, `staticcheck`,
+  `govulncheck`, `go mod tidy` diff check.
 - Go version from `go.mod` (`go-version-file: go.mod`).
 - Release: on tag `v*`, build a multi-arch image and push to GHCR; the VPS pulls a
   pinned tag (ADR-0002).
