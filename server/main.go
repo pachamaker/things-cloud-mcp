@@ -343,6 +343,42 @@ func newThingsClient(endpoint, username, password string) *things.Client {
 	return things.New(endpoint, username, password)
 }
 
+// connectThings sets the package globals the handlers use (KI-17): the
+// client, the mirror under dataDir after an initial sync, and the write
+// history. The sandbox e2e harness starts the server through it too.
+func connectThings(username, password, dataDir string) (closeMirror func() error, err error) {
+	client = newThingsClient(things.APIEndpoint, username, password)
+
+	dbPath := syncDBPath(dataDir)
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o700); err != nil {
+		return nil, fmt.Errorf("failed to create data directory: %w", err)
+	}
+	log.Printf("Sync database: %s", dbPath)
+
+	syncer, err = sync.Open(dbPath, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open sync database: %w", err)
+	}
+	mirror = newSyncGate(syncer, time.Now)
+
+	if err := runInitialSync(mirror); err != nil {
+		syncer.Close()
+		return nil, err
+	}
+
+	history, err = client.OwnHistory()
+	if err != nil {
+		syncer.Close()
+		return nil, fmt.Errorf("failed to get history: %w", err)
+	}
+	if err := history.Sync(); err != nil {
+		syncer.Close()
+		return nil, fmt.Errorf("failed to sync history: %w", err)
+	}
+	log.Println("History ready for writes")
+	return syncer.Close, nil
+}
+
 func runInitialSync(s changeSyncer) error {
 	log.Println("Performing initial sync...")
 	changes, err := s.Sync()
@@ -402,35 +438,11 @@ func main() {
 		port = "8080"
 	}
 
-	client = newThingsClient(things.APIEndpoint, username, password)
-
-	dbPath := syncDBPath(os.Getenv("DATA_DIR"))
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o700); err != nil {
-		log.Fatalf("failed to create data directory: %v", err)
-	}
-	log.Printf("Sync database: %s", dbPath)
-
-	var err error
-	syncer, err = sync.Open(dbPath, client)
+	closeMirror, err := connectThings(username, password, os.Getenv("DATA_DIR"))
 	if err != nil {
-		log.Fatalf("failed to open sync database: %v", err)
-	}
-	defer syncer.Close()
-	mirror = newSyncGate(syncer, time.Now)
-
-	if err := runInitialSync(mirror); err != nil {
 		log.Fatal(err)
 	}
-
-	// Get history for write operations
-	history, err = client.OwnHistory()
-	if err != nil {
-		log.Fatalf("failed to get history: %v", err)
-	}
-	if err := history.Sync(); err != nil {
-		log.Fatalf("failed to sync history: %v", err)
-	}
-	log.Println("History ready for writes")
+	defer closeMirror()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
