@@ -4,14 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
-	"math/big"
 	"os"
 	"strings"
 	"time"
 
 	thingscloud "github.com/arthursoares/things-cloud-sdk"
 	memory "github.com/arthursoares/things-cloud-sdk/state/memory"
-	"github.com/google/uuid"
 )
 
 // ---------------------------------------------------------------------------
@@ -133,22 +131,7 @@ func defaultExtension() WireExtension {
 }
 
 func generateUUID() string {
-	u := uuid.New()
-	// Base58 alphabet (Bitcoin/Flickr): no 0, O, I, l
-	const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-	n := new(big.Int).SetBytes(u[:])
-	base := big.NewInt(58)
-	mod := new(big.Int)
-	var encoded []byte
-	for n.Sign() > 0 {
-		n.DivMod(n, base, mod)
-		encoded = append(encoded, alphabet[mod.Int64()])
-	}
-	// Reverse (big-endian)
-	for i, j := 0, len(encoded)-1; i < j; i, j = i+1, j-1 {
-		encoded[i], encoded[j] = encoded[j], encoded[i]
-	}
-	return string(encoded)
+	return thingscloud.NewUUID()
 }
 
 func nowTs() float64 {
@@ -169,16 +152,7 @@ func parseDate(s string) *time.Time {
 }
 
 func isBase58UUID(id string) bool {
-	const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-	if len(id) < 20 || len(id) > 32 {
-		return false
-	}
-	for i := 0; i < len(id); i++ {
-		if !strings.ContainsRune(alphabet, rune(id[i])) {
-			return false
-		}
-	}
-	return true
+	return thingscloud.ValidateUUID(id) == nil
 }
 
 func validateUUID(name, id string) error {
