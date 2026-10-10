@@ -129,7 +129,9 @@ workaround can be deleted.
   do not expose the server on a public address.
 
 ### KI-08 · Destructive debug endpoints ship in the production binary
-- **Status:** open · **Evidence:** confirmed (`server/main.go:463-557`)
+- **Status:** fixed (phase 0) — every `/api/debug/*` route and the `DEBUG` variable are
+  gone from the server; there is no account-surgery tool, the sandbox e2e cleanup covers
+  test data · **Evidence:** confirmed (`server/main.go:463-557` before the fix)
 - **Symptom:** with `DEBUG=true` and an `API_KEY`, one POST deletes the Things Cloud
   history (`/api/debug/delete-history`) or the whole Things account
   (`/api/debug/nuke-account`).
@@ -137,8 +139,9 @@ workaround can be deleted.
   that requires interactive confirmation and a sandbox account.
 
 ### KI-09 · `DEBUG=true` logs the Things password
-- **Status:** mitigated — the server never sets the SDK's `Client.Debug`; `DEBUG` only
-  gates the debug endpoints (PR #4) · **Evidence:** confirmed (SDK `client.go:135-146`
+- **Status:** fixed for the server — it never sets the SDK's `Client.Debug` (PR #4) and
+  has no debug mode since KI-08; `TestNewThingsClient_KI09_DebugEnvDoesNotDumpPassword`
+  guards it · **Evidence:** confirmed (SDK `client.go:135-146`
   dumps full requests incl. `Authorization: Password <plaintext>` when `Debug` is set)
 - **Remaining:** the SDK logs a full response dump (no request headers) when a commit is
   rejected (`histories.go:281-282`).
@@ -168,9 +171,7 @@ workaround can be deleted.
   `server/redact_test.go` drive the MCP and REST handlers through a refusing
   `http.DefaultTransport` and check the tool result, the REST body and the log. The
   sandbox harness keeps its own redaction as a second layer.
-- **Remaining:** the debug endpoints (KI-08) still show the key by design:
-  `/api/debug/histories` returns it, `/api/debug/delete-history` logs it, and
-  `/api/debug/history` returns raw SDK errors. Errors of `client.Verify`/`OwnHistory`
+- **Remaining:** errors of `client.Verify`/`OwnHistory`
   outside the sync gate (`/api/verify`, `failed to get history` at startup) can carry the
   account e-mail address, not the key.
 

@@ -37,8 +37,8 @@ change is checked automatically.
 | ~~Move workflows to `.github/workflows/`, drop Fly.io deploy and nested duplicate, Go version from `go.mod`, add `-race`~~ (done, `ci.yml`); ~~add `govulncheck`~~ (done with KI-32); add `staticcheck` once KI-33 is fixed | KI-15, ADR-0007 | S |
 | ~~Build and test on a supported Go release (Go 1.25 is out of support; 9 reachable stdlib vulnerabilities)~~ (done: `toolchain go1.26.9`, `golang:1.26.9-alpine`, `govulncheck` job) | KI-32 | S |
 | ~~Reject `repeat` on all surfaces; remove it from tool schemas~~ (done, PR #2) | KI-01, ADR-0004 | S |
-| Remove debug endpoints (`delete-history`, `nuke-account`, `confirm-account`) from the server | KI-08 | S |
-| Redact `Authorization`/passwords in debug dumps + test | KI-09 | S |
+| ~~Remove debug endpoints (`delete-history`, `nuke-account`, `confirm-account`) from the server~~ (done, phase 0: all of `/api/debug/*` and `DEBUG`) | KI-08 | S |
+| ~~Redact `Authorization`/passwords in debug dumps + test~~ (done for the server: no SDK dumps, no debug mode; the SDK's own dump on a rejected commit needs an upstream PR) | KI-09 | S |
 | Remove `things_smoke_test` from MCP; keep as sandbox-only CLI | KI-11 | S |
 | Write preconditions: target exists, right type, not template, not trashed | KI-10, ADR-0004 | M |
 | `ENABLE_WRITES` switch (write tools not registered when off; default off for new installs) | ADR-0004, `legal-and-risk.md` | S |

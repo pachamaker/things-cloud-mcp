@@ -147,7 +147,6 @@ Configuration (environment variables):
 | `API_KEY` | no | Static bearer for `/api/*` (no effect on `/mcp`, KI-07) |
 | `PORT` | no | Listen port, default `8080` |
 | `DATA_DIR` | no | Directory of the SQLite cache `things-upstream.db`, default `/data` (created with mode 0700). The cache is disposable: delete the file to force a full resync |
-| `DEBUG` | no | `true` enables the debug endpoints (KI-08) — never in production. It no longer turns on SDK HTTP dumps, which would log the password (KI-09) |
 
 Planned: `THINGS_TIMEZONE` (ADR-0003), OAuth settings (ADR-0002).
 
