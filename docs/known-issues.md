@@ -158,7 +158,15 @@ workaround can be deleted.
 - **Fix direction:** move to an admin CLI / CI job against the sandbox account.
 
 ### KI-32 · The server is built with Go 1.25, which no longer gets security fixes
-- **Status:** open · **Evidence:** confirmed (`govulncheck` v1.8.0, 2026-10-11)
+- **Status:** fixed on branch `KI-32-go-1-26-toolchain`: `go.mod` keeps `go 1.25.0` as
+  the minimum and adds `toolchain go1.26.9`, which `setup-go` installs in CI and a local
+  `go` older than 1.26.9 switches to (`GOTOOLCHAIN=auto`); the `Dockerfile` builder is
+  `golang:1.26.9-alpine`; the CI job `govulncheck` runs govulncheck v1.8.0 (which itself
+  needs Go ≥ 1.26) and fails on reachable vulnerabilities (checked: exit 3 on go1.25.14). GO-2026-4514 stays: `buger/jsonparser` v1.1.2 is not a one-line fix
+  but bundles parser rewrites (integer parsing, key lookup, `null` handling) that
+  `mcp-go` v0.44.0 is not tested with, `Delete` is not reachable, and `mcp-go` v1.x
+  (ADR-0002) no longer depends on `invopop/jsonschema` or `jsonparser` ·
+  **Evidence:** confirmed (`govulncheck` v1.8.0, 2026-10-11)
 - **Symptom:** with the newest Go 1.25 patch (1.25.14) `govulncheck ./...` reports 9
   standard-library vulnerabilities the server's code reaches (`net/http` HTTP/1 and
   HTTP/2 server and client, `net/textproto`, `crypto/tls`; GO-2026-6603 … GO-2026-6617),
@@ -299,8 +307,8 @@ workaround can be deleted.
   `go mod tidy -diff`, `go build -o /dev/null ./...`, `go vet ./...` and
   `go test -race ./...` on every pull request and every push to `main`, with the Go
   version from `go.mod`; `.github/Workflows/` (old `go.yml`, Fly.io deploy, nested
-  duplicate) is deleted. `staticcheck` and `govulncheck` are not in CI yet: they fail on
-  the current code (KI-33, KI-32) · **Evidence:** confirmed
+  duplicate) is deleted. `govulncheck` runs since KI-32; `staticcheck` is not in CI
+  yet: it fails on the current code (KI-33) · **Evidence:** confirmed
 - **Root cause:** workflows live in `.github/Workflows/` (capital `W`) — GitHub only
   reads `.github/workflows/`. There is also a nested duplicate
   `.github/Workflows/.github/Workflows/deploy.yml`. `go.yml` pins Go 1.23 while

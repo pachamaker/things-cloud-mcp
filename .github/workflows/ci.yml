@@ -1,5 +1,6 @@
 # Checks for every pull request and every push to main (KI-15, ADR-0007).
-# No secrets, no deployment, no Things Cloud access: unit tests only.
+# No secrets, no deployment, no Things Cloud access: unit tests and a vulnerability scan.
+# Go is the `toolchain` version from go.mod, which setup-go prefers over the `go` line (KI-32).
 # Actions are pinned to a full commit SHA; the comment names the release.
 name: CI
 
@@ -37,3 +38,22 @@ jobs:
 
       - name: Test
         run: go test -race ./...
+
+  vulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Fails only on vulnerable code the server can reach; packages that are
+      # imported but not called are listed without failing the job.
+      - name: Known vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
