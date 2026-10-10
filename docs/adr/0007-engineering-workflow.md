@@ -44,8 +44,17 @@ Rules:
   `server/` directory), `go vet ./...`, `go test -race ./...`, `staticcheck`,
   `govulncheck`, `go mod tidy` diff check.
 - Go version from `go.mod` (`go-version-file: go.mod`).
+- Triggers: `pull_request` and `push` to `main`, never `pull_request_target`. Workflow
+  permissions `contents: read`; checkout without persisted credentials. The check
+  workflow uses no secrets, deploys nothing and never reaches Things Cloud; sandbox e2e
+  jobs get a workflow of their own.
+- Actions are pinned to a full commit SHA with the release in a comment
+  (`actions/checkout@<sha> # v7.0.1`).
 - Release: on tag `v*`, build a multi-arch image and push to GHCR; the VPS pulls a
   pinned tag (ADR-0002).
+- Status (2026-10-11): `.github/workflows/ci.yml` runs the tidy check, build, vet and
+  race tests, and `govulncheck` in a separate job, on the Go `toolchain` from `go.mod`
+  (KI-32). `staticcheck` waits for KI-33; release and Dependabot are not set up.
 
 ### Agent workflow
 - `AGENTS.md` is the contract for every agent; `CLAUDE.md` imports it.

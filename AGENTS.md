@@ -77,11 +77,18 @@ go vet ./...                         # static checks
 go test ./...                        # unit tests (no network)
 go test -race ./...                  # includes the concurrent-sync gate tests
 go test -run TestName ./server       # single test
+go mod tidy -diff                    # go.mod/go.sum must be tidy; prints the needed change
+go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...   # vulnerabilities in reachable code, as in CI
 go build -o things-server ./server   # build the server binary
 ```
 
 If the default Go proxy is unreachable (e.g. a corporate proxy), prefix commands with
 `GOPROXY=https://proxy.golang.org,direct`.
+
+`go.mod` keeps `go 1.25.0` as the minimum and pins `toolchain go1.26.9` (KI-32): a local
+`go` older than that downloads and uses Go 1.26.9 (`GOTOOLCHAIN=auto`), a newer one
+builds with itself. CI and the Docker builder (`golang:1.26.9-alpine`) use 1.26.9; bump
+the `toolchain` line and the `Dockerfile` tag together.
 
 Run the server locally **against the sandbox account only**:
 
@@ -144,9 +151,9 @@ Configuration (environment variables):
 
 Planned: `THINGS_TIMEZONE` (ADR-0003), OAuth settings (ADR-0002).
 
-Baseline on `spike-upstream-sdk` after the upstream migration (phase 3, 2026-10-11):
-build, vet and `go test -race ./...` pass locally. CI does not run yet (KI-15). Do not
-add failures.
+Baseline: CI (`.github/workflows/ci.yml`) runs `go mod tidy -diff`, build, vet,
+`go test -race ./...` and `govulncheck` on Go 1.26.9 for every pull request and push to
+`main`; all pass. `staticcheck` is not gated yet (KI-33). Do not add failures.
 
 ## 5. Repository map
 
@@ -160,6 +167,7 @@ add failures.
 | `server/syncgate.go` | Serialises and coalesces syncs, 429 backoff | live |
 | `server/sandbox_*_test.go` | Sandbox e2e harness (tag `e2e`) and its pure rules (untagged, unit-tested) | sandbox only |
 | `tests/` | Shell e2e scripts against a running server (superseded by the Go harness) | sandbox only |
+| `.github/workflows/ci.yml` | PR and `main` checks: tidy, build, vet, race tests, `govulncheck`; no secrets, no network to Things | live |
 | `docs/` | See `docs/README.md` for the index | |
 
 The module is `github.com/pachamaker/things-cloud-mcp`. The SDK packages are imported
@@ -234,7 +242,8 @@ Never write `st=2` with today's date.
 ## 10. Definition of done
 
 - [ ] Change is scoped to one KI/ADR item; unrelated refactors are not mixed in.
-- [ ] `go build -o /dev/null ./...`, `go vet ./...`, `go test -race ./...` pass (no new failures).
+- [ ] `go mod tidy -diff`, `go build -o /dev/null ./...`, `go vet ./...`, `go test -race ./...`
+      pass (no new failures); CI is green on the PR.
 - [ ] New or changed behaviour has tests; wire changes have capture fixtures.
 - [ ] Docs updated: KI status, protocol evidence, README tool tables, ADR status.
 - [ ] Final report lists changed files with one line each, what was verified, and what
