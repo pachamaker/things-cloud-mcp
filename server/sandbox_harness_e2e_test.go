@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	gosync "sync"
 	"testing"
@@ -38,6 +39,7 @@ const (
 	sandboxMidnightMargin  = 15 * time.Minute
 	sandboxCallTimeout     = 3 * time.Minute
 	sandboxRateLimitPause  = time.Minute
+	sandboxRetryAfterCap   = 5 * time.Minute
 	thingsCloudHost        = "cloud.culturedcode.com"
 )
 
@@ -63,6 +65,10 @@ type cloudTransport struct {
 	base     http.RoundTripper
 	interval time.Duration
 	firewall *writeFirewall
+	// rateLimitBackoff is how long a GET waits before each retry after a 429.
+	// Things Cloud rate-limits per account, so the next workflow step, a new
+	// process with a full initial sync, used to fail right away (KI-27, KI-34).
+	rateLimitBackoff []time.Duration
 
 	throttleMu gosync.Mutex
 	last       time.Time
@@ -71,7 +77,8 @@ type cloudTransport struct {
 	requests      int
 	commitPosts   int
 	conflicts     int
-	rateLimited   bool
+	rateLimited   bool // a 429 the retries did not get past
+	retried429    int  // GETs that succeeded after waiting out a 429
 	commits       []committedWrite
 	pendingInject *conflictInjection
 }
@@ -109,6 +116,18 @@ func (c *cloudTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	c.throttle()
 	resp, err := c.base.RoundTrip(req)
+	retries := 0
+	for err == nil && resp.StatusCode == http.StatusTooManyRequests && req.Method == http.MethodGet && retries < len(c.rateLimitBackoff) {
+		wait := retryAfter(resp.Header.Get("Retry-After"), c.rateLimitBackoff[retries])
+		resp.Body.Close()
+		c.mu.Lock()
+		c.requests++
+		c.mu.Unlock()
+		time.Sleep(wait)
+		retries++
+		c.throttle()
+		resp, err = c.base.RoundTrip(req)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -116,6 +135,8 @@ func (c *cloudTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	c.requests++
 	if resp.StatusCode == http.StatusTooManyRequests {
 		c.rateLimited = true
+	} else if retries > 0 {
+		c.retried429++
 	}
 	if isCommit && resp.StatusCode == http.StatusConflict {
 		c.conflicts++
@@ -139,6 +160,15 @@ func (c *cloudTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		c.mu.Unlock()
 	}
 	return resp, nil
+}
+
+// retryAfter honours a Retry-After header in seconds, capped, and falls back
+// to the harness backoff.
+func retryAfter(header string, fallback time.Duration) time.Duration {
+	if secs, err := strconv.Atoi(strings.TrimSpace(header)); err == nil && secs >= 0 {
+		return min(time.Duration(secs)*time.Second, sandboxRetryAfterCap)
+	}
+	return fallback
 }
 
 func (c *cloudTransport) throttle() {
@@ -189,14 +219,14 @@ func modifies(items []wireItem, uuid string) bool {
 }
 
 type cloudStats struct {
-	Requests, CommitPosts, Conflicts int
-	RateLimited                      bool
+	Requests, CommitPosts, Conflicts, Retried429 int
+	RateLimited                                  bool
 }
 
 func (c *cloudTransport) stats() cloudStats {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return cloudStats{Requests: c.requests, CommitPosts: c.commitPosts, Conflicts: c.conflicts, RateLimited: c.rateLimited}
+	return cloudStats{Requests: c.requests, CommitPosts: c.commitPosts, Conflicts: c.conflicts, Retried429: c.retried429, RateLimited: c.rateLimited}
 }
 
 func (c *cloudTransport) committed() []committedWrite {
@@ -299,7 +329,12 @@ func startSandboxHarness(t *testing.T, mode harnessMode) *sandboxHarness {
 	h.firewall = newWriteFirewall(time.Now, prefixes...)
 
 	direct := http.DefaultTransport
-	h.cloud = &cloudTransport{base: direct, interval: interval, firewall: h.firewall}
+	h.cloud = &cloudTransport{
+		base:             direct,
+		interval:         interval,
+		firewall:         h.firewall,
+		rateLimitBackoff: []time.Duration{sandboxRateLimitPause / 2, sandboxRateLimitPause, 2 * sandboxRateLimitPause},
+	}
 	http.DefaultTransport = h.cloud
 	t.Cleanup(func() { http.DefaultTransport = direct })
 

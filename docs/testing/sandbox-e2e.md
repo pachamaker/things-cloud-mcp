@@ -52,7 +52,11 @@ send a write the official apps might choke on (rule 2). Layers, in the order the
    uses that ID, and the cleanup test trashes only that run's objects (plus
    `[smoke-test] …` leftovers); CI sets it per workflow run.
 6. **Throttle.** At most one Things Cloud request per second (`THINGS_E2E_REQUEST_INTERVAL`,
-   minimum `250ms`). Any `429` stops the run; cleanup then waits a minute first.
+   minimum `250ms`). A GET answered with `429` waits and retries (30 s, 1 min, 2 min, or
+   the `Retry-After` header, capped at 5 min); the run log counts these retries. A `429`
+   that outlasts the retries, or one on a commit (never retried), stops the run; cleanup
+   then waits a minute first. Each CI step is a new process with a full initial sync, so
+   the step after a long run can start rate-limited (KI-27).
 7. **Time.** The server's "today" is the UTC day (KI-03), so the harness skips itself
    within 15 minutes of 00:00 UTC.
 8. **Public logs.** CI logs of this public repository are readable by anyone, and GitHub
@@ -217,8 +221,8 @@ ignores. Check `git ls-files .github` before committing.
 - `the sandbox firewall refused a commit` — the server tried to send something outside
   the verified write set. The commit did not leave the process. This is a server bug (or
   a new write that needs evidence first, see `docs/protocol/things-cloud.md` §8).
-- `Things Cloud answered 429` — stop, wait, retry later with a larger
-  `THINGS_E2E_REQUEST_INTERVAL`.
+- `Things Cloud answered 429` — the retries ran out (or a commit got a 429): stop,
+  wait, retry later with a larger `THINGS_E2E_REQUEST_INTERVAL`.
 - `<key>: sent …, stored …` or `sent but not stored` in the wire section — Things Cloud
   stored something other than what the server sent. Record it in
   `docs/protocol/things-cloud.md` before relaxing the check.

@@ -29,7 +29,7 @@ jobs:
     name: Sandbox e2e
     runs-on: ubuntu-latest
     environment: things-sandbox
-    timeout-minutes: 70
+    timeout-minutes: 90
     env:
       # The cleanup step trashes exactly this run's objects.
       THINGS_E2E_RUN_ID: e2e-gh${{ github.run_id }}-${{ github.run_attempt }}
@@ -57,19 +57,22 @@ jobs:
           THINGS_SANDBOX_PASSWORD: ${{ secrets.THINGS_SANDBOX_PASSWORD }}
         run: go test -tags e2e -run '^TestSandboxE2E$' -count=1 -v -timeout 25m ./server
 
+      # Each step is a new process with a full initial sync; Things Cloud may
+      # still be rate-limiting the account from the previous step. The harness
+      # retries a GET after a 429 (30 s, 1 min, 2 min), hence the margins.
       - name: Seed checks (read-only)
-        timeout-minutes: 10
+        timeout-minutes: 20
         env:
           THINGS_SANDBOX_USERNAME: ${{ secrets.THINGS_SANDBOX_USERNAME }}
           THINGS_SANDBOX_PASSWORD: ${{ secrets.THINGS_SANDBOX_PASSWORD }}
-        run: go test -tags e2e -run '^TestSandboxSeedChecks$' -count=1 -v -timeout 8m ./server
+        run: go test -tags e2e -run '^TestSandboxSeedChecks$' -count=1 -v -timeout 18m ./server
 
       # Runs after failures and cancellations too (a -timeout kill skips the
       # test's own cleanup); skipped only when the e2e step never started.
       - name: Trash this run's objects
         if: ${{ always() && steps.e2e.outcome != 'skipped' }}
-        timeout-minutes: 10
+        timeout-minutes: 20
         env:
           THINGS_SANDBOX_USERNAME: ${{ secrets.THINGS_SANDBOX_USERNAME }}
           THINGS_SANDBOX_PASSWORD: ${{ secrets.THINGS_SANDBOX_PASSWORD }}
-        run: go test -tags e2e -run '^TestSandboxCleanupLeftovers$' -count=1 -v -timeout 8m ./server
+        run: go test -tags e2e -run '^TestSandboxCleanupLeftovers$' -count=1 -v -timeout 18m ./server

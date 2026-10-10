@@ -400,7 +400,7 @@ func TestSandboxE2E(t *testing.T) {
 	})
 
 	s := h.cloud.stats()
-	t.Logf("Things Cloud requests: %d (commits posted %d, 409s %d)", s.Requests, s.CommitPosts, s.Conflicts)
+	t.Logf("Things Cloud requests: %d (commits posted %d, 409s %d, GETs retried after a 429: %d)", s.Requests, s.CommitPosts, s.Conflicts, s.Retried429)
 }
 
 func taskOutputsEqual(a, b taskOutput) bool {

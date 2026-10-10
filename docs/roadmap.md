@@ -43,7 +43,7 @@ change is checked automatically.
 | ~~Write preconditions: target exists, right type, not trashed~~ (done, phase 0); not template (needs `rr`/`rt` in the mirror) | KI-10, ADR-0004 | M |
 | ~~`ENABLE_WRITES` switch (write tools not registered when off; default off for new installs)~~ (done, phase 0) | ADR-0004, `legal-and-risk.md` | S |
 | ~~Sandbox Things account + `.env.sandbox` convention; mark `tests/*.sh` sandbox-only~~ (done: account and `things-sandbox` environment by the owner, `.env.sandbox` ignored, `THINGS_SANDBOX_ENV_FILE` for the harness; writing scripts check the marker area, phase 0) | ADR-0007 | S |
-| Sandbox e2e harness: every MCP tool, account guard, pre-send write firewall, 409 test, wire check by an independent client, cleanup, seed list (`docs/testing/sandbox-e2e.md`); first run by the owner, then at most daily via `.github/workflows/e2e.yml` | KI-34, ADR-0007 | M — first run 2026-10-11: main suite green; seed checks and leftover cleanup hit 429 (KI-27) |
+| Sandbox e2e harness: every MCP tool, account guard, pre-send write firewall, 409 test, wire check by an independent client, cleanup, seed list (`docs/testing/sandbox-e2e.md`); first run by the owner, then at most daily via `.github/workflows/e2e.yml` | KI-34, ADR-0007 | M — first run 2026-10-11: main suite green; seed checks and leftover cleanup hit 429 (KI-27); GET retry after 429 added in phase 0, next run pending |
 | ~~Module rename to `github.com/pachamaker/things-cloud-mcp`~~ (done, migration PR); ~~version via ldflags~~ (done, phase 0) | ADR-0001, KI-16 | S |
 
 **Exit:** CI green on `main`; no route can delete history/account; `repeat` rejected;

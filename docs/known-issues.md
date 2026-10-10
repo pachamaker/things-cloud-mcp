@@ -396,9 +396,10 @@ workaround can be deleted.
   and a leftover cleanup test, a 1 request/s throttle, and read-only checks of a manual
   seed list (`Task7`, repeating to-dos). Offline self-test against an in-memory fake:
   `go test -tags 'e2e fakecloud' -run '^TestSandbox' ./server`.
-- **Remaining:** make the workflow survive Things Cloud rate limiting (pause or back off
-  between steps, or run the three tests in one process), a green seed-check run, then a
-  Mac + iOS round trip (ADR-0004). `things_edit_task` with `when: "none"`
+- **Remaining:** a green seed-check run, then a Mac + iOS round trip (ADR-0004). Since
+  phase 0 the harness retries a GET after a 429 (30 s, 1 min, 2 min, or `Retry-After`;
+  commits are never retried) and the workflow gives the seed and cleanup steps room for
+  it; not yet confirmed against Things Cloud. `things_edit_task` with `when: "none"`
   writes `sr`/`tir` without `st`, which is not a verified placement: the firewall refuses
   it, so the harness does not exercise it; capture what the official client sends, or
   write `st` explicitly.
@@ -429,7 +430,7 @@ workaround can be deleted.
 
 | ID | Issue | Evidence | Fix direction |
 |---|---|---|---|
-| KI-27 | `429 AbusePrevention` on reads: every tool call syncs, bursts of calls trip it | [wbopan#32](https://github.com/wbopan/things-cloud-mcp/issues/32) | Coalesce/throttle syncs (freshness window), backoff on 429 — done for syncs in `server/syncgate.go` (PR #4); writes are not gated |
+| KI-27 | `429 AbusePrevention` on reads: every tool call syncs, bursts of calls trip it | [wbopan#32](https://github.com/wbopan/things-cloud-mcp/issues/32) | Coalesce/throttle syncs (freshness window), backoff on 429 — done for syncs in `server/syncgate.go` (PR #4); writes are not gated. The sandbox harness retries GETs after a 429 (phase 0): consecutive CI steps hit it on the first run (KI-34) |
 | KI-28 | History key change or `404 AccountIssue` after an account reset leaves a stale cursor | [wbopan#27](https://github.com/wbopan/things-cloud-mcp/issues/27), [#35](https://github.com/wbopan/things-cloud-mcp/issues/35) | Detect key change / 404, rebuild the mirror |
 | KI-29 | One malformed historical tombstone can block processing | [arthursoares#37](https://github.com/arthursoares/things-cloud-sdk/issues/37) | Quarantine bad items with a log entry instead of aborting or skipping silently |
 | KI-30 | Client identity is a Things 3.22-era build (`ThingsMac/32209501`; 3.23 is `32300536`) | SDK `client.go` (`DefaultClientInfo`, `ThingsUserAgent`) | Hypothesis: the cloud may adapt responses to the client version. Decide deliberately (see `legal-and-risk.md`); do not change blindly |
