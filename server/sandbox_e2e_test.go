@@ -599,7 +599,9 @@ func TestSandboxSeedChecks(t *testing.T) {
 		if e != nil {
 			generated := lookup(title, true, isInstance)
 			t.Logf("seed %q: %d generated instances in history", title, len(generated))
-			instances = append(instances, generated...)
+			if len(generated) > 0 {
+				instances = append(instances, generated[0])
+			}
 		}
 		return e
 	}
@@ -719,10 +721,16 @@ func TestSandboxSeedChecks(t *testing.T) {
 	}
 	if len(instances) == 0 {
 		t.Log("no generated instance of a repeating seed in history yet; instance checks skipped")
-	} else {
-		instance := instances[0]
-		if got := h.getTask(t, instance.UUID).Repeating; got != "instance" {
-			t.Errorf("things_get_task reports an instance of %q with repeating=%q, want instance (KI-05)", instance.title(), got)
+	}
+	for _, instance := range instances {
+		got := h.getTask(t, instance.UUID)
+		if got.Repeating != "instance" {
+			t.Errorf("things_get_task reports an instance of %q with repeating=%q, want instance (KI-05)", instance.title(), got.Repeating)
+		}
+		v := views(instance)
+		t.Logf("instance %s of %q: status %s, listed in %v", instance.UUID, instance.title(), got.Status, v)
+		if got.Status == "open" && len(v) == 0 {
+			t.Errorf("the open instance %s of %q is in no view; only templates are hidden (KI-05)", instance.UUID, instance.title())
 		}
 		h.expectRepeatingRefused(t, instance)
 	}

@@ -125,10 +125,11 @@ Unless stated otherwise, put each to-do in the area `MCP E2E SANDBOX` with no da
 
 Every to-do seed is also checked for its entity kind: at least one must be `Task7`
 (KI-25). A mismatch in `rr.fu`/`rr.tp` means the protocol notes (§5.3, evidence 🟡) or
-the seed are wrong. Repeating templates (and the first generated instance found) are
+the seed are wrong. Repeating templates (and the first generated instance of each) are
 checked for KI-01/KI-05: `things_get_task` must report `repeating: "template"` (or
 `"instance"`); a template listed in any view, in the marker area or by
-`things_search_tasks` fails the test; `things_complete_task`, `things_edit_task`,
+`things_search_tasks`, or an open instance listed in no view, fails the test; the views
+of each instance are logged; `things_complete_task`, `things_edit_task`,
 `things_move_to_today` and `things_trash_task` on each must be refused with a KI-01
 error. The refusals happen before any commit is built, and the read-only firewall would
 stop one that was not, so the check still sends no commit.

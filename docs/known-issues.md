@@ -365,7 +365,7 @@ workaround can be deleted.
   `things_list_completed` are unchanged. Task output gains `repeating: "template"` or
   `"instance"`. Tests: `TestReadModel_KI05_HidesRepeatingTemplates`,
   `TestFormatTask_KI05_RepeatingMarker`; the sandbox seed checks now fail when a template is
-  listed. Not handled: to-dos inside a repeating project's template (no evidence how
+  listed or an open instance is not. Not handled: to-dos inside a repeating project's template (no evidence how
   Things stores them).
 
 ### KI-13 · Tasks under headings are missing from project listings
