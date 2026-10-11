@@ -118,14 +118,20 @@ Unless stated otherwise, put each to-do in the area `MCP E2E SANDBOX` with no da
 | 9 | Project in the area, with heading `SEED heading` | `SEED project` | listed by `things_list_projects` |
 | 10 | To-do directly in `SEED project` | `SEED in project` | in `things_list_project_tasks` |
 | 11 | To-do under heading `SEED heading` | `SEED under heading` | in `things_list_project_tasks` for `SEED project` (KI-13) |
-| 12 | Repeating to-do, every week, fixed schedule | `SEED repeat weekly` | template with `rr.fu = 256`, `rr.tp = 0`; generated instances are counted |
+| 12 | Repeating to-do, every week, fixed schedule | `SEED repeat weekly` | template with `rr.fu = 256`, `rr.tp = 0`; generated instances are counted, one is checked like the templates |
 | 13 | Repeating to-do, every month, after completion | `SEED repeat monthly after completion` | template with `rr.fu = 8`, `rr.tp = 1` |
 | 14 | To-do, then complete it | `SEED completed` | in `things_list_completed`; in no open list |
 | 15 | To-do, then cancel it | `SEED canceled` | in no open list and not in `things_list_all_tasks` (KI-05) |
 
 Every to-do seed is also checked for its entity kind: at least one must be `Task7`
-(KI-25). Templates listed in open views are logged as KNOWN ISSUE KI-05. A mismatch in
-`rr.fu`/`rr.tp` means the protocol notes (§5.3, evidence 🟡) or the seed are wrong.
+(KI-25). A mismatch in `rr.fu`/`rr.tp` means the protocol notes (§5.3, evidence 🟡) or
+the seed are wrong. Repeating templates (and the first generated instance found) are
+checked for KI-01/KI-05: `things_get_task` must report `repeating: "template"` (or
+`"instance"`); a template listed in any view, in the marker area or by
+`things_search_tasks` fails the test; `things_complete_task`, `things_edit_task`,
+`things_move_to_today` and `things_trash_task` on each must be refused with a KI-01
+error. The refusals happen before any commit is built, and the read-only firewall would
+stop one that was not, so the check still sends no commit.
 
 ## Running
 

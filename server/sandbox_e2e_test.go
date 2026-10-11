@@ -592,11 +592,14 @@ func TestSandboxSeedChecks(t *testing.T) {
 		t.Helper()
 		return one(title, lookup(title, isTask, func(e *foldedEntity) bool { return !isInstance(e) }))
 	}
+	var instances []*foldedEntity
 	template := func(title string) *foldedEntity {
 		t.Helper()
 		e := one(title, lookup(title, true, isTemplate))
 		if e != nil {
-			t.Logf("seed %q: %d generated instances in history", title, len(lookup(title, true, isInstance)))
+			generated := lookup(title, true, isInstance)
+			t.Logf("seed %q: %d generated instances in history", title, len(generated))
+			instances = append(instances, generated...)
 		}
 		return e
 	}
@@ -635,7 +638,8 @@ func TestSandboxSeedChecks(t *testing.T) {
 	if v := views(anytime); !slices.Contains(v, "anytime") {
 		t.Errorf("SEED anytime is listed in %v, want anytime", v)
 	}
-	if !containsTask(h.listTasks(t, "things_list_area_tasks", map[string]any{"area_uuid": marker.UUID}), anytime.UUID) {
+	areaTasks := h.listTasks(t, "things_list_area_tasks", map[string]any{"area_uuid": marker.UUID})
+	if !containsTask(areaTasks, anytime.UUID) {
 		t.Errorf("SEED anytime is not listed in the %s area", sandboxMarkerArea)
 	}
 	if v := views(someday); !slices.Contains(v, "someday") {
@@ -697,12 +701,30 @@ func TestSandboxSeedChecks(t *testing.T) {
 		if rr["fu"] != tc.fu || rr["tp"] != tc.tp {
 			t.Errorf("%q rr fu=%v tp=%v, want fu=%v tp=%v; if the seed is right, correct docs/protocol/things-cloud.md §5.3", tc.e.title(), rr["fu"], rr["tp"], tc.fu, tc.tp)
 		}
-		if v := views(tc.e); len(v) > 0 {
-			t.Logf("KNOWN ISSUE KI-05: repeating template %q is listed in %v", tc.e.title(), v)
-		}
-		if _, isErr := h.call(t, "things_get_task", map[string]any{"uuid": tc.e.UUID}); isErr {
+		if text, isErr := h.call(t, "things_get_task", map[string]any{"uuid": tc.e.UUID}); isErr {
 			t.Errorf("things_get_task fails on %q", tc.e.title())
+		} else if got := decodeAs[taskOutput](t, "things_get_task", text).Repeating; got != "template" {
+			t.Errorf("things_get_task reports %q with repeating=%q, want template: the mirror lost rr (KI-05)", tc.e.title(), got)
 		}
+		if v := views(tc.e); len(v) > 0 {
+			t.Errorf("repeating template %q is listed in %v; Things never lists templates (KI-05)", tc.e.title(), v)
+		}
+		if containsTask(areaTasks, tc.e.UUID) {
+			t.Errorf("repeating template %q is listed in the %s area (KI-05)", tc.e.title(), sandboxMarkerArea)
+		}
+		if containsTask(h.listTasks(t, "things_search_tasks", map[string]any{"query": tc.e.title()}), tc.e.UUID) {
+			t.Errorf("things_search_tasks finds the repeating template %q (KI-05)", tc.e.title())
+		}
+		h.expectRepeatingRefused(t, tc.e)
+	}
+	if len(instances) == 0 {
+		t.Log("no generated instance of a repeating seed in history yet; instance checks skipped")
+	} else {
+		instance := instances[0]
+		if got := h.getTask(t, instance.UUID).Repeating; got != "instance" {
+			t.Errorf("things_get_task reports an instance of %q with repeating=%q, want instance (KI-05)", instance.title(), got)
+		}
+		h.expectRepeatingRefused(t, instance)
 	}
 
 	logbook := h.listTasks(t, "things_list_completed", map[string]any{"limit": 200})
@@ -721,6 +743,28 @@ func TestSandboxSeedChecks(t *testing.T) {
 
 	if posts := h.cloud.stats().CommitPosts; posts != 0 {
 		t.Errorf("read-only seed checks attempted %d commits", posts)
+	}
+}
+
+// expectRepeatingRefused calls write tools on a repeating template or
+// instance and expects each to be refused before a commit is built (KI-01).
+// A write that got past the preconditions would hit the read-only firewall
+// and stop the test; none reaches Things Cloud.
+func (h *sandboxHarness) expectRepeatingRefused(t *testing.T, e *foldedEntity) {
+	t.Helper()
+	for _, tc := range []struct {
+		tool string
+		args map[string]any
+	}{
+		{"things_complete_task", map[string]any{"uuid": e.UUID}},
+		{"things_edit_task", map[string]any{"uuid": e.UUID, "title": "SEED must not change"}},
+		{"things_move_to_today", map[string]any{"uuid": e.UUID}},
+		{"things_trash_task", map[string]any{"uuid": e.UUID}},
+	} {
+		text, isErr := h.call(t, tc.tool, tc.args)
+		if !isErr || !strings.Contains(text, "repeating") || !strings.Contains(text, "KI-01") {
+			t.Errorf("%s on %s (%q): error=%v, %q; want a KI-01 refusal of a repeating item", tc.tool, e.UUID, e.title(), isErr, text)
+		}
 	}
 }
 

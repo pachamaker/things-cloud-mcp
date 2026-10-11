@@ -180,3 +180,36 @@ func TestProjectTasksResult_KI13_HeadingFields(t *testing.T) {
 		t.Errorf("direct to-do project_id = %v, want p", got[0]["project_id"])
 	}
 }
+
+// TestFormatTask_KI05_RepeatingMarker: a template, reachable only through
+// things_get_task, says so; an instance names its role; an ordinary to-do
+// has no "repeating" key at all.
+func TestFormatTask_KI05_RepeatingMarker(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		task things.Task
+		want any
+	}{
+		{"template", things.Task{Repeater: &things.RepeaterConfiguration{}}, "template"},
+		{"instance", things.Task{RecurrenceIDs: []string{"template"}}, "instance"},
+		{"ordinary", things.Task{}, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			b, err := json.Marshal(formatTask(&tt.task))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got map[string]any
+			if err := json.Unmarshal(b, &got); err != nil {
+				t.Fatal(err)
+			}
+			if got["repeating"] != tt.want {
+				t.Errorf("repeating = %v, want %v (JSON %s)", got["repeating"], tt.want, b)
+			}
+		})
+	}
+}

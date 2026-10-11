@@ -75,7 +75,8 @@ both open questions:
 Until that capture exists and a sandbox round trip passes on Mac and iOS, do not remove
 `rejectRepeat` from `createTask()`/`editTask()` (`server/write.go`) and do not re-add `repeat` to
 the tool schemas. Re-enabling also needs the mirror to store `rr`/`rt`, so the server can refuse
-edits to templates and instances (KI-01 fix direction).
+edits to templates and instances (KI-01 fix direction); the SDK fork does, and the refusal
+exists on branch `recurrence-sdk-fork-KI-05-KI-10`.
 
 ## Read-path gap (separate, lower-risk, unrelated to the crash)
 

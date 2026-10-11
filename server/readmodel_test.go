@@ -409,3 +409,100 @@ func TestReadModel_KI13_ProjectHeadings(t *testing.T) {
 		t.Errorf("headings = %v, want %v", titles, want)
 	}
 }
+
+// repeatingMirror holds a repeating template in every list a to-do or project
+// can reach, a visible instance generated from one of them, a completed
+// instance and an ordinary to-do. Every item is in project "p" or area "area".
+func repeatingMirror() listMirror {
+	rule := &things.RepeaterConfiguration{FrequencyUnit: things.FrequencyUnit(256)}
+	todo := func(uuid string, schedule things.TaskSchedule, start *time.Time, change func(*things.Task)) things.Task {
+		t := things.Task{UUID: uuid, Type: things.TaskTypeTask, Schedule: schedule, ScheduledDate: start, AreaIDs: []string{"area"}}
+		if change != nil {
+			change(&t)
+		}
+		return t
+	}
+	template := func(t *things.Task) { t.Repeater = rule }
+	done := time.Date(2026, 10, 9, 18, 30, 5, 0, time.UTC)
+	return listMirror{
+		{UUID: "p", Type: things.TaskTypeProject, Schedule: things.TaskScheduleAnytime},
+		{UUID: "h", Type: things.TaskTypeHeading, ParentTaskIDs: []string{"p"}},
+		{UUID: "tpl-project", Type: things.TaskTypeProject, Schedule: things.TaskScheduleSomeday, Repeater: rule},
+		todo("tpl-inbox", things.TaskScheduleInbox, nil, template),
+		todo("tpl-today", things.TaskScheduleAnytime, dayAt(2026, time.January, 1), template),
+		todo("tpl-anytime", things.TaskScheduleAnytime, nil, func(t *things.Task) {
+			t.Repeater, t.ParentTaskIDs = rule, []string{"p"}
+		}),
+		todo("tpl-someday", things.TaskScheduleSomeday, nil, template),
+		todo("tpl-upcoming", things.TaskScheduleSomeday, dayAt(3000, time.January, 1), template),
+		todo("tpl-heading", things.TaskScheduleAnytime, nil, func(t *things.Task) {
+			t.Repeater, t.ActionGroupIDs = rule, []string{"h"}
+		}),
+		todo("instance", things.TaskScheduleAnytime, nil, func(t *things.Task) {
+			t.RecurrenceIDs, t.ParentTaskIDs = []string{"tpl-anytime"}, []string{"p"}
+		}),
+		todo("instance-done", things.TaskScheduleAnytime, nil, func(t *things.Task) {
+			t.RecurrenceIDs, t.Status, t.CompletionDate = []string{"tpl-anytime"}, things.TaskStatusCompleted, &done
+		}),
+		todo("plain", things.TaskScheduleAnytime, nil, nil),
+	}
+}
+
+// TestReadModel_KI05_HidesRepeatingTemplates: Things never lists the hidden
+// template of a repeating to-do or project; its generated instances are
+// ordinary items. Closed items included or not, no open list shows a
+// template. The Logbook query and lookups by UUID are unchanged.
+func TestReadModel_KI05_HidesRepeatingTemplates(t *testing.T) {
+	t.Parallel()
+
+	r := readModel{mirror: repeatingMirror()}
+	withDone := listOpts{QueryOpts: sync.QueryOpts{IncludeCompleted: true}}
+	project := func(opts listOpts) func() ([]*things.Task, error) {
+		return func() ([]*things.Task, error) {
+			tasks, _, err := r.TasksInProject("p", opts)
+			return tasks, err
+		}
+	}
+	tests := map[string]struct {
+		list func() ([]*things.Task, error)
+		want []string
+	}{
+		"all tasks":             {func() ([]*things.Task, error) { return r.AllTasks(listOpts{}) }, []string{"instance", "plain"}},
+		"all tasks with done":   {func() ([]*things.Task, error) { return r.AllTasks(withDone) }, []string{"instance", "instance-done", "plain"}},
+		"projects":              {func() ([]*things.Task, error) { return r.AllProjects(listOpts{}) }, []string{"p"}},
+		"projects with done":    {func() ([]*things.Task, error) { return r.AllProjects(withDone) }, []string{"p"}},
+		"inbox":                 {func() ([]*things.Task, error) { return r.TasksInInbox(listOpts{}) }, nil},
+		"today":                 {func() ([]*things.Task, error) { return r.TasksInToday(listOpts{}) }, nil},
+		"anytime":               {func() ([]*things.Task, error) { return r.TasksInAnytime(listOpts{}) }, []string{"instance", "plain"}},
+		"someday":               {func() ([]*things.Task, error) { return r.TasksInSomeday(listOpts{}) }, nil},
+		"upcoming":              {func() ([]*things.Task, error) { return r.TasksInUpcoming(listOpts{}) }, nil},
+		"project":               {project(listOpts{}), []string{"instance"}},
+		"project with done":     {project(withDone), []string{"instance"}},
+		"area":                  {func() ([]*things.Task, error) { return r.TasksInArea("area", listOpts{}) }, []string{"instance", "plain"}},
+		"page after a template": {func() ([]*things.Task, error) { return r.AllTasks(listOpts{Limit: 1, Offset: 1}) }, []string{"plain"}},
+		"completed (logbook)":   {func() ([]*things.Task, error) { return r.CompletedTasksInRange(0, nil, nil) }, []string{"instance-done"}},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			tasks, err := tt.list()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, task := range tasks {
+				got = append(got, task.UUID)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("list = %v, want %v", got, tt.want)
+			}
+		})
+	}
+
+	for _, uuid := range []string{"tpl-someday", "tpl-project"} {
+		task, err := r.Task(uuid)
+		if err != nil || task == nil || !task.IsRepeatingTemplate() {
+			t.Errorf("Task(%q) = %+v, %v; want the template itself", uuid, task, err)
+		}
+	}
+}
