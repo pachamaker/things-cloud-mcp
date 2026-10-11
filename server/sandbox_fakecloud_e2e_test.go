@@ -167,8 +167,16 @@ func (f *fakeThingsCloud) seed() {
 			"ss": ss, "sp": sp, "lt": false, "xx": defaultExtension(),
 		})
 	}
+	add(newID("deleted tag"), "Tag4", map[string]any{"ix": 1, "tt": "SEED tag", "sh": nil, "pn": []string{}, "xx": defaultExtension()})
+	add(newID("tombstone"), "Tombstone2", map[string]any{"dloid": ids["deleted tag"], "dld": 1791677000.5})
 	add(newID("tag"), "Tag4", map[string]any{"ix": 0, "tt": "SEED tag", "sh": nil, "pn": []string{}, "xx": defaultExtension()})
 	todo("tagged", "SEED tagged", func(p *taskCreatePayload) { p.Tg = []string{ids["tag"]} })
+	// Decoys the seed lookup must not take for the tag seed (KI-34): the
+	// deleted tag above and a checklist item named like the tag.
+	add(newID("check tag"), "ChecklistItem3", map[string]any{
+		"tt": "SEED tag", "ts": []string{ids["tagged"]}, "ix": 0, "cd": 1791676800, "md": nil,
+		"ss": 0, "sp": nil, "lt": false, "xx": defaultExtension(),
+	})
 	todo("project", "SEED project", func(p *taskCreatePayload) { p.Tp, p.Ar = 1, []string{marker} })
 	todo("heading", "SEED heading", func(p *taskCreatePayload) { p.Tp, p.Pr = 2, []string{ids["project"]} })
 	todo("in project", "SEED in project", func(p *taskCreatePayload) { p.Pr = []string{ids["project"]} })
