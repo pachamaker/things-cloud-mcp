@@ -15,6 +15,8 @@ import (
 
 	thingscloud "github.com/arthursoares/things-cloud-sdk"
 	"github.com/google/uuid"
+
+	"github.com/pachamaker/things-cloud-mcp/domain/civil"
 )
 
 // historyMu serializes all write operations (history.Sync + history.Write)
@@ -236,9 +238,17 @@ func nowTs() float64 {
 	return float64(time.Now().UnixNano()) / 1e9
 }
 
-func todayMidnightUTC() int64 {
-	now := time.Now().UTC()
-	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).Unix()
+// parseDeadline reads a YYYY-MM-DD deadline; today is allowed, earlier days
+// are not.
+func parseDeadline(raw string, today civil.Date) (int64, error) {
+	d, err := civil.Parse(raw)
+	if err != nil {
+		return 0, invalidInputf("deadline must be YYYY-MM-DD format, got: %s", raw)
+	}
+	if d.Before(today) {
+		return 0, invalidInputf("deadline cannot be in the past")
+	}
+	return d.Wire(), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -548,12 +558,13 @@ func isConflictError(err error) bool {
 
 // parseWhen interprets the when parameter. Returns (st, sr, tir, handled).
 // For named values (today/anytime/someday/inbox/none) and YYYY-MM-DD dates.
-// A future date goes to Upcoming (st=2), today's date goes to Today (st=1).
-func parseWhen(when string) (st int, sr, tir *int64, handled bool) {
+// A future date goes to Upcoming (st=2); today's date or a past one goes to
+// Today (st=1) with today's date. today is the owner's calendar day.
+func parseWhen(when string, today civil.Date) (st int, sr, tir *int64, handled bool) {
 	switch when {
 	case "today":
-		today := todayMidnightUTC()
-		return 1, &today, &today, true
+		ts := today.Wire()
+		return 1, &ts, &ts, true
 	case "anytime":
 		return 1, nil, nil, true
 	case "someday":
@@ -563,21 +574,16 @@ func parseWhen(when string) (st int, sr, tir *int64, handled bool) {
 	case "none", "":
 		return -1, nil, nil, false
 	default:
-		// Try parsing as YYYY-MM-DD
-		if t, err := time.Parse("2006-01-02", when); err == nil {
-			ts := t.UTC().Unix()
-			today := todayMidnightUTC()
-			if ts < today {
-				// Past date → treat as Today
-				return 1, &today, &today, true
-			}
-			if ts == today {
-				return 1, &ts, &ts, true
-			}
-			// Future → Upcoming view (st=2 with date)
+		d, err := civil.Parse(when)
+		if err != nil {
+			return -1, nil, nil, false
+		}
+		if d.After(today) {
+			ts := d.Wire()
 			return 2, &ts, nil, true
 		}
-		return -1, nil, nil, false
+		ts := today.Wire()
+		return 1, &ts, &ts, true
 	}
 }
 
@@ -604,12 +610,13 @@ func createTask(req CreateTaskRequest) (string, error) {
 	taskUUID := generateUUID()
 	now := nowTs()
 
+	today := ownerToday()
 	var st int
 	var sr, tir *int64
 	var dd *int64
 
 	if req.When != "" {
-		s, r, t, ok := parseWhen(req.When)
+		s, r, t, ok := parseWhen(req.When, today)
 		if !ok {
 			return "", invalidInputf("invalid when value: %s (use today, anytime, someday, inbox, or YYYY-MM-DD)", req.When)
 		}
@@ -619,13 +626,9 @@ func createTask(req CreateTaskRequest) (string, error) {
 	}
 
 	if req.Deadline != "" {
-		t, err := time.Parse("2006-01-02", req.Deadline)
+		ts, err := parseDeadline(req.Deadline, today)
 		if err != nil {
-			return "", invalidInputf("deadline must be YYYY-MM-DD format, got: %s", req.Deadline)
-		}
-		ts := t.Unix()
-		if ts < todayMidnightUTC() {
-			return "", invalidInputf("deadline cannot be in the past")
+			return "", err
 		}
 		dd = &ts
 	}
@@ -729,6 +732,7 @@ func editTask(req EditTaskRequest) error {
 		return err
 	}
 
+	today := ownerToday()
 	u := newTaskUpdate()
 	if req.Title != "" {
 		u.title(req.Title)
@@ -742,7 +746,7 @@ func editTask(req EditTaskRequest) error {
 		u.fields["sr"] = nil
 		u.fields["tir"] = nil
 	} else if req.When != "" {
-		st, sr, tir, ok := parseWhen(req.When)
+		st, sr, tir, ok := parseWhen(req.When, today)
 		if !ok {
 			return invalidInputf("invalid when value: %s (use today, anytime, someday, inbox, none, or YYYY-MM-DD)", req.When)
 		}
@@ -751,14 +755,11 @@ func editTask(req EditTaskRequest) error {
 	if req.Deadline == "none" {
 		u.clearDeadline()
 	} else if req.Deadline != "" {
-		t, err := time.Parse("2006-01-02", req.Deadline)
+		dd, err := parseDeadline(req.Deadline, today)
 		if err != nil {
-			return invalidInputf("deadline must be YYYY-MM-DD format, got: %s", req.Deadline)
+			return err
 		}
-		if t.Unix() < todayMidnightUTC() {
-			return invalidInputf("deadline cannot be in the past")
-		}
-		u.deadline(t.Unix())
+		u.deadline(dd)
 	}
 	if req.ParentTask != "" {
 		u.project(req.ParentTask)
@@ -794,7 +795,7 @@ func moveTaskToToday(uuid string) error {
 	}); err != nil {
 		return err
 	}
-	today := todayMidnightUTC()
+	today := ownerToday().Wire()
 	u := newTaskUpdate().schedule(1, today, today)
 	env := writeEnvelope{id: uuid, action: 1, kind: "Task6", payload: u.build()}
 	if err := historyWrite(env); err != nil {
@@ -992,6 +993,7 @@ func createProject(title, note, when, deadline, areaUUID string) (string, error)
 	}
 	projectUUID := generateUUID()
 	now := nowTs()
+	today := ownerToday()
 
 	var st int
 	var sr, tir *int64
@@ -1000,9 +1002,9 @@ func createProject(title, note, when, deadline, areaUUID string) (string, error)
 	switch when {
 	case "today":
 		st = 1
-		today := todayMidnightUTC()
-		sr = &today
-		tir = &today
+		ts := today.Wire()
+		sr = &ts
+		tir = &ts
 	case "someday":
 		st = 2
 	case "anytime", "":
@@ -1012,13 +1014,9 @@ func createProject(title, note, when, deadline, areaUUID string) (string, error)
 	}
 
 	if deadline != "" {
-		t, err := time.Parse("2006-01-02", deadline)
+		ts, err := parseDeadline(deadline, today)
 		if err != nil {
-			return "", invalidInputf("deadline must be YYYY-MM-DD format, got: %s", deadline)
-		}
-		ts := t.Unix()
-		if ts < todayMidnightUTC() {
-			return "", invalidInputf("deadline cannot be in the past")
+			return "", err
 		}
 		dd = &ts
 	}

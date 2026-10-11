@@ -12,6 +12,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	things "github.com/arthursoares/things-cloud-sdk"
+
+	"github.com/pachamaker/things-cloud-mcp/domain/civil"
 )
 
 // ---------------------------------------------------------------------------
@@ -161,7 +163,9 @@ func syncForMCPReadResult() *mcp.CallToolResult {
 	return nil
 }
 
-func parseDateOrRFC3339(raw, name string) (*time.Time, error) {
+// parseDateOrRFC3339 reads an instant; a bare YYYY-MM-DD means the start of
+// that day in loc, the owner's timezone (ADR-0003).
+func parseDateOrRFC3339(raw, name string, loc *time.Location) (*time.Time, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil, nil
@@ -170,11 +174,17 @@ func parseDateOrRFC3339(raw, name string) (*time.Time, error) {
 		tt := t.UTC()
 		return &tt, nil
 	}
-	if t, err := time.Parse("2006-01-02", raw); err == nil {
-		tt := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+	if d, err := civil.Parse(raw); err == nil {
+		tt := d.Start(loc).UTC()
 		return &tt, nil
 	}
 	return nil, fmt.Errorf("%s must be RFC3339 or YYYY-MM-DD", name)
+}
+
+// todayNote names the calendar day the date rules use, so the assistant can
+// notice when the user is in another timezone (ADR-0003).
+func todayNote() string {
+	return fmt.Sprintf("\"Today\" is the calendar day in %s, the timezone configured on the server.", ownerZone)
 }
 
 func mcpPaginationOpts(req mcp.CallToolRequest) (listOpts, error) {
@@ -373,11 +383,11 @@ func mcpListCompleted(_ context.Context, req mcp.CallToolRequest) (*mcp.CallTool
 		return syncErr, nil
 	}
 	limit := req.GetInt("limit", 50)
-	completedAfter, err := parseDateOrRFC3339(req.GetString("completed_after", ""), "completed_after")
+	completedAfter, err := parseDateOrRFC3339(req.GetString("completed_after", ""), "completed_after", ownerZone)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	completedBefore, err := parseDateOrRFC3339(req.GetString("completed_before", ""), "completed_before")
+	completedBefore, err := parseDateOrRFC3339(req.GetString("completed_before", ""), "completed_before", ownerZone)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -760,7 +770,7 @@ func newMCPHandler(writes bool) http.Handler {
 	// --- Read tools ---
 
 	s.AddTool(mcp.NewTool("things_list_today",
-		mcp.WithDescription("List to-dos in the Things Today view: to-dos with a start date today or earlier (including overdue ones and scheduled ones whose date has arrived), to-dos placed in Today, and to-dos without a start date whose deadline is today or earlier (Inbox included). \"Today\" is the server's UTC calendar day, not the user's local date, so the list can be a day off around local midnight. Projects scheduled for today are not listed, and overdue deadlines dismissed in the Things app still appear."),
+		mcp.WithDescription("List to-dos in the Things Today view: to-dos with a start date today or earlier (including overdue ones and scheduled ones whose date has arrived), to-dos placed in Today, and to-dos without a start date whose deadline is today or earlier (Inbox included). "+todayNote()+" Projects scheduled for today are not listed, and overdue deadlines dismissed in the Things app still appear."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximum number of tasks to return"),
@@ -773,7 +783,7 @@ func newMCPHandler(writes bool) http.Handler {
 	), mcpListToday)
 
 	s.AddTool(mcp.NewTool("things_list_anytime",
-		mcp.WithDescription("List started to-dos in the Things Anytime view, excluding those shown in Today. \"Today\" is the server's UTC calendar day, not the user's local date."),
+		mcp.WithDescription("List started to-dos in the Things Anytime view, excluding those shown in Today. "+todayNote()),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximum number of tasks to return"),
@@ -812,7 +822,7 @@ func newMCPHandler(writes bool) http.Handler {
 	), mcpListSomeday)
 
 	s.AddTool(mcp.NewTool("things_list_upcoming",
-		mcp.WithDescription("List to-dos in the Things Upcoming view: deferred to-dos with a start date after today. Scheduled to-dos whose date has arrived are in things_list_today instead. \"Today\" is the server's UTC calendar day, not the user's local date."),
+		mcp.WithDescription("List to-dos in the Things Upcoming view: deferred to-dos with a start date after today. Scheduled to-dos whose date has arrived are in things_list_today instead. "+todayNote()),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximum number of tasks to return"),
@@ -917,10 +927,10 @@ func newMCPHandler(writes bool) http.Handler {
 			mcp.Description("Maximum number of tasks to return (default 50)"),
 		),
 		mcp.WithString("completed_after",
-			mcp.Description("Optional lower bound for completion time (inclusive). Accepts RFC3339 or YYYY-MM-DD."),
+			mcp.Description("Optional lower bound for completion time (inclusive). Accepts RFC3339, or YYYY-MM-DD for the start of that day in the server's timezone."),
 		),
 		mcp.WithString("completed_before",
-			mcp.Description("Optional upper bound for completion time (exclusive). Accepts RFC3339 or YYYY-MM-DD."),
+			mcp.Description("Optional upper bound for completion time (exclusive). Accepts RFC3339, or YYYY-MM-DD for the start of that day in the server's timezone."),
 		),
 	), mcpListCompleted)
 

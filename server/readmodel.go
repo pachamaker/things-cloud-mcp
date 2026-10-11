@@ -85,13 +85,13 @@ func (r readModel) AllTagsWithOpts(opts listOpts) ([]*things.Tag, error) {
 
 // tasksInView classifies every to-do locally instead of using the SDK's
 // TasksIn* queries, which drop overdue and arrived-but-unconfirmed items from
-// every list (spike report §4 B3). "Today" is the UTC day until KI-03.
+// every list (spike report §4 B3). "Today" is the owner's day (ADR-0003).
 func (r readModel) tasksInView(view listView, opts listOpts) ([]*things.Task, error) {
 	tasks, err := r.State.AllTasks(opts.QueryOpts)
 	if err != nil {
 		return nil, err
 	}
-	tasks = tasksInView(tasks, view, time.Unix(todayMidnightUTC(), 0).UTC())
+	tasks = tasksInView(tasks, view, ownerToday())
 	return openList(tasks, nil, opts)
 }
 

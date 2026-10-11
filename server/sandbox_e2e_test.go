@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	things "github.com/arthursoares/things-cloud-sdk"
 	"github.com/arthursoares/things-cloud-sdk/sync"
@@ -25,7 +26,7 @@ func TestSandboxE2E(t *testing.T) {
 	t.Cleanup(func() { h.cleanupRun(t) })
 	t.Logf("title prefix %q", h.prefix)
 
-	day := func(offset int) string { return h.today.AddDate(0, 0, offset).Format("2006-01-02") }
+	day := func(offset int) string { return h.today.AddDays(offset).String() }
 	today, upcoming, deadline := day(0), day(7), day(30)
 	title := func(s string) string { return h.prefix + s }
 	id := map[string]string{}
@@ -451,7 +452,7 @@ func (h *sandboxHarness) verifyWire(t *testing.T) {
 			if stored.Kind != sent.Kind || stored.Action != sent.Action {
 				t.Errorf("%s: sent %s t=%d, stored %s t=%d", sent.UUID, sent.Kind, sent.Action, stored.Kind, stored.Action)
 			}
-			for _, v := range wireViolations(stored, itemCivilToday(stored.Payload, h.today)) {
+			for _, v := range wireViolations(stored, itemCivilToday(stored.Payload, h.today.Start(time.UTC))) {
 				t.Errorf("stored item at index %d: %s", stored.ServerIndex, v)
 			}
 			for _, d := range payloadDifferences(sent.Payload, stored.Payload) {

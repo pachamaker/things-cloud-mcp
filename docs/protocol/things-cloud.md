@@ -133,7 +133,8 @@ documents which `Task7` writes have been validated; title-only `Task6` modifies 
 | Null vs absent | On modify, an explicit `null` clears a field; an absent key leaves it unchanged | ✅ (`TaskActionItemPayload.UnmarshalJSON` tracks presence) |
 
 Consequence: to compute "today" you need the user's timezone. Deriving it from UTC is
-wrong for any user not on UTC (KI-03).
+wrong for any user not on UTC (KI-03). The server takes it from `THINGS_TIMEZONE` and
+encodes days with `domain/civil` (ADR-0003).
 
 ## 5. `Task6` payload
 

@@ -451,6 +451,15 @@ func main() {
 		log.Fatal(err)
 	}
 
+	tz := os.Getenv("THINGS_TIMEZONE")
+	if ownerZone, err = ownerTimezone(tz); err != nil {
+		log.Fatal(err)
+	}
+	if tz == "" {
+		log.Println("THINGS_TIMEZONE is not set: \"today\" is the UTC day; set the owner's IANA zone, e.g. Europe/Moscow (ADR-0003)")
+	}
+	log.Printf("Timezone %s, today is %s", ownerZone, ownerToday())
+
 	closeMirror, err := connectThings(username, password, os.Getenv("DATA_DIR"))
 	if err != nil {
 		log.Fatal(err)

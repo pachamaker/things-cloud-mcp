@@ -7,6 +7,8 @@ import (
 
 	things "github.com/arthursoares/things-cloud-sdk"
 	"github.com/arthursoares/things-cloud-sdk/sync"
+
+	"github.com/pachamaker/things-cloud-mcp/domain/civil"
 )
 
 // TestViews_KI02_ClassificationMatrix pins view membership for every case of the
@@ -22,6 +24,7 @@ func TestViews_KI02_ClassificationMatrix(t *testing.T) {
 	t.Parallel()
 
 	day := time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)
+	today := civil.DateOf(day)
 	yesterday := day.AddDate(0, 0, -1)
 	tomorrow := day.AddDate(0, 0, 1)
 	never := time.Date(neverendingRepeatYear, time.January, 1, 0, 0, 0, 0, time.UTC)
@@ -69,7 +72,7 @@ func TestViews_KI02_ClassificationMatrix(t *testing.T) {
 			t.Parallel()
 			var got []string
 			for view, name := range views {
-				if inView(&tc.task, view, day) {
+				if inView(&tc.task, view, today) {
 					got = append(got, name)
 				}
 			}
@@ -123,6 +126,7 @@ func TestTasksInView_Ordering(t *testing.T) {
 	t.Parallel()
 
 	day := time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)
+	today := civil.DateOf(day)
 	in3, in2 := day.AddDate(0, 0, 3), day.AddDate(0, 0, 2)
 	tasks := []*things.Task{
 		{UUID: "today-ti-2", Schedule: things.TaskScheduleAnytime, ScheduledDate: &day, TodayIndex: 2},
@@ -139,10 +143,10 @@ func TestTasksInView_Ordering(t *testing.T) {
 		return out
 	}
 
-	if got, want := uuids(tasksInView(tasks, viewToday, day)), []string{"today-ti-1", "today-ti-1-later", "today-ti-2"}; !slices.Equal(got, want) {
+	if got, want := uuids(tasksInView(tasks, viewToday, today)), []string{"today-ti-1", "today-ti-1-later", "today-ti-2"}; !slices.Equal(got, want) {
 		t.Errorf("today order = %v, want %v", got, want)
 	}
-	if got, want := uuids(tasksInView(tasks, viewUpcoming, day)), []string{"upcoming-2", "upcoming-3"}; !slices.Equal(got, want) {
+	if got, want := uuids(tasksInView(tasks, viewUpcoming, today)), []string{"upcoming-2", "upcoming-3"}; !slices.Equal(got, want) {
 		t.Errorf("upcoming order = %v, want %v", got, want)
 	}
 }

@@ -2,9 +2,10 @@ package main
 
 import (
 	"sort"
-	"time"
 
 	things "github.com/arthursoares/things-cloud-sdk"
+
+	"github.com/pachamaker/things-cloud-mcp/domain/civil"
 )
 
 // listView names a Things list the server derives locally; Things Cloud has
@@ -31,23 +32,23 @@ func isClosed(t *things.Task) bool {
 //     Things client has confirmed yet;
 //   - no start date and a deadline on or before today, Inbox included.
 //
-// today is the civil day encoded as midnight UTC, as Things stores sr and dd.
+// today is the owner's calendar day (ADR-0003); sr and dd are compared as the
+// calendar dates they encode, never as instants.
 // The SDK mirror does not keep tir, dds or sb (spike report §4 B4), so to-dos
 // placed in Today only through tir are missed, dismissed deadlines still show,
 // and This Evening is not flagged.
-func inToday(t *things.Task, today time.Time) bool {
-	tomorrow := today.AddDate(0, 0, 1)
+func inToday(t *things.Task, today civil.Date) bool {
 	if t.ScheduledDate != nil {
 		started := t.Schedule == things.TaskScheduleAnytime || t.Schedule == things.TaskScheduleSomeday
-		return started && t.ScheduledDate.Before(tomorrow)
+		return started && !civil.FromWireTime(*t.ScheduledDate).After(today)
 	}
-	return t.DeadlineDate != nil && t.DeadlineDate.Before(tomorrow)
+	return t.DeadlineDate != nil && !civil.FromWireTime(*t.DeadlineDate).After(today)
 }
 
 // inView reports view membership. Today and Anytime partition st=1; an Inbox or
 // Someday to-do pulled into Today by its deadline stays in its own list too,
 // as in Things.
-func inView(t *things.Task, view listView, today time.Time) bool {
+func inView(t *things.Task, view listView, today civil.Date) bool {
 	switch view {
 	case viewInbox:
 		return t.Schedule == things.TaskScheduleInbox
@@ -59,14 +60,14 @@ func inView(t *things.Task, view listView, today time.Time) bool {
 		return t.Schedule == things.TaskScheduleSomeday && t.ScheduledDate == nil
 	case viewUpcoming:
 		return t.Schedule == things.TaskScheduleSomeday && t.ScheduledDate != nil &&
-			!t.ScheduledDate.Before(today.AddDate(0, 0, 1))
+			civil.FromWireTime(*t.ScheduledDate).After(today)
 	}
 	return false
 }
 
 // tasksInView filters to-dos already ordered by index and orders them as the
 // Things lists do: Today by today index, Upcoming by start date.
-func tasksInView(tasks []*things.Task, view listView, today time.Time) []*things.Task {
+func tasksInView(tasks []*things.Task, view listView, today civil.Date) []*things.Task {
 	var out []*things.Task
 	for _, t := range tasks {
 		if inView(t, view, today) {

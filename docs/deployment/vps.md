@@ -89,8 +89,8 @@ OAUTH_ALLOWED_SUBJECT=<your Pocket ID user id, the sub of its tokens>
 # OAUTH_ALLOWED_CLIENTS=<claude client id>,<chatgpt client id>
 # Optional: serve /api/* behind the same tokens.
 # ENABLE_REST_API=true
-# planned (ADR-0003):
-# THINGS_TIMEZONE=Europe/Moscow
+# Owner's IANA zone: decides "today" (ADR-0003). Unset means the UTC day.
+THINGS_TIMEZONE=Europe/Moscow
 ```
 
 `compose.yaml`:
