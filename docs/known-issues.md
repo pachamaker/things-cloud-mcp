@@ -23,7 +23,7 @@ workaround can be deleted.
 | Never pass `repeat` — it corrupts Things on macOS/iOS (incident 2026-08-18) | KI-01 |
 | `things_list_today` is incomplete; always also call `things_list_upcoming` | KI-25 (fixed by the SDK migration), KI-02, KI-03 |
 | Between 00:00 and 03:00 MSK the server's "today" is still yesterday | KI-03 (fixed; delete once the deployment sets `THINGS_TIMEZONE=Europe/Moscow`) |
-| `deadline = 4001-01-01` means "no deadline" | KI-04 |
+| `deadline = 4001-01-01` means "no deadline" | KI-04 (fixed; delete once the deployment runs this version) |
 | Don't trust `status` in lists; filter `status == "open"` yourself | KI-05 |
 | Create → list → edit one by one; batch update fails on the first unsynced ID | KI-06 |
 | Use only existing tags | KI-12 |
@@ -306,15 +306,24 @@ workaround can be deleted.
   is unwired and untouched (KI-01).
 
 ### KI-04 · Year-4001 sentinel leaks out as a real date
-- **Status:** fixed in tool output (PR #1); normalising at ingestion still recommended ·
-  **Evidence:** confirmed for `rr.ed` (SDK `repeat.go`, `IsNeverending`); observed by the
-  operator in `deadline`
+- **Status:** fixed (branch `read-fixes-KI-04-KI-13`) · **Evidence:** confirmed for
+  `rr.ed` (SDK `repeat.go`, `IsNeverending`); observed by the operator in `deadline`
 - **Symptom:** tools return `deadline: "4001-01-01"`.
 - **Root cause:** Things uses 4001-01-01 (`64092211200`) as "never". The mirror stores
-  it verbatim and `formatTask` (`server/mcp.go:81-83`) prints it.
-- **Fix direction:** normalise any day-precision value with year ≥ 4000 to null where
-  the server reads the SDK mirror (`server/readmodel.go`), or upstream at ingestion,
-  with a test.
+  it verbatim; PR #1 hid it only in `formatTask`'s `deadline`, so REST responses,
+  `scheduled_for` and the view rules still saw it (a deferred to-do with a sentinel
+  start date was listed in Upcoming instead of Someday).
+- **Fix:** `server/readmodel.go` clears every start date and deadline with year ≥ 4000
+  on each task it reads from the mirror (`clearSentinels`), before view classification,
+  pagination or output: every list and view, `things_list_completed`, `things_get_task`
+  and the REST endpoints. Completion dates are instants and stay as they are;
+  `formatTask` applies the same rule to both day fields. Tests:
+  `TestClearSentinels_KI04`, `TestReadModel_KI04_NoSentinelInAnyList`,
+  `TestReadModel_KI04_NeverStartDateIsSomeday`,
+  `TestReadModel_KI04_CompletedKeepsCompletionInstant`, `TestFormatTask_KI04_NoSentinelDates`.
+- **Not done:** the SDK still stores the sentinel; write preconditions read the raw
+  mirror, but check no dates. ADR-0003 decision 7 (`civil.FromWire`) waits for the
+  server's own domain model.
 
 ### KI-05 · Lists contain non-actionable items; `status` is unreliable
 - **Status:** partially fixed — canceled items excluded from open views (PR #1) and,
@@ -331,16 +340,33 @@ workaround can be deleted.
   `"unknown"` and are logged.
 
 ### KI-13 · Tasks under headings are missing from project listings
-- **Status:** open · **Evidence:** likely
+- **Status:** fixed (branch `read-fixes-KI-04-KI-13`) · **Evidence:** likely; the
+  sandbox seed check now fails if `SEED under heading` is missing from its project
 - **Root cause:** SDK `State.TasksInProject` filters on `project_uuid`. In
   Things, a task placed under a heading carries the heading in `agr` and usually no
   `pr`; its project is the heading's project.
-- **Fix direction:** resolve the project through the heading (`heading_uuid →
-  tasks.project_uuid`); return heading grouping in the output. The SDK already offers
-  `HeadingsInProject` and `TasksUnderHeading`.
+- **Fix:** `readModel.TasksInProject` (`server/readmodel.go`) lists the to-dos directly
+  in the project (SDK `TasksInProject`), then, for each of the project's headings in
+  heading order (SDK `HeadingsInProject`), its to-dos (SDK `TasksUnderHeading`); each
+  group keeps the SDK's index order. A to-do with both `pr` and `agr` is listed once,
+  under its heading. Open-list filtering (KI-05) and `limit`/`offset` apply to the
+  merged list. Every task output now carries `heading_id`; `things_list_project_tasks`
+  adds `heading_title`. Tests: `TestReadModel_KI13_ProjectIncludesHeadings`,
+  `TestReadModel_KI13_ProjectHeadings`, `TestProjectTasksResult_KI13_HeadingFields`;
+  the offline harness self-test checks `SEED under heading` against the SDK's SQLite
+  mirror.
+- **SDK limitations:** `HeadingsInProject` applies the to-do status/trash filters to
+  the headings themselves, so the server asks for all headings and lets each to-do's
+  own status decide (an archived heading does not hide an open to-do). Whether Things
+  also sets `tr` on the to-dos of a trashed heading is not verified; the server treats
+  them as trashed with it. One query per heading, on top of the SDK's query per row.
+- **Not done:** `project_id` stays the to-do's own `pr`, so it is empty for a to-do
+  under a heading (name-resolved project and heading: ADR-0006); `things_list_area_tasks`
+  and the view classifier do not resolve projects through headings.
 
 ### KI-14 · Output hides what the model needs; IDs instead of names
-- **Status:** open · **Evidence:** confirmed (`server/mcp.go:22-100`)
+- **Status:** open (`heading_id` in every task output and `heading_title` in project
+  listings since KI-13) · **Evidence:** confirmed (`server/mcp.go:22-100`)
 - **Symptom:** the model must make extra calls to turn `project_id`/`area_id`/tag UUIDs
   into names; it cannot see which view a task is in, whether it is in This Evening,
   under which heading, whether it repeats, or how many checklist items it has.

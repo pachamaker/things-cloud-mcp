@@ -679,7 +679,7 @@ func TestSandboxSeedChecks(t *testing.T) {
 		t.Error("things_list_project_tasks does not list SEED in project")
 	}
 	if !containsTask(projectTasks, underHeading.UUID) {
-		t.Log("KNOWN ISSUE KI-13: things_list_project_tasks misses SEED under heading")
+		t.Error("things_list_project_tasks does not list SEED under heading (KI-13)")
 	}
 
 	for _, tc := range []struct {
