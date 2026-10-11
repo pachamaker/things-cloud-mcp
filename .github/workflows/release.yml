@@ -1,0 +1,94 @@
+# Release image on a version tag (KI-16, ADR-0002, ADR-0007): the CI checks
+# from ci.yml, then a linux/amd64 + linux/arm64 image pushed to
+# ghcr.io/pachamaker/things-cloud-mcp as :<tag> (e.g. :v2.0.0) and
+# :sha-<short sha>. No `latest`: the VPS pulls a pinned tag
+# (docs/deployment/vps.md). The only credential is the job's GITHUB_TOKEN.
+#
+# Never add pull_request or pull_request_target triggers: the image job can
+# push packages.
+# Actions are pinned to a full commit SHA; the comment names the release.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    name: Checks
+    uses: ./.github/workflows/ci.yml
+
+  image:
+    name: Image
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      # The tag becomes the image tag and main.version (Dockerfile ARG VERSION).
+      - name: Tag is vMAJOR.MINOR.PATCH[-PRERELEASE]
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::tag '$TAG' is not vMAJOR.MINOR.PATCH[-PRERELEASE]"
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Image config, history and file timestamps come from the commit, so a
+      # rebuild of the same tag gives the same platform images.
+      - name: Commit time
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+        with:
+          images: ghcr.io/pachamaker/things-cloud-mcp
+          flavor: latest=false
+          tags: |
+            type=ref,event=tag
+            type=sha
+          labels: |
+            org.opencontainers.image.created={{commit_date 'YYYY-MM-DDTHH:mm:ss[Z]'}}
+            org.opencontainers.image.licenses=MIT
+          annotations: |
+            org.opencontainers.image.created={{commit_date 'YYYY-MM-DDTHH:mm:ss[Z]'}}
+            org.opencontainers.image.licenses=MIT
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The Dockerfile cross-compiles on the runner, so no QEMU is needed.
+      - name: Build and push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          build-args: VERSION=${{ github.ref_name }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          outputs: type=image,push=true,rewrite-timestamp=true
+          provenance: mode=max
+          sbom: true

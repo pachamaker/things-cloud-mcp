@@ -388,12 +388,22 @@ workaround can be deleted.
 - **Fix direction:** ADR-0007.
 
 ### KI-16 · Hard-coded runtime assumptions from the Fly.io era
-- **Status:** partially fixed — cache at `$DATA_DIR/things-upstream.db` (PR #4); module
+- **Status:** fixed — cache at `$DATA_DIR/things-upstream.db` (PR #4); module
   renamed to `github.com/pachamaker/things-cloud-mcp` (SDK migration); the version comes
   from `-ldflags "-X main.version=…"` (Dockerfile `ARG VERSION`, default `dev`) and is
-  reported in MCP `serverInfo` and on `/` (phase 0) · **Evidence:** confirmed
-- **Remaining:** Dockerfile uses `alpine:latest` and `CGO_ENABLED=1` although
-  `modernc.org/sqlite` is pure Go.
+  reported in MCP `serverInfo` and on `/` (phase 0); release image (phase 2): static
+  `CGO_ENABLED=0` build with `-trimpath` on `distroless/static-debian13:nonroot`, both
+  base images pinned by digest, uid `65532` with `/data` (`0700`) owned by it, image
+  `HEALTHCHECK` through `things-server healthcheck` (the public `/` on loopback; no shell
+  in the image), and `release.yml` pushing linux/amd64 + linux/arm64 to GHCR on `v*`
+  tags after the CI checks · **Evidence:** confirmed
+- **Verified (2026-10-11, locally):** both platforms build; the binary is static and
+  carries the version; offline (`--network none`) the image exits with the auth or
+  credentials error, and with dummy credentials creates the cache in a fresh named
+  volume as uid `65532`; two `--no-cache` multi-arch builds with `SOURCE_DATE_EPOCH` and
+  `rewrite-timestamp` give identical digests. **Not verified:** the release workflow
+  itself (runs on the first tag) and pulling the image on the VPS.
+- **Still open elsewhere:** `/readyz` and structured logs (roadmap Phase 2).
 - **Fix direction:** ADR-0001 (fork identity) and ADR-0002 (deployment).
 
 ### KI-34 · The write path has no automated end-to-end check on a real account

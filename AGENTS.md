@@ -85,7 +85,8 @@ go mod tidy -diff                    # go.mod/go.sum must be tidy; prints the ne
 go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...   # vulnerabilities in reachable code, as in CI
 go build -o things-server ./server   # build the server binary (version "dev")
 go build -ldflags "-X main.version=v2.0.0" -o things-server ./server   # release build
-docker build --build-arg VERSION=v2.0.0 -t things-cloud-mcp:v2.0.0 .     # image
+docker build --build-arg VERSION=v2.0.0 -t things-cloud-mcp:v2.0.0 .     # image (host platform)
+docker run --rm --network none things-cloud-mcp:v2.0.0   # offline smoke: exits with the auth configuration error
 ```
 
 If the default Go proxy is unreachable (e.g. a corporate proxy), prefix commands with
@@ -93,8 +94,8 @@ If the default Go proxy is unreachable (e.g. a corporate proxy), prefix commands
 
 `go.mod` keeps `go 1.25.0` as the minimum and pins `toolchain go1.26.9` (KI-32): a local
 `go` older than that downloads and uses Go 1.26.9 (`GOTOOLCHAIN=auto`), a newer one
-builds with itself. CI and the Docker builder (`golang:1.26.9-alpine`) use 1.26.9; bump
-the `toolchain` line and the `Dockerfile` tag together.
+builds with itself. CI and the Docker builder (`golang:1.26.9-alpine`, pinned by digest)
+use 1.26.9; bump the `toolchain` line and the `Dockerfile` tag and digest together.
 
 Run the server locally **against the sandbox account only**:
 
@@ -176,6 +177,11 @@ Baseline: CI (`.github/workflows/ci.yml`) runs `go mod tidy -diff`, build, vet,
 `main`; all pass. `staticcheck -tags 'e2e fakecloud'` is gated too (KI-33). Do not add
 failures.
 
+Releases: pushing a `v*` tag runs `.github/workflows/release.yml`, which repeats the CI
+checks and pushes a linux/amd64 + linux/arm64 image to `ghcr.io/pachamaker/things-cloud-mcp`
+(`docs/deployment/vps.md`, KI-16). Tags and releases are the owner's: agents never create
+or push tags and never publish images.
+
 ## 5. Repository map
 
 | Path | What | Status |
@@ -192,6 +198,8 @@ failures.
 | `server/sandbox_*_test.go` | Sandbox e2e harness (tag `e2e`) and its pure rules (untagged, unit-tested) | sandbox only |
 | `tests/` | Shell e2e scripts against a running server (superseded by the Go harness) | sandbox only |
 | `.github/workflows/ci.yml` | PR and `main` checks: tidy, build, vet, race tests, `govulncheck`; no secrets, no network to Things | live |
+| `.github/workflows/release.yml` | On `v*` tags: the CI checks, then the multi-arch image to GHCR; only job with `packages: write` | live |
+| `Dockerfile` | Static build on distroless `nonroot`, base images pinned by digest, `HEALTHCHECK` via `things-server healthcheck` (`server/healthcheck.go`) | live |
 | `docs/` | See `docs/README.md` for the index | |
 
 The module is `github.com/pachamaker/things-cloud-mcp`. The SDK packages are imported

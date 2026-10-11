@@ -69,10 +69,54 @@ adduser deploy && usermod -aG sudo,docker deploy
 /opt/things-mcp/
 ├── compose.yaml
 ├── Caddyfile
-├── secrets/
-│   └── things.env        # chmod 600, never committed
-└── src/                  # git clone of this repository (until images are published)
+└── secrets/
+    └── things.env        # chmod 600, never committed
 ```
+
+### Image
+
+`things-mcp` runs the release image `ghcr.io/pachamaker/things-cloud-mcp:<tag>`, built
+for linux/amd64 and linux/arm64 by `.github/workflows/release.yml` when the owner pushes
+a `v*` tag, after the CI checks pass. Each release is tagged `vX.Y.Z` and
+`sha-<short commit>`; there is no `latest`, so pin an exact tag, optionally with its
+digest from `docker buildx imagetools inspect ghcr.io/pachamaker/things-cloud-mcp:<tag>`.
+
+What is inside (KI-16):
+
+- One static Go binary (`CGO_ENABLED=0`; SQLite is pure Go, zone data is built in) on
+  `gcr.io/distroless/static-debian13:nonroot`: CA certificates, no shell, no package
+  manager. Base images are pinned by digest, and a rebuild of the same commit gives the
+  same platform images.
+- Runs as uid/gid `65532` (`nonroot`). `/data` belongs to that user with mode `0700`; a
+  new named volume mounted there inherits both.
+- `HEALTHCHECK`: `things-server healthcheck` requests the public `/` on `127.0.0.1:$PORT`
+  and fails unless it answers `200`. `/` returns only the service name, status and
+  version. The server listens only after its initial sync, so the container is
+  `starting` for up to 5 minutes and then `healthy`; the check does not test Things Cloud
+  or the issuer (use §8 for those).
+- The version is the tag: `docker compose logs things-mcp | grep 'Starting server'`, or
+  `serverInfo.version` in MCP.
+
+The first release creates the GHCR package. If `docker compose pull` answers `denied` or
+`unauthorized`, the package is private: make it public in its GitHub package settings,
+or `docker login ghcr.io` on the VPS with a token that has only `read:packages`.
+
+To run an unreleased commit instead, clone the repository into `src/` and replace
+`image:` with `build: {context: ./src, args: {VERSION: <commit>}}`; that builds from the
+same `Dockerfile`.
+
+### Environment
+
+| Variable | In `secrets/things.env` |
+|---|---|
+| `THINGS_USERNAME`, `THINGS_PASSWORD` | Required. The Things Cloud account the server syncs |
+| `MCP_PUBLIC_URL`, `OAUTH_ISSUER`, `OAUTH_ALLOWED_SUBJECT` | Required (KI-07): without them the server refuses to start. `OAUTH_ALLOWED_CLIENTS` is optional |
+| `ENABLE_WRITES` | `true` to register write tools; unset means read-only (ADR-0004) |
+| `THINGS_TIMEZONE` | Set it to your IANA zone: decides "today" (ADR-0003); unset means the UTC day |
+| `ENABLE_REST_API` | Optional, off by default |
+| `DATA_DIR` | Leave unset: the cache lives in `/data`, the volume below. If you change it, mount a volume writable by uid `65532` at that path |
+| `PORT` | Leave unset (`8080`). The health check reads the same variable |
+| `INSECURE_NO_AUTH_LOCAL_ONLY` | Never on a VPS: the server would listen on the container's loopback only and be unreachable |
 
 `secrets/things.env`:
 
@@ -108,17 +152,15 @@ services:
     networks: [edge]
 
   things-mcp:
-    build: ./src            # later: image: ghcr.io/pachamaker/things-cloud-mcp:<version>
+    image: ghcr.io/pachamaker/things-cloud-mcp:v2.0.0   # pin a release tag (§4 Image)
     restart: unless-stopped
     env_file: ./secrets/things.env
     volumes:
       - things-data:/data
     networks: [edge]
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # The image brings its own HEALTHCHECK (`things-server healthcheck`).
 
   pocket-id:
     image: ghcr.io/pocket-id/pocket-id:v2   # pin an exact version, v2.14 or newer
@@ -163,7 +205,7 @@ DNS-rebinding protection (v0.56+, after the planned upgrade) will accept the for
 Start:
 
 ```bash
-cd /opt/things-mcp && docker compose up -d --build && docker compose logs -f things-mcp
+cd /opt/things-mcp && docker compose pull && docker compose up -d && docker compose logs -f things-mcp
 ```
 
 The server performs a full initial sync and exits if it fails (wrong credentials,
@@ -254,19 +296,38 @@ Test a restore once: stop the stack, restore volumes on a fresh VM, start, verif
   - `GET https://mcp.example.com/mcp` without token → 401
   - TLS certificate expiry
 - Heartbeat ping from the backup job.
-- `docker compose ps` restarts and `docker compose logs things-mcp` for sync errors
-  (`429`, `409`, `404 AccountIssue`).
+- `docker compose ps`: restarts and the `healthy`/`unhealthy` state of `things-mcp`;
+  `docker compose logs things-mcp` for sync errors (`429`, `409`, `404 AccountIssue`).
 
 ## 9. Updating
 
 Upgrading from a version before KI-07: the server refuses to start until the OAuth
 settings from §4 are in `secrets/things.env`, and while `API_KEY` is still set.
 
+Set the new tag in `compose.yaml` (`image: ghcr.io/pachamaker/things-cloud-mcp:<tag>`),
+then:
+
 ```bash
-cd /opt/things-mcp/src && git fetch && git checkout <tag>
-cd .. && docker compose up -d --build
+cd /opt/things-mcp && docker compose pull things-mcp && docker compose up -d
 docker compose logs --since 5m things-mcp
 ```
+
+Rolling back is the same with the previous tag. If the older version cannot open a
+cache that a newer one migrated, remove the `things-data` volume: it is a disposable
+cache, and the next start performs a full sync.
+
+Upgrading from a build of this repository before the distroless image (KI-16): that
+image ran as root, so the files in the `things-data` volume belong to root and the
+nonroot server cannot open them. Hand the volume to uid `65532` once, before the first
+start of the new image (the volume name carries the Compose project prefix):
+
+```bash
+docker compose stop things-mcp
+docker run --rm -v things-mcp_things-data:/data alpine:3.24 sh -c 'chown -R 65532:65532 /data && chmod 700 /data'
+```
+
+The cache is disposable, so removing the volume instead works too; the next start
+performs a full sync.
 
 After an update, ask the assistant to list Today and compare with the Things app.
 Schema migrations may wipe and rebuild the mirror; the first sync after such an update
@@ -287,4 +348,7 @@ takes longer.
 | 403 from the app behind a proxy on the same host | After the `mcp-go` v1.x upgrade: its DNS-rebinding protection; proxy to the container network, or `header_up Host localhost`. In local-only mode: the request's `Host` or `Origin` is not loopback |
 | Tools time out | Things Cloud slow or rate-limited (429); see logs |
 | Server exits at start | Initial sync failed: credentials, network, or Things Cloud error |
+| Server exits: "failed to open sync database: attempt to write a readonly database" | The volume comes from an image that ran as root; hand it to uid `65532` (§9) |
+| `docker compose pull`: `denied` or `unauthorized` | The GHCR package is private; make it public or log in with a `read:packages` token (§4 Image) |
+| `things-mcp` stays `unhealthy` | The server is not answering on `/`: it crashed or is restarting; see `docker compose logs things-mcp`. `starting` for a few minutes is the initial sync |
 | Tasks from the Things app missing | KI-25 (`Task7` not read) on versions before the fix |
