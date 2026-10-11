@@ -118,8 +118,8 @@ Unless stated otherwise, put each to-do in the area `MCP E2E SANDBOX` with no da
 | 9 | Project in the area, with heading `SEED heading` | `SEED project` | listed by `things_list_projects` |
 | 10 | To-do directly in `SEED project` | `SEED in project` | in `things_list_project_tasks` |
 | 11 | To-do under heading `SEED heading` | `SEED under heading` | in `things_list_project_tasks` for `SEED project` (KI-13) |
-| 12 | Repeating to-do, every week, fixed schedule | `SEED repeat weekly` | template with `rr.fu = 256`, `rr.tp = 0`; generated instances are counted, one is checked like the templates |
-| 13 | Repeating to-do, every month, after completion | `SEED repeat monthly after completion` | template with `rr.fu = 8`, `rr.tp = 1` |
+| 12 | Repeating to-do, every week, fixed schedule | `SEED repeat weekly` | template with `rr.fu = 256`, `rr.tp = 0`; generated instances are counted, the first is checked (below) |
+| 13 | Repeating to-do, every month, after completion | `SEED repeat monthly after completion` | template with `rr.fu = 8`, `rr.tp = 1`; as row 12 |
 | 14 | To-do, then complete it | `SEED completed` | in `things_list_completed`; in no open list |
 | 15 | To-do, then cancel it | `SEED canceled` | in no open list and not in `things_list_all_tasks` (KI-05) |
 
@@ -133,6 +133,24 @@ of each instance are logged; `things_complete_task`, `things_edit_task`,
 `things_move_to_today` and `things_trash_task` on each must be refused with a KI-01
 error. The refusals happen before any commit is built, and the read-only firewall would
 stop one that was not, so the check still sends no commit.
+
+### Fixing seeds
+
+`TestSandboxSeedChecks` finds each seed by its exact title among live, untrashed
+objects of its kind: to-dos, projects and headings among `Task*` items, the area among
+`Area*`, the tag among `Tag*`. A checklist item or an area named like the tag does not
+count. When a seed is wrong, the test names it and the UUIDs involved; a to-do's UUID is
+the `id=` part of the link Things copies for it (Share → Copy Link). Fix the seed in the
+Things app, let it sync, then run the seed checks again.
+
+| Message | Meaning | Fix in the Things app |
+|---|---|---|
+| `seed items missing …: X` | no live object of that kind has exactly that title | create it as in the seed list; check case and spaces in the title |
+| `seed "X" exists N times [UUIDs]` | several live objects of that kind have that title | keep one, delete or rename the others; for `SEED tag` keep the one `SEED tagged` carries |
+| `SEED tagged does not carry SEED tag [UUID]: … U is a deleted Tag4 titled "SEED tag"` | the to-do still points at a tag that was deleted; the app shows the to-do without it | open `SEED tagged`, remove its tags, add `SEED tag` from the list |
+| `… U is a live Tag4 with another title (N chars)`, or `whose title differs from "SEED tag" only in case or surrounding spaces` | the to-do carries a different tag | remove that tag from `SEED tagged` and add `SEED tag`; delete the stray tag if it was made for the seeds |
+| `… U is not in history`, `U is a live Area3, not a tag`, `it has no tags` | the to-do carries no live tag called `SEED tag` | remove its tags, add `SEED tag` |
+| `… but history has tg [UUIDs]: a read bug, not a seed problem` | the server reads other tags than the account stores | leave the seeds alone; open a KI with the run link |
 
 ## Running
 

@@ -559,20 +559,9 @@ func TestSandboxSeedChecks(t *testing.T) {
 	if skipped > 0 {
 		t.Logf("%d history items with a non-object payload skipped", skipped)
 	}
-	folded := foldHistory(items)
+	folded, deleted := foldHistoryWithDeleted(items)
 
 	var missing []string
-	// lookup returns the live entities titled title; repeating to-dos share
-	// the title between the template (rr set) and its instances (rt set).
-	lookup := func(title string, isTask bool, keep func(*foldedEntity) bool) []*foldedEntity {
-		var found []*foldedEntity
-		for _, e := range folded {
-			if e.title() == title && isTaskEntity(e) == isTask && string(e.Fields["tr"]) != "true" && keep(e) {
-				found = append(found, e)
-			}
-		}
-		return found
-	}
 	one := func(title string, found []*foldedEntity) *foldedEntity {
 		t.Helper()
 		switch len(found) {
@@ -582,22 +571,29 @@ func TestSandboxSeedChecks(t *testing.T) {
 		case 1:
 			return found[0]
 		default:
-			t.Errorf("seed %q exists %d times; keep exactly one", title, len(found))
+			ids := make([]string, len(found))
+			for i, e := range found {
+				ids[i] = e.UUID
+			}
+			t.Errorf(`seed %q exists %d times %v; keep exactly one (docs/testing/sandbox-e2e.md, "Fixing seeds")`, title, len(found), ids)
 			return found[0]
 		}
 	}
+	// Repeating to-dos share the title between the template (rr set) and
+	// its instances (rt set).
 	isTemplate := func(e *foldedEntity) bool { return !isJSONNull(e.Fields["rr"]) }
 	isInstance := func(e *foldedEntity) bool { return !isEmptyJSONArrayOrNull(e.Fields["rt"]) }
-	seed := func(title string, isTask bool) *foldedEntity {
+	notInstance := func(e *foldedEntity) bool { return !isInstance(e) }
+	seed := func(title, kindPrefix string) *foldedEntity {
 		t.Helper()
-		return one(title, lookup(title, isTask, func(e *foldedEntity) bool { return !isInstance(e) }))
+		return one(title, seedCandidates(folded, title, kindPrefix, notInstance))
 	}
 	var instances []*foldedEntity
 	template := func(title string) *foldedEntity {
 		t.Helper()
-		e := one(title, lookup(title, true, isTemplate))
+		e := one(title, seedCandidates(folded, title, "Task", isTemplate))
 		if e != nil {
-			generated := lookup(title, true, isInstance)
+			generated := seedCandidates(folded, title, "Task", isInstance)
 			t.Logf("seed %q: %d generated instances in history", title, len(generated))
 			if len(generated) > 0 {
 				instances = append(instances, generated[0])
@@ -606,21 +602,22 @@ func TestSandboxSeedChecks(t *testing.T) {
 		return e
 	}
 
-	marker := seed(sandboxMarkerArea, false)
-	anytime := seed("SEED anytime", true)
-	someday := seed("SEED someday", true)
-	upcoming := seed("SEED upcoming", true)
-	deadline := seed("SEED deadline", true)
-	checklist := seed("SEED checklist", true)
-	tag := seed("SEED tag", false)
-	tagged := seed("SEED tagged", true)
-	project := seed("SEED project", true)
-	inProject := seed("SEED in project", true)
-	underHeading := seed("SEED under heading", true)
+	marker := seed(sandboxMarkerArea, "Area")
+	anytime := seed("SEED anytime", "Task")
+	someday := seed("SEED someday", "Task")
+	upcoming := seed("SEED upcoming", "Task")
+	deadline := seed("SEED deadline", "Task")
+	checklist := seed("SEED checklist", "Task")
+	seedTags := seedCandidates(folded, "SEED tag", "Tag", notInstance)
+	tag := one("SEED tag", seedTags)
+	tagged := seed("SEED tagged", "Task")
+	project := seed("SEED project", "Task")
+	inProject := seed("SEED in project", "Task")
+	underHeading := seed("SEED under heading", "Task")
 	repeatWeekly := template("SEED repeat weekly")
 	repeatAfter := template("SEED repeat monthly after completion")
-	completed := seed("SEED completed", true)
-	canceled := seed("SEED canceled", true)
+	completed := seed("SEED completed", "Task")
+	canceled := seed("SEED canceled", "Task")
 	if len(missing) > 0 {
 		t.Fatalf("seed items missing, create them once in the Things app (docs/testing/sandbox-e2e.md): %s", strings.Join(missing, ", "))
 	}
@@ -673,8 +670,8 @@ func TestSandboxSeedChecks(t *testing.T) {
 	if !slices.ContainsFunc(tags, func(tg tagOutput) bool { return tg.UUID == tag.UUID }) {
 		t.Error("things_list_tags does not list SEED tag")
 	}
-	if got := h.getTask(t, tagged.UUID).Tags; !slices.Contains(got, tag.UUID) {
-		t.Errorf("SEED tagged tags = %v, want SEED tag", got)
+	if problem := seedTagProblem(h.getTask(t, tagged.UUID).Tags, tagged, seedTags, folded, deleted); problem != "" {
+		t.Error(problem)
 	}
 
 	if !containsTask(h.listTasks(t, "things_list_projects", nil), project.UUID) {
@@ -774,22 +771,4 @@ func (h *sandboxHarness) expectRepeatingRefused(t *testing.T, e *foldedEntity) {
 			t.Errorf("%s on %s (%q): error=%v, %q; want a KI-01 refusal of a repeating item", tc.tool, e.UUID, e.title(), isErr, text)
 		}
 	}
-}
-
-func isTaskEntity(e *foldedEntity) bool {
-	for k := range e.Kinds {
-		if strings.HasPrefix(k, "Task") {
-			return true
-		}
-	}
-	return false
-}
-
-func sortedKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }
