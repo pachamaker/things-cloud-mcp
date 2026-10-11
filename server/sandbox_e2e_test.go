@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	things "github.com/arthursoares/things-cloud-sdk"
 	"github.com/arthursoares/things-cloud-sdk/sync"
@@ -452,7 +451,7 @@ func (h *sandboxHarness) verifyWire(t *testing.T) {
 			if stored.Kind != sent.Kind || stored.Action != sent.Action {
 				t.Errorf("%s: sent %s t=%d, stored %s t=%d", sent.UUID, sent.Kind, sent.Action, stored.Kind, stored.Action)
 			}
-			for _, v := range wireViolations(stored, itemCivilToday(stored.Payload, h.today.Start(time.UTC))) {
+			for _, v := range wireViolations(stored, itemCivilToday(stored.Payload, h.zone, h.today)) {
 				t.Errorf("stored item at index %d: %s", stored.ServerIndex, v)
 			}
 			for _, d := range payloadDifferences(sent.Payload, stored.Payload) {
