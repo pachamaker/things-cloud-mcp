@@ -30,6 +30,8 @@ import (
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/pachamaker/things-cloud-mcp/domain/civil"
 )
 
 const (
@@ -257,7 +259,7 @@ type sandboxHarness struct {
 	creds    sandboxCredentials
 	runID    string
 	prefix   string
-	today    time.Time // the server's civil day: the UTC day until ADR-0003 (KI-03)
+	today    civil.Date // the server's civil day: the UTC day, as the harness leaves THINGS_TIMEZONE unset
 	red      *redactor
 	cloud    *cloudTransport
 	firewall *writeFirewall
@@ -353,7 +355,7 @@ func startSandboxHarness(t *testing.T, mode harnessMode) *sandboxHarness {
 	}
 	t.Cleanup(func() { closeMirror() })
 	h.red.add(history.ID)
-	h.today = time.Unix(todayMidnightUTC(), 0).UTC()
+	h.today = ownerToday()
 
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", newMCPHandler(true))
