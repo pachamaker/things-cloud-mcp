@@ -76,7 +76,7 @@ Goal: Claude (web, desktop, iOS) and ChatGPT reach the server on the VPS securel
 | Item | Refs | Size |
 |---|---|---|
 | ~~Upgrade to Go ≥ 1.25 (Dockerfile base image too)~~ (done with the SDK migration); `mcp-go` v1.x | ADR-0002 | S |
-| Resource-server auth on `/mcp`: RFC 9728 metadata, 401 + `WWW-Authenticate`, JWT validation against Pocket ID, scopes `things.read`/`things.write` | KI-07, ADR-0002 | M |
+| ~~Resource-server auth on `/mcp`: RFC 9728 metadata, 401 + `WWW-Authenticate`, JWT validation against Pocket ID, scopes `things.read`/`things.write`~~ (done in code: `server/auth.go`; REST behind the same tokens, `API_KEY` removed) | KI-07, ADR-0002 | M |
 | End-to-end OAuth test with Claude (web + iOS) and ChatGPT; fall back to built-in AS if Pocket ID fails | ADR-0002 | S–M |
 | ~~`DATA_DIR`~~ (done, PR #4); `/healthz` + `/readyz`, `log/slog` structured logs | KI-16 | S |
 | Docker image (distroless/static, pure-Go SQLite, tzdata), GHCR release on tag | ADR-0002, ADR-0007 | S |

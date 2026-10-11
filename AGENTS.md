@@ -54,10 +54,11 @@ feature unimplemented.
 9. **Do not edit `.env` files, deployment secrets, or anything under `/migrations`**
    without an explicit instruction.
 
-**Current top risks** (read before touching sync or writes): KI-01 (recurrence), KI-07
-(no auth on `/mcp`), KI-03 ("today" is the UTC day). KI-25 (`Task7`) is fixed by the
-upstream SDK; an unknown task kind now stops the sync with an error instead of being
-skipped.
+**Current top risks** (read before touching sync or writes): KI-01 (recurrence), KI-03
+("today" is the UTC day). KI-25 (`Task7`) is fixed by the upstream SDK; an unknown task
+kind now stops the sync with an error instead of being skipped. KI-07 (no auth on `/mcp`)
+is fixed in code: every data route requires an OAuth access token (`server/auth.go`),
+but the end-to-end sign-in through Pocket ID from Claude and ChatGPT is not verified yet.
 
 ## 3. Before you start a task
 
@@ -98,6 +99,7 @@ Run the server locally **against the sandbox account only**:
 export THINGS_USERNAME="$THINGS_SANDBOX_USERNAME" THINGS_PASSWORD="$THINGS_SANDBOX_PASSWORD"
 export DATA_DIR="$PWD/.data"            # empty directory; the cache is $DATA_DIR/things-upstream.db
 export ENABLE_WRITES=true               # writes are off by default
+export INSECURE_NO_AUTH_LOCAL_ONLY=true # no OAuth; the server listens on 127.0.0.1 only
 go run ./server
 ```
 
@@ -149,12 +151,22 @@ Configuration (environment variables):
 | Variable | Required | Meaning |
 |---|---|---|
 | `THINGS_USERNAME` / `THINGS_PASSWORD` | yes | Things Cloud account the server syncs |
-| `API_KEY` | no | Static bearer for `/api/*` (no effect on `/mcp`, KI-07) |
+| `OAUTH_ISSUER` | yes¹ | Authorization server (Pocket ID) URL, `https`, exactly the `iss` of its tokens. Metadata and signing keys are discovered from it |
+| `MCP_PUBLIC_URL` | yes¹ | Public URL of the MCP endpoint, `https://…/mcp`: the RFC 9728 `resource` and the audience every token must carry |
+| `OAUTH_ALLOWED_SUBJECT` | yes¹ | The owner's user id (`sub`) at the issuer; tokens of any other user are rejected |
+| `OAUTH_ALLOWED_CLIENTS` | no | Comma-separated `client_id` allowlist; unset accepts any client the issuer grants this API |
+| `INSECURE_NO_AUTH_LOCAL_ONLY` | yes¹ | `true` serves without authentication, listens on `127.0.0.1` only and rejects requests whose `Host` or `Origin` is not loopback (local development, sandbox scripts). Cannot be combined with the `OAUTH_*` settings |
 | `PORT` | no | Listen port, default `8080` |
 | `ENABLE_WRITES` | no | `true` registers the write tools and REST write endpoints. Unset or `false`: read-only, the write tools are not even listed (ADR-0004). Any other value stops the server at startup |
+| `ENABLE_REST_API` | no | `true` serves `/api/*` behind the same tokens as `/mcp`; off by default (ADR-0002) |
 | `DATA_DIR` | no | Directory of the SQLite cache `things-upstream.db`, default `/data` (created with mode 0700). The cache is disposable: delete the file to force a full resync |
 
-Planned: `THINGS_TIMEZONE` (ADR-0003), OAuth settings (ADR-0002).
+¹ Either the three OAuth settings or `INSECURE_NO_AUTH_LOCAL_ONLY=true`; without either the
+server refuses to start. Tokens need the scope `things.read` for any request and
+`things.write` for write tools and REST write endpoints. `API_KEY` is gone: the server
+refuses to start while it is set (ADR-0002).
+
+Planned: `THINGS_TIMEZONE` (ADR-0003).
 
 Baseline: CI (`.github/workflows/ci.yml`) runs `go mod tidy -diff`, build, vet,
 `go test -race ./...` and `govulncheck` on Go 1.26.9 for every pull request and push to
@@ -165,7 +177,8 @@ failures.
 
 | Path | What | Status |
 |---|---|---|
-| `server/main.go` | Process wiring, REST handlers, debug endpoints, `DATA_DIR` | live |
+| `server/main.go` | Process wiring, router, REST handlers, `DATA_DIR` | live |
+| `server/auth.go` | OAuth resource server: config, JWKS cache, RFC 9068 token checks, RFC 9728 metadata, scopes per tool (KI-07) | live |
 | `server/mcp.go` | MCP tool registry, read handlers, output formatting | live |
 | `server/write.go` | Write commands, wire payload builders, ID generator, `historyWrite` | live |
 | `server/readmodel.go` | Read model over the SDK `State`: pagination, open-list filtering, completed range | live |
@@ -221,7 +234,8 @@ Never write `st=2` with today's date.
 
 ## 8. Write capability status
 
-All write tools exist only when the server runs with `ENABLE_WRITES=true` (ADR-0004).
+All write tools exist only when the server runs with `ENABLE_WRITES=true` (ADR-0004),
+and only a token with the `things.write` scope sees and calls them (KI-07).
 Every write first checks its target and references against a freshly synced mirror
 (`server/preconditions.go`, KI-10) and sends nothing when a check fails. Repeating
 templates are not recognised yet (the SDK does not store `rr`/`rt`).

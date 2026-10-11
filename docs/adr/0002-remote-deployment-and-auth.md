@@ -1,7 +1,9 @@
 # ADR-0002: Remote deployment on a VPS with OAuth 2.1
 
 ## Status
-Proposed (2026-10-10). Addresses KI-07, KI-16.
+Accepted (2026-10-11). Addresses KI-07, KI-16. The resource-server part (decision items 2,
+4, 5) is implemented, see "Implementation notes"; the `mcp-go` v1.x upgrade and the
+end-to-end test with Claude and ChatGPT are still open (roadmap Phase 2).
 
 ## Context
 
@@ -44,10 +46,10 @@ Facts that shape the decision (sources collected 2026-10-10):
      and `/.well-known/oauth-protected-resource` with `resource =
      https://mcp.<domain>/mcp`, `authorization_servers = [https://auth.<domain>]`.
    - Middleware on `/mcp`: no or invalid token → `401` with
-     `WWW-Authenticate: Bearer resource_metadata="…", scope="things"`; validate `iss`,
+     `WWW-Authenticate: Bearer resource_metadata="…", scope="things.read things.write"`; validate `iss`,
      `aud`, `exp`, `nbf`, scope; allowed subject = the owner only.
-   - Caddy and the app share a Docker network, so DNS-rebinding protection is not
-     triggered; never disable it.
+   - Caddy and the app share a Docker network, so `mcp-go`'s DNS-rebinding protection
+     (v0.56+, not in the pinned v0.44) is not triggered; never disable it.
 3. **Clients:** Claude via CIMD (allowlist its metadata URL) or a pre-registered public
    client; ChatGPT via a pre-registered confidential client with the exact redirect
    URI shown in its plugin settings.
@@ -63,6 +65,37 @@ Facts that shape the decision (sources collected 2026-10-10):
    Claude and ChatGPT accept, implement A with a vetted library
    (`zitadel/oidc` or `go-oauth2/oauth2`), pre-registered clients only (no DCR), RFC
    9207 `iss`, passkey login via `go-webauthn`.
+
+## Implementation notes (2026-10-11)
+
+Choices the owner approved when KI-07 was implemented:
+
+- **Pocket ID is good enough on paper** (checked 2026-10-11, v2.18): APIs with permissions
+  (custom scopes) since v2.10; RFC 9068 JWT access tokens and CIMD since v2.13; RFC 8414
+  metadata since v2.14. `aud` is the client id unless the client sends `resource=`, then
+  it is the API's resource. Not documented, to verify on the VPS: a resource with a path
+  (`https://mcp.<domain>/mcp`), the `typ` header, and what happens when a client asks for
+  a permission it was not granted.
+- **Strict audience:** a token must carry `aud` = `MCP_PUBLIC_URL` exactly. Tokens whose
+  audience is a client id are rejected, so tokens Pocket ID issues for other apps never
+  work here.
+- **RFC 9068 `typ`:** `at+jwt` or `application/at+jwt` is required, so an ID token is never
+  accepted as an access token.
+- **Scopes and `ENABLE_WRITES`:** `ENABLE_WRITES` is the server-wide ceiling (write tools
+  are not registered without it); `things.write` is per connection. Write tools are hidden
+  from, and refused to, tokens without `things.write`; every request needs `things.read`
+  (`403 insufficient_scope` otherwise). `scopes_supported` and the challenge advertise
+  `things.write` only when writes are enabled.
+- **Optional `OAUTH_ALLOWED_CLIENTS`** guards against Pocket ID's "Allow all metadata
+  document clients" switch, which grants the API to any CIMD client.
+- **No silent open mode:** without OAuth settings the server refuses to start unless
+  `INSECURE_NO_AUTH_LOCAL_ONLY=true`, which also binds it to `127.0.0.1` and rejects
+  requests whose `Host` or `Origin` is not loopback (DNS rebinding; `mcp-go` v0.44 has no
+  such check).
+- **Signing keys:** discovered from the issuer's metadata (RFC 8414, then OIDC), cached,
+  refreshed hourly or on an unknown `kid` at most once a minute; the last good keys survive
+  an outage, and an issuer that was never reachable yields `503`, not `401`.
+- **Library:** `go-jose/v4` for JWS/JWT; asymmetric algorithms only.
 
 ## Consequences
 - Easier: phones and laptops reach the server through the assistants with no Mac, VPN
