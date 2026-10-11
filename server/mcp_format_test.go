@@ -123,3 +123,24 @@ func TestFormatTaskJSONShape(t *testing.T) {
 		}
 	})
 }
+
+func TestFormatTask_KI04_NoSentinelDates(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		task things.Task
+	}{
+		{"start date sentinel", things.Task{ScheduledDate: dayAt(4001, time.January, 1)}},
+		{"deadline in year 4000", things.Task{DeadlineDate: dayAt(4000, time.January, 1)}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := formatTask(&tt.task)
+			if got.ScheduledFor != "" || got.Deadline != "" {
+				t.Errorf("scheduled_for = %q, deadline = %q, want both empty", got.ScheduledFor, got.Deadline)
+			}
+		})
+	}
+}

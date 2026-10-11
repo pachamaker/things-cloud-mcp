@@ -128,7 +128,7 @@ documents which `Task7` writes have been validated; title-only `Task6` modifies 
 |---|---|---|
 | Instant (`cd`, `md`, `sp`, `dld`) | Unix seconds as float with sub-second precision, e.g. `1770713623.4716659` | ✅ |
 | Calendar date (`sr`, `tir`, `dd`, `rr.sr`, `rr.ia`, `rr.ed`) | Unix seconds of **00:00 UTC on the user's local calendar date**, integer | ✅ (capture: `1770681600` = 2026-02-10 00:00 UTC for a task made "Today" that day) |
-| "Never" sentinel | `64092211200` = 4001-01-01 | ✅ for `rr.ed`; reported in `dd` (KI-04) |
+| "Never" sentinel | `64092211200` = 4001-01-01 | ✅ for `rr.ed`; reported in `dd`. The server reads any day value with year ≥ 4000 as "no date" (KI-04) |
 | Boolean | JSON bool; some old payloads use `0/1` | ✅ |
 | Null vs absent | On modify, an explicit `null` clears a field; an absent key leaves it unchanged | ✅ (`TaskActionItemPayload.UnmarshalJSON` tracks presence) |
 

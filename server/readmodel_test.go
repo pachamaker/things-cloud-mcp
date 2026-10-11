@@ -2,10 +2,13 @@ package main
 
 import (
 	"reflect"
+	"slices"
+	"sort"
 	"testing"
 	"time"
 
 	things "github.com/arthursoares/things-cloud-sdk"
+	"github.com/arthursoares/things-cloud-sdk/sync"
 )
 
 func TestPaginate(t *testing.T) {
@@ -82,5 +85,214 @@ func TestCompletedInRange(t *testing.T) {
 				t.Fatalf("completedInRange = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// listMirror answers the SDK state queries the read model makes from a fixed
+// item list, with the SDK's status/trash filters and "index" order. Like the
+// SDK, it builds a fresh Task for every row, so callers may change the result.
+type listMirror []things.Task
+
+func firstID(ids []string) string {
+	if len(ids) == 0 {
+		return ""
+	}
+	return ids[0]
+}
+
+func (f listMirror) query(tp things.TaskType, opts sync.QueryOpts, keep func(*things.Task) bool) ([]*things.Task, error) {
+	var out []*things.Task
+	for i := range f {
+		it := f[i]
+		if it.Type != tp || (!opts.IncludeCompleted && it.Status == things.TaskStatusCompleted) || (!opts.IncludeTrashed && it.InTrash) {
+			continue
+		}
+		if keep == nil || keep(&it) {
+			out = append(out, &it)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Index < out[j].Index })
+	return out, nil
+}
+
+func (f listMirror) Task(uuid string) (*things.Task, error) {
+	for i := range f {
+		if f[i].UUID == uuid {
+			it := f[i]
+			return &it, nil
+		}
+	}
+	return nil, nil
+}
+
+func (f listMirror) AllTasks(opts sync.QueryOpts) ([]*things.Task, error) {
+	return f.query(things.TaskTypeTask, opts, nil)
+}
+
+func (f listMirror) AllProjects(opts sync.QueryOpts) ([]*things.Task, error) {
+	return f.query(things.TaskTypeProject, opts, nil)
+}
+
+func (f listMirror) AllAreas() ([]*things.Area, error) { return nil, nil }
+
+func (f listMirror) AllTags() ([]*things.Tag, error) { return nil, nil }
+
+func (f listMirror) TasksInProject(projectUUID string, opts sync.QueryOpts) ([]*things.Task, error) {
+	return f.query(things.TaskTypeTask, opts, func(t *things.Task) bool { return firstID(t.ParentTaskIDs) == projectUUID })
+}
+
+func (f listMirror) TasksInArea(areaUUID string, opts sync.QueryOpts) ([]*things.Task, error) {
+	return f.query(things.TaskTypeTask, opts, func(t *things.Task) bool { return firstID(t.AreaIDs) == areaUUID })
+}
+
+func dayAt(y int, m time.Month, d int) *time.Time {
+	v := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+	return &v
+}
+
+func dayString(d *time.Time) string {
+	if d == nil {
+		return ""
+	}
+	return d.Format("2006-01-02")
+}
+
+func TestClearSentinels_KI04(t *testing.T) {
+	t.Parallel()
+
+	done := time.Date(2026, 10, 9, 18, 30, 5, 0, time.UTC)
+	tests := []struct {
+		name                    string
+		task                    things.Task
+		wantScheduled, wantDead string
+		wantCompleted           *time.Time
+	}{
+		{"deadline sentinel", things.Task{DeadlineDate: dayAt(4001, time.January, 1)}, "", "", nil},
+		{"deadline in year 4000", things.Task{DeadlineDate: dayAt(4000, time.January, 1)}, "", "", nil},
+		{"deadline on the last real day", things.Task{DeadlineDate: dayAt(3999, time.December, 31)}, "", "3999-12-31", nil},
+		{"start date sentinel", things.Task{ScheduledDate: dayAt(4001, time.January, 1)}, "", "", nil},
+		{"real start date and sentinel deadline", things.Task{ScheduledDate: dayAt(2026, time.October, 11), DeadlineDate: dayAt(4001, time.January, 1)}, "2026-10-11", "", nil},
+		{"completed with sentinel deadline keeps its completion instant", things.Task{Status: things.TaskStatusCompleted, CompletionDate: &done, DeadlineDate: dayAt(4001, time.January, 1)}, "", "", &done},
+		{"no dates", things.Task{}, "", "", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			task := tt.task
+			got := clearSentinels(&task)
+			if s := dayString(got.ScheduledDate); s != tt.wantScheduled {
+				t.Errorf("start date = %q, want %q", s, tt.wantScheduled)
+			}
+			if d := dayString(got.DeadlineDate); d != tt.wantDead {
+				t.Errorf("deadline = %q, want %q", d, tt.wantDead)
+			}
+			if !reflect.DeepEqual(got.CompletionDate, tt.wantCompleted) {
+				t.Errorf("completion = %v, want %v", got.CompletionDate, tt.wantCompleted)
+			}
+		})
+	}
+}
+
+// sentinelMirror holds one item per list, each with the year-4001 sentinel in
+// a day field. Real dates are far enough from any test run's "today" to keep
+// every item in the same view.
+func sentinelMirror() listMirror {
+	never := dayAt(4001, time.January, 1)
+	done := time.Date(2026, 10, 9, 18, 30, 5, 0, time.UTC)
+	return listMirror{
+		{UUID: "inbox", Type: things.TaskTypeTask, Schedule: things.TaskScheduleInbox, DeadlineDate: never},
+		{UUID: "today", Type: things.TaskTypeTask, Schedule: things.TaskScheduleAnytime, ScheduledDate: dayAt(2026, time.January, 1), DeadlineDate: never},
+		{UUID: "anytime", Type: things.TaskTypeTask, Schedule: things.TaskScheduleAnytime, DeadlineDate: never, AreaIDs: []string{"area"}, ParentTaskIDs: []string{"project"}},
+		{UUID: "someday-never", Type: things.TaskTypeTask, Schedule: things.TaskScheduleSomeday, ScheduledDate: never},
+		{UUID: "upcoming", Type: things.TaskTypeTask, Schedule: things.TaskScheduleSomeday, ScheduledDate: dayAt(3000, time.January, 1), DeadlineDate: never},
+		{UUID: "done", Type: things.TaskTypeTask, Status: things.TaskStatusCompleted, CompletionDate: &done, DeadlineDate: never},
+		{UUID: "project", Type: things.TaskTypeProject, Schedule: things.TaskScheduleAnytime, DeadlineDate: never},
+	}
+}
+
+func TestReadModel_KI04_NoSentinelInAnyList(t *testing.T) {
+	t.Parallel()
+
+	r := readModel{mirror: sentinelMirror()}
+	single := func(uuid string) func() ([]*things.Task, error) {
+		return func() ([]*things.Task, error) {
+			task, err := r.Task(uuid)
+			return []*things.Task{task}, err
+		}
+	}
+	withDone := listOpts{QueryOpts: sync.QueryOpts{IncludeCompleted: true}}
+	lists := map[string]func() ([]*things.Task, error){
+		"all tasks":           func() ([]*things.Task, error) { return r.AllTasks(listOpts{}) },
+		"all tasks with done": func() ([]*things.Task, error) { return r.AllTasks(withDone) },
+		"projects":            func() ([]*things.Task, error) { return r.AllProjects(listOpts{}) },
+		"inbox":               func() ([]*things.Task, error) { return r.TasksInInbox(listOpts{}) },
+		"today":               func() ([]*things.Task, error) { return r.TasksInToday(listOpts{}) },
+		"anytime":             func() ([]*things.Task, error) { return r.TasksInAnytime(listOpts{}) },
+		"someday":             func() ([]*things.Task, error) { return r.TasksInSomeday(listOpts{}) },
+		"upcoming":            func() ([]*things.Task, error) { return r.TasksInUpcoming(listOpts{}) },
+		"project":             func() ([]*things.Task, error) { return r.TasksInProject("project", listOpts{}) },
+		"area":                func() ([]*things.Task, error) { return r.TasksInArea("area", listOpts{}) },
+		"completed":           func() ([]*things.Task, error) { return r.CompletedTasksInRange(0, nil, nil) },
+		"get project":         single("project"),
+		"get completed":       single("done"),
+		"get someday":         single("someday-never"),
+	}
+	for name, list := range lists {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			tasks, err := list()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(tasks) == 0 {
+				t.Fatal("list is empty; the check would prove nothing")
+			}
+			for _, task := range tasks {
+				if task == nil {
+					t.Fatal("nil task")
+				}
+				for field, d := range map[string]*time.Time{"start date": task.ScheduledDate, "deadline": task.DeadlineDate} {
+					if d != nil && d.Year() >= 4000 {
+						t.Errorf("%s: %s %s is the never sentinel", task.UUID, field, dayString(d))
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestReadModel_KI04_NeverStartDateIsSomeday: a deferred to-do whose start
+// date is the sentinel has no start date, so it is in Someday, not Upcoming.
+func TestReadModel_KI04_NeverStartDateIsSomeday(t *testing.T) {
+	t.Parallel()
+
+	r := readModel{mirror: sentinelMirror()}
+	someday, err := r.TasksInSomeday(listOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	upcoming, err := r.TasksInUpcoming(listOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(someday, func(t *things.Task) bool { return t.UUID == "someday-never" }) {
+		t.Error("someday-never is not in Someday")
+	}
+	if slices.ContainsFunc(upcoming, func(t *things.Task) bool { return t.UUID == "someday-never" }) {
+		t.Error("someday-never is in Upcoming")
+	}
+}
+
+func TestReadModel_KI04_CompletedKeepsCompletionInstant(t *testing.T) {
+	t.Parallel()
+
+	r := readModel{mirror: sentinelMirror()}
+	tasks, err := r.CompletedTasksInRange(0, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2026, 10, 9, 18, 30, 5, 0, time.UTC)
+	if len(tasks) != 1 || tasks[0].CompletionDate == nil || !tasks[0].CompletionDate.Equal(want) || tasks[0].DeadlineDate != nil {
+		t.Fatalf("completed = %+v, want done at %v without a deadline", tasks, want)
 	}
 }

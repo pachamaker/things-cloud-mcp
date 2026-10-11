@@ -23,7 +23,7 @@ workaround can be deleted.
 | Never pass `repeat` — it corrupts Things on macOS/iOS (incident 2026-08-18) | KI-01 |
 | `things_list_today` is incomplete; always also call `things_list_upcoming` | KI-25 (fixed by the SDK migration), KI-02, KI-03 |
 | Between 00:00 and 03:00 MSK the server's "today" is still yesterday | KI-03 (fixed; delete once the deployment sets `THINGS_TIMEZONE=Europe/Moscow`) |
-| `deadline = 4001-01-01` means "no deadline" | KI-04 |
+| `deadline = 4001-01-01` means "no deadline" | KI-04 (fixed; delete once the deployment runs this version) |
 | Don't trust `status` in lists; filter `status == "open"` yourself | KI-05 |
 | Create → list → edit one by one; batch update fails on the first unsynced ID | KI-06 |
 | Use only existing tags | KI-12 |
@@ -306,15 +306,24 @@ workaround can be deleted.
   is unwired and untouched (KI-01).
 
 ### KI-04 · Year-4001 sentinel leaks out as a real date
-- **Status:** fixed in tool output (PR #1); normalising at ingestion still recommended ·
-  **Evidence:** confirmed for `rr.ed` (SDK `repeat.go`, `IsNeverending`); observed by the
-  operator in `deadline`
+- **Status:** fixed (branch `read-fixes-KI-04-KI-13`) · **Evidence:** confirmed for
+  `rr.ed` (SDK `repeat.go`, `IsNeverending`); observed by the operator in `deadline`
 - **Symptom:** tools return `deadline: "4001-01-01"`.
 - **Root cause:** Things uses 4001-01-01 (`64092211200`) as "never". The mirror stores
-  it verbatim and `formatTask` (`server/mcp.go:81-83`) prints it.
-- **Fix direction:** normalise any day-precision value with year ≥ 4000 to null where
-  the server reads the SDK mirror (`server/readmodel.go`), or upstream at ingestion,
-  with a test.
+  it verbatim; PR #1 hid it only in `formatTask`'s `deadline`, so REST responses,
+  `scheduled_for` and the view rules still saw it (a deferred to-do with a sentinel
+  start date was listed in Upcoming instead of Someday).
+- **Fix:** `server/readmodel.go` clears every start date and deadline with year ≥ 4000
+  on each task it reads from the mirror (`clearSentinels`), before view classification,
+  pagination or output: every list and view, `things_list_completed`, `things_get_task`
+  and the REST endpoints. Completion dates are instants and stay as they are;
+  `formatTask` applies the same rule to both day fields. Tests:
+  `TestClearSentinels_KI04`, `TestReadModel_KI04_NoSentinelInAnyList`,
+  `TestReadModel_KI04_NeverStartDateIsSomeday`,
+  `TestReadModel_KI04_CompletedKeepsCompletionInstant`, `TestFormatTask_KI04_NoSentinelDates`.
+- **Not done:** the SDK still stores the sentinel; write preconditions read the raw
+  mirror, but check no dates. ADR-0003 decision 7 (`civil.FromWire`) waits for the
+  server's own domain model.
 
 ### KI-05 · Lists contain non-actionable items; `status` is unreliable
 - **Status:** partially fixed — canceled items excluded from open views (PR #1) and,

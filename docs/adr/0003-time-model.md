@@ -70,6 +70,6 @@ Option C.
    dates mean the start of that day in the zone. `today` is the only relative word;
    list responses do not carry `today` yet (that changes their shape, ADR-0006), so the
    view tool descriptions name the configured zone instead.
-6. Decision 7 is not in `civil` yet: the sentinel is still hidden in `formatTask`
-   (KI-04).
+6. Decision 7 is not in `civil` yet: `server/readmodel.go` clears start dates and
+   deadlines with year ≥ 4000 on every task it reads from the SDK mirror (KI-04).
 7. Instants (`cd`, `md`, `sp`, sync freshness) keep `time.Now()`; they decide no day.

@@ -78,14 +78,14 @@ func formatTask(t *things.Task) taskOutput {
 	case things.TaskTypeHeading:
 		o.Type = "heading"
 	}
-	if t.DeadlineDate != nil && t.DeadlineDate.Year() < neverendingRepeatYear {
-		o.Deadline = t.DeadlineDate.Format("2006-01-02")
+	if d := calendarDay(t.DeadlineDate); d != nil {
+		o.Deadline = d.Format("2006-01-02")
 	}
 	if t.CompletionDate != nil {
 		o.CompletedAt = t.CompletionDate.UTC().Format(time.RFC3339)
 	}
-	if t.ScheduledDate != nil {
-		o.ScheduledFor = t.ScheduledDate.Format("2006-01-02")
+	if d := calendarDay(t.ScheduledDate); d != nil {
+		o.ScheduledFor = d.Format("2006-01-02")
 	}
 	if len(t.ParentTaskIDs) > 0 {
 		o.ProjectID = t.ParentTaskIDs[0]
@@ -425,7 +425,7 @@ func mcpGetTask(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	task, err := syncer.State().Task(uuid)
+	task, err := readState().Task(uuid)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
