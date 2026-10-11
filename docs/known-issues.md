@@ -307,7 +307,7 @@ workaround can be deleted.
   is unwired and untouched (KI-01).
 
 ### KI-04 · Year-4001 sentinel leaks out as a real date
-- **Status:** fixed (branch `read-fixes-KI-04-KI-13`) · **Evidence:** confirmed for
+- **Status:** fixed ([#21](https://github.com/pachamaker/things-cloud-mcp/pull/21), `a53bb30`) · **Evidence:** confirmed for
   `rr.ed` (SDK `repeat.go`, `IsNeverending`); observed by the operator in `deadline`
 - **Symptom:** tools return `deadline: "4001-01-01"`.
 - **Root cause:** Things uses 4001-01-01 (`64092211200`) as "never". The mirror stores
@@ -345,8 +345,11 @@ workaround can be deleted.
   confirm the gap on real data: both repeating seed templates are listed in Someday.
 
 ### KI-13 · Tasks under headings are missing from project listings
-- **Status:** fixed (branch `read-fixes-KI-04-KI-13`) · **Evidence:** likely; the
-  sandbox seed check now fails if `SEED under heading` is missing from its project
+- **Status:** fixed ([#21](https://github.com/pachamaker/things-cloud-mcp/pull/21), `a53bb30`) · **Evidence:** confirmed on
+  the sandbox account: before the fix, e2e run 38139217523 on `main` logged
+  `SEED under heading` as missing from its project; with it, a local
+  `TestSandboxSeedChecks` run (2026-10-11, run `e2e-20261011-1246-fb3f`) lists it.
+  The seed check fails if the to-do goes missing again
 - **Root cause:** SDK `State.TasksInProject` filters on `project_uuid`. In
   Things, a task placed under a heading carries the heading in `agr` and usually no
   `pr`; its project is the heading's project.
