@@ -58,7 +58,7 @@ workarounds.
 |---|---|---|
 | ~~`THINGS_TIMEZONE`, `domain/civil` (Date, Clock), migrate all date logic~~ (done on `KI-03-owner-timezone`, the sandbox harness follows the zone on `KI-34-harness-owner-timezone`; `today` in list output remains, ADR-0003 notes) | KI-03, ADR-0003 | M |
 | ~~Normalise year ≥ 4000 sentinels to null at ingestion~~ (done where the server reads the mirror, `server/readmodel.go`) | KI-04 | S |
-| Persist `rr`, `rt`, `sb`, `dds`, `tir` in the mirror: upstream SDK PR with a `TaskReplayVersion` bump, or a `replace` soft fork (spike report §4 B4) | KI-01, KI-02, ADR-0001 | M |
+| Persist `rr`, `rt`, `sb`, `dds`, `tir` in the mirror: upstream SDK PR with a `TaskReplayVersion` bump, or a `replace` soft fork (spike report §4 B4). `rr`/`rt`: [arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40) (issue [#39](https://github.com/arthursoares/things-cloud-sdk/issues/39)), awaiting review; `sb`, `dds`, `tir` not proposed yet | KI-01, KI-02, ADR-0001 | M |
 | Move the classifier from `server/views.go` to `domain/view`; extend it once B4 fields exist (evening, `dds`, templates, projects in Today) | KI-02, KI-05, ADR-0005 | M |
 | ~~Resolve project membership through headings~~ (done for `things_list_project_tasks`, with `heading_id`/`heading_title`) | KI-13 | S |
 | Conformance harness + first snapshots (incl. post-midnight and "Mac closed for a day") | ADR-0005 | M |

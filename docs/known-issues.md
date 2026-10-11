@@ -198,7 +198,8 @@ workaround can be deleted.
   refused · **Evidence:** confirmed (before the fix `server/write.go:650-852` validated
   only the Base58 shape)
 - **Remaining:** repeating templates and instances cannot be recognised: the SDK
-  mirror does not store `rr`/`rt` (spike report §4 B4). Checklist writes find the item
+  mirror does not store `rr`/`rt` (spike report §4 B4; upstream fix proposed in
+  [arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40)). Checklist writes find the item
   by scanning every to-do's checklist (the SDK has no lookup by item UUID).
 - **Symptom:** a hallucinated or mistyped UUID produces a modify-item for an unknown
   object in the cloud history. Clients receive a partial entity with no creation
@@ -338,6 +339,10 @@ workaround can be deleted.
 - **Fix direction:** open views mean `status = 0 AND in_trash = 0 AND NOT template`;
   canceled items appear only in Logbook queries; unknown statuses become an explicit
   `"unknown"` and are logged.
+- **Upstream:** [arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40) (issue [#39](https://github.com/arthursoares/things-cloud-sdk/issues/39)) stores `rr`/`rt` in the
+  SDK mirror and adds `Task.IsRepeatingTemplate()` / `IsRepeatingInstance()`. Once it is
+  released, bump the SDK and drop templates from open lists here. The sandbox seed checks
+  confirm the gap on real data: both repeating seed templates are listed in Someday.
 
 ### KI-13 · Tasks under headings are missing from project listings
 - **Status:** fixed (branch `read-fixes-KI-04-KI-13`) · **Evidence:** likely; the
