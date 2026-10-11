@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	thingscloud "github.com/arthursoares/things-cloud-sdk"
 	"github.com/google/uuid"
+
+	"github.com/pachamaker/things-cloud-mcp/domain/civil"
 )
 
 const testPassword = "pa$$ word#1"
@@ -280,7 +283,7 @@ func TestWireViolations_VerifiedWritesPass(t *testing.T) {
 			t.Parallel()
 
 			item := parseOne(t, tc.env)
-			if v := wireViolations(item, itemCivilToday(item.Payload, time.Unix(testToday, 0))); len(v) != 0 {
+			if v := wireViolations(item, itemCivilToday(item.Payload, time.UTC, civil.FromWire(testToday))); len(v) != 0 {
 				t.Fatalf("verified write flagged: %v", v)
 			}
 		})
@@ -340,22 +343,93 @@ func TestWireViolations_RejectsUnverifiedWrites(t *testing.T) {
 func TestItemCivilToday(t *testing.T) {
 	t.Parallel()
 
-	late := time.Date(2026, 10, 11, 23, 59, 59, 0, time.UTC)
-	fallback := time.Date(2030, 1, 1, 12, 0, 0, 0, time.UTC)
+	moscow := mustLoadZone(t, "Europe/Moscow")
+	newYork := mustLoadZone(t, "America/New_York")
+	day := func(y int, m time.Month, d int) civil.Date { return civil.Date{Year: y, Month: m, Day: d} }
+	at := func(utc time.Time) json.RawMessage { return json.RawMessage(strconv.FormatInt(utc.Unix(), 10) + ".25") }
+	fallback := day(2030, time.January, 1)
 	cases := []struct {
 		name string
+		loc  *time.Location
 		p    map[string]json.RawMessage
-		want time.Time
+		want civil.Date
 	}{
-		{"md wins", map[string]json.RawMessage{"md": json.RawMessage(`1791763199.9`), "cd": json.RawMessage(`1`)}, late},
-		{"cd when md null", map[string]json.RawMessage{"md": json.RawMessage(`null`), "cd": json.RawMessage(`1791763199`)}, late},
-		{"fallback", map[string]json.RawMessage{}, fallback},
+		{"md wins", time.UTC, map[string]json.RawMessage{"md": json.RawMessage(`1791763199.9`), "cd": json.RawMessage(`1`)}, day(2026, time.October, 11)},
+		{"cd when md null", time.UTC, map[string]json.RawMessage{"md": json.RawMessage(`null`), "cd": json.RawMessage(`1791763199`)}, day(2026, time.October, 11)},
+		{"fallback", moscow, map[string]json.RawMessage{}, fallback},
+		// 00:30 in Moscow is 21:30 of the previous day in UTC.
+		{"Moscow 00:30", moscow, map[string]json.RawMessage{"md": at(time.Date(2026, 10, 10, 21, 30, 0, 0, time.UTC))}, day(2026, time.October, 11)},
+		// 22:30 EDT is 02:30 of the next day in UTC.
+		{"New York 22:30", newYork, map[string]json.RawMessage{"md": at(time.Date(2026, 10, 12, 2, 30, 0, 0, time.UTC))}, day(2026, time.October, 11)},
 	}
 	for _, tc := range cases {
-		got := itemCivilToday(tc.p, fallback)
-		want := time.Date(tc.want.Year(), tc.want.Month(), tc.want.Day(), 0, 0, 0, 0, time.UTC).Unix()
-		if got != want {
-			t.Errorf("%s: got %d, want %d", tc.name, got, want)
+		if got, want := itemCivilToday(tc.p, tc.loc, fallback), tc.want.Wire(); got != want {
+			t.Errorf("%s: got %s, want %s", tc.name, civil.FromWire(got), tc.want)
+		}
+	}
+}
+
+func TestSandboxNearMidnight(t *testing.T) {
+	t.Parallel()
+
+	moscow := mustLoadZone(t, "Europe/Moscow")
+	newYork := mustLoadZone(t, "America/New_York")
+	santiago := mustLoadZone(t, "America/Santiago")
+	cases := []struct {
+		name string
+		loc  *time.Location
+		at   time.Time
+		want bool
+	}{
+		{"UTC 00:10", time.UTC, time.Date(2026, 10, 11, 0, 10, 0, 0, time.UTC), true},
+		{"UTC 23:50", time.UTC, time.Date(2026, 10, 11, 23, 50, 0, 0, time.UTC), true},
+		{"UTC noon", time.UTC, time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC), false},
+		{"UTC 00:15 is outside", time.UTC, time.Date(2026, 10, 11, 0, 15, 0, 0, time.UTC), false},
+		{"Moscow 00:05", moscow, time.Date(2026, 10, 10, 21, 5, 0, 0, time.UTC), true},
+		{"Moscow 03:05 at 00:05 UTC", moscow, time.Date(2026, 10, 11, 0, 5, 0, 0, time.UTC), false},
+		{"New York 23:55", newYork, time.Date(2026, 10, 12, 3, 55, 0, 0, time.UTC), true},
+		{"New York 20:05 at 00:05 UTC", newYork, time.Date(2026, 10, 12, 0, 5, 0, 0, time.UTC), false},
+		// Chile skips 2026-09-06 00:00: the day starts at 01:00 -03 (04:00 UTC).
+		{"Santiago 01:10 after skipped midnight", santiago, time.Date(2026, 9, 6, 4, 10, 0, 0, time.UTC), true},
+	}
+	for _, tc := range cases {
+		clock := civil.ClockFunc(func() time.Time { return tc.at })
+		if got := sandboxNearMidnight(clock, tc.loc, 15*time.Minute); got != tc.want {
+			t.Errorf("%s: sandboxNearMidnight = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// KI-34: the firewall judges a Today placement by the owner's day, so a write
+// at 00:30 in Moscow (21:30 UTC of the day before) is the verified Today shape.
+func TestWriteFirewall_KI34_OwnerZone(t *testing.T) {
+	t.Parallel()
+
+	written := time.Date(2026, 10, 10, 21, 30, 0, 0, time.UTC)
+	today := civil.Date{Year: 2026, Month: time.October, Day: 11}.Wire()
+	task := generateUUID()
+	u := newTaskUpdate()
+	u.fields["md"] = float64(written.Unix())
+	item := parseOne(t, writeEnvelope{task, 1, "Task6", u.schedule(1, today, today).build()})
+
+	cases := []struct {
+		name    string
+		loc     *time.Location
+		wantErr string
+	}{
+		{"owner's zone", mustLoadZone(t, "Europe/Moscow"), ""},
+		{"UTC day", time.UTC, "placement"},
+	}
+	for _, tc := range cases {
+		f := newWriteFirewall(func() time.Time { return written }, tc.loc)
+		f.setMode(firewallWrites)
+		f.own(task, "Task6")
+		err := f.check([]wireItem{item})
+		switch {
+		case tc.wantErr == "" && err != nil:
+			t.Errorf("%s: Today write refused: %v", tc.name, err)
+		case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+			t.Errorf("%s: got %v, want an error mentioning %q", tc.name, err, tc.wantErr)
 		}
 	}
 }
@@ -372,7 +446,7 @@ func TestWriteFirewall(t *testing.T) {
 	tomb := writeEnvelope{generateUUID(), 0, "Tombstone2", map[string]any{"dloid": task, "dld": 1.5}}
 	items := func(env writeEnvelope) []wireItem { return []wireItem{parseOne(t, env)} }
 
-	f := newWriteFirewall(now, prefix)
+	f := newWriteFirewall(now, time.UTC, prefix)
 	if err := f.check(items(area)); err == nil || !strings.Contains(err.Error(), "locked") {
 		t.Fatalf("locked firewall let a commit through: %v", err)
 	}

@@ -63,7 +63,7 @@ func TestSandboxTransport_KI27_RetriesGetAfter429(t *testing.T) {
 	})
 	t.Run("commit is not retried", func(t *testing.T) {
 		cloud := &scriptedCloud{statuses: []int{429}}
-		c := &cloudTransport{base: cloud, rateLimitBackoff: backoff, firewall: newWriteFirewall(time.Now)}
+		c := &cloudTransport{base: cloud, rateLimitBackoff: backoff, firewall: newWriteFirewall(time.Now, time.UTC)}
 		req, _ := http.NewRequest(http.MethodPost, "https://"+thingsCloudHost+"/version/1/history/x/items", strings.NewReader(`{}`))
 		resp, err := c.RoundTrip(req)
 		if err != nil {

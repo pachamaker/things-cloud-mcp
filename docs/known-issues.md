@@ -296,11 +296,14 @@ workaround can be deleted.
   compares `sr`/`dd` as civil dates, `when` (`today`, `YYYY-MM-DD`), `things_move_to_today`
   and the deadline check use the owner's day, and `completed_after`/`completed_before`
   dates start at the owner's midnight. Tests: `TestToday_KI03`, `TestParseWhen_KI03_OwnerDay`,
-  `TestParseDeadline_KI03_OwnerDay`, `TestViews_KI03_OwnerDay`.
+  `TestParseDeadline_KI03_OwnerDay`, `TestViews_KI03_OwnerDay`. The sandbox harness reads
+  `THINGS_TIMEZONE` the same way: its midnight skip window and the day the wire check
+  expects follow the zone (branch `KI-34-harness-owner-timezone`; `TestSandboxNearMidnight`,
+  `TestItemCivilToday`, `TestWriteFirewall_KI34_OwnerZone`).
 - **Not done (ADR-0003 notes):** list responses do not report `today` yet (output shape,
-  ADR-0006); the sandbox harness leaves `THINGS_TIMEZONE` unset and keeps its UTC
-  midnight window and `itemCivilToday` — they could follow a configured zone
-  (follow-up); `buildRepeatRule` is unwired and untouched (KI-01).
+  ADR-0006); the CI sandbox run does not set `THINGS_TIMEZONE`, so the owner's-zone paths
+  run end to end only locally (`docs/testing/sandbox-e2e.md`, "CI"); `buildRepeatRule`
+  is unwired and untouched (KI-01).
 
 ### KI-04 · Year-4001 sentinel leaks out as a real date
 - **Status:** fixed in tool output (PR #1); normalising at ingestion still recommended ·
@@ -425,7 +428,9 @@ workaround can be deleted.
   commits are never retried) and the workflow gives the seed and cleanup steps room for
   it; not yet confirmed against Things Cloud. The second CI run (2026-10-10, 23:44 UTC)
   was green but skipped every test inside the midnight window; since then CI sets
-  `THINGS_E2E_REQUIRE_RUN=1`, which turns a skip into a failure. `things_edit_task` with `when: "none"`
+  `THINGS_E2E_REQUIRE_RUN=1`, which turns a skip into a failure. The midnight window and
+  the wire check's day follow `THINGS_TIMEZONE` (branch `KI-34-harness-owner-timezone`);
+  the workflow does not set it, so CI runs on the UTC day. `things_edit_task` with `when: "none"`
   writes `sr`/`tir` without `st`, which is not a verified placement: the firewall refuses
   it, so the harness does not exercise it; capture what the official client sends, or
   write `st` explicitly.
