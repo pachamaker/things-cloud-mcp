@@ -1,7 +1,8 @@
 # ADR-0003: Civil dates in the owner's timezone
 
 ## Status
-Proposed (2026-10-10). Fixes KI-03, prerequisite for KI-02.
+Accepted (2026-10-11), implemented on branch `KI-03-owner-timezone` with the amendments
+in "Implementation notes". Fixes KI-03, prerequisite for KI-02.
 
 ## Context
 - Things stores day-precision fields (`sr`, `tir`, `dd`, recurrence dates) as the Unix
@@ -51,3 +52,24 @@ Option C.
 - Travel: if the owner changes timezone, they change one env var. Things itself uses
   the device's zone, so a mismatch is possible while travelling; acceptable for a
   single user and visible through the `today` field in responses.
+
+## Implementation notes (2026-10-11)
+1. **`THINGS_TIMEZONE` is optional** (amends decision 1). Unset means the UTC day, as
+   before, with a startup warning, so an upgrade does not stop a running deployment.
+   An unknown name, or `Local` (the host's zone, option B), stops the server at
+   startup. `time/tzdata` is embedded by `domain/civil`.
+2. `domain/civil` names the fields `Year`, `Month`, `Day` and adds `Compare`,
+   `FromWireTime` (for the SDK's `time.Time` day values) and `Start(loc)`, the first
+   instant of a day, correct where a DST change skips or repeats midnight.
+   `Clock` comes with `SystemClock` and `ClockFunc`.
+3. Decision 3 is deferred: the domain model is still the SDK's `things.Task` with
+   `time.Time` day fields. The server converts at the point of comparison
+   (`civil.FromWireTime`); a model of its own comes with `domain/view` (ADR-0005).
+4. Decision 5 does not apply yet: views are classified in Go over `State.AllTasks`.
+5. Decision 6: `YYYY-MM-DD` inputs are owner's days; `completed_after`/`completed_before`
+   dates mean the start of that day in the zone. `today` is the only relative word;
+   list responses do not carry `today` yet (that changes their shape, ADR-0006), so the
+   view tool descriptions name the configured zone instead.
+6. Decision 7 is not in `civil` yet: the sentinel is still hidden in `formatTask`
+   (KI-04).
+7. Instants (`cd`, `md`, `sp`, sync freshness) keep `time.Now()`; they decide no day.

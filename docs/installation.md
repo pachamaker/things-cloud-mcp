@@ -31,6 +31,7 @@ Run the server locally to confirm everything works:
 ```bash
 export THINGS_USERNAME='your-things-email'
 export THINGS_PASSWORD='your-things-password'
+export THINGS_TIMEZONE='Europe/Moscow'   # your IANA zone: "today" follows it
 mkdir -p /data
 go run ./server/
 ```
@@ -142,6 +143,7 @@ Fly.io doesn't bill you if your monthly usage is under $5. The server scales to 
 | `PORT` | No | Server port (default: `8080`) |
 | `DATA_DIR` | No | Directory of the SQLite cache `things-upstream.db` (default: `/data`) |
 | `ENABLE_WRITES` | No | `true` enables the write tools and endpoints; read-only otherwise |
+| `THINGS_TIMEZONE` | No, but set it | Your IANA timezone, e.g. `Europe/Moscow`. Decides "today" for the Today/Upcoming views, `when`, deadlines and `completed_*` dates. Unset: the UTC day (logged as a warning); an unknown name stops the server |
 
 ## Updating
 

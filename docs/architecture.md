@@ -94,7 +94,9 @@ used to carry: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4.
 | `server/mcp.go` | MCP tool registry and read handlers, output formatting | `mark3labs/mcp-go` v0.44, Streamable HTTP, stateless |
 | `server/write.go` | All write commands, wire payload builders, ID generator, `historyWrite` | One item per commit; global `historyMu`; `repeat` always rejected (KI-01) |
 | `server/readmodel.go` | Read model over SDK `State`: pagination, open-list filtering (canceled excluded), completed range | Loads full lists, then pages in Go (KI-18) |
-| `server/views.go` | View classifier (Inbox/Today/Anytime/Someday/Upcoming) over `State.AllTasks` | UTC-based (KI-03); no `tir`/`dds`/`sb` in the SDK mirror (KI-02) |
+| `server/views.go` | View classifier (Inbox/Today/Anytime/Someday/Upcoming) over `State.AllTasks` | Compares civil dates against the owner's day; no `tir`/`dds`/`sb` in the SDK mirror (KI-02) |
+| `server/today.go` | `THINGS_TIMEZONE` parsing, `ownerToday()` | Global `ownerZone`, set once in `main` |
+| `domain/civil` | Civil date, clock, owner's "today", wire encoding of day values, zone loading (ADR-0003) | Pure; embeds `time/tzdata` |
 | `server/syncgate.go` | Serialises and coalesces `Syncer.Sync()`, backs off on 429 | The SDK `Syncer` has no lock |
 | `server/json_body.go` | Bounded JSON body decoding for REST | |
 | `server/redact.go` | Hides the URL of a failed Things Cloud request where SDK errors enter the server (sync gate, `historyWrite`, startup) | The URL carries the history key, a bearer capability (KI-35) |
@@ -248,7 +250,7 @@ See [`roadmap.md`](roadmap.md).
 |---|---|---|
 | AuthN to the server | none on `/mcp`; optional static bearer on `/api` | OAuth 2.1 single-user (ADR-0002) |
 | Secrets | env vars; password logged in `DEBUG` (KI-09) | env/secret files; redaction tested |
-| Time | UTC everywhere | owner's IANA timezone, injectable clock (ADR-0003) |
+| Time | owner's IANA timezone (`THINGS_TIMEZONE`, UTC if unset) through `domain/civil`; pure date logic takes `today` | injectable clock end to end (ADR-0003) |
 | Observability | `log.Printf` | structured logs (`log/slog`), request id, write audit log, `/healthz` + `/readyz` |
 | Backups | none | nightly copy of SQLite + audit log; the cloud stays the source of truth |
 | Testing | unit tests in `server/`; shell scripts against real account | unit, captures, conformance snapshots, sandbox e2e (ADR-0005, ADR-0007) |

@@ -26,7 +26,7 @@ A skill for morning reviews and day-to-day task management. Tell Claude:
 - **Your tag system** — what each tag means and its UUID (the MCP requires UUIDs, not names)
 - **How you schedule** — do you use `when` as a soft target or a hard commitment? What's the difference between `when` and `deadline` in your workflow?
 - **Morning review steps** — what you want to see each morning (today's tasks, overdue items, inbox count)
-- **Overdue and deadline detection** — `things_list_today` includes overdue carry-over, scheduled tasks whose date has arrived, and tasks without a start date whose deadline is today or earlier (Inbox included), in addition to tasks scheduled for today. No extra `things_list_all_tasks` or `things_list_upcoming` call is needed for these. Caveats: "today" is the server's UTC calendar day, not your local timezone, so near local midnight it can be off by a day; a deadline you dismissed from Today in the app still shows up.
+- **Overdue and deadline detection** — `things_list_today` includes overdue carry-over, scheduled tasks whose date has arrived, and tasks without a start date whose deadline is today or earlier (Inbox included), in addition to tasks scheduled for today. No extra `things_list_all_tasks` or `things_list_upcoming` call is needed for these. Caveats: "today" is the calendar day in the server's `THINGS_TIMEZONE` (UTC if it is not set), so while you are in another timezone it can be off by a day near midnight; a deadline you dismissed from Today in the app still shows up.
 
 ### 2. Weekly/monthly review skill
 

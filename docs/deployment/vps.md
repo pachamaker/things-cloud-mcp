@@ -79,8 +79,9 @@ THINGS_USERNAME=you@example.com
 THINGS_PASSWORD=change-me
 # Off by default: without it the server is read-only (ADR-0004).
 ENABLE_WRITES=true
-# planned (ADR-0002 / ADR-0003):
-# THINGS_TIMEZONE=Europe/Moscow
+# Owner's IANA zone: decides "today" (ADR-0003). Unset means the UTC day.
+THINGS_TIMEZONE=Europe/Moscow
+# planned (ADR-0002):
 # MCP_PUBLIC_URL=https://mcp.example.com/mcp
 # OAUTH_ISSUER=https://auth.example.com
 # OAUTH_ALLOWED_SUBJECT=<owner's Pocket ID user id>

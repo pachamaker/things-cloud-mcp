@@ -22,7 +22,7 @@ workaround can be deleted.
 |---|---|
 | Never pass `repeat` — it corrupts Things on macOS/iOS (incident 2026-08-18) | KI-01 |
 | `things_list_today` is incomplete; always also call `things_list_upcoming` | KI-25 (fixed by the SDK migration), KI-02, KI-03 |
-| Between 00:00 and 03:00 MSK the server's "today" is still yesterday | KI-03 |
+| Between 00:00 and 03:00 MSK the server's "today" is still yesterday | KI-03 (fixed; delete once the deployment sets `THINGS_TIMEZONE=Europe/Moscow`) |
 | `deadline = 4001-01-01` means "no deadline" | KI-04 |
 | Don't trust `status` in lists; filter `status == "open"` yourself | KI-05 |
 | Create → list → edit one by one; batch update fails on the first unsynced ID | KI-06 |
@@ -235,8 +235,8 @@ workaround can be deleted.
 
 ### KI-02 · View classification does not match Things
 - **Status:** in-progress — PR #1 (`f79b05e`) implements the things.py rules in SQL on
-  `main`; remaining: owner timezone (KI-03), `dds`, This Evening, projects in Today,
-  template hiding, conformance harness. Since the upstream SDK migration the rules live
+  `main`; the classifier compares civil dates in the owner's timezone (KI-03);
+  remaining: `dds`, This Evening, projects in Today, template hiding, conformance harness. Since the upstream SDK migration the rules live
   in `server/views.go` over SDK `State.AllTasks` (SDK `TasksIn*` are not used, spike
   report §4 B3); `tir` is not mirrored, so a to-do placed in Today only through `tir` is
   listed in Anytime, and a deferred one with a future `tir` and no start date in Someday ·
@@ -265,7 +265,9 @@ workaround can be deleted.
   database.
 
 ### KI-03 · "Today" is computed in UTC
-- **Status:** open · **Evidence:** confirmed
+- **Status:** fixed (branch `KI-03-owner-timezone`) for deployments that set
+  `THINGS_TIMEZONE`; unset, the server keeps the UTC day and warns at startup ·
+  **Evidence:** confirmed
 - **Symptom:** for a user in Moscow (UTC+3), between 00:00 and 03:00 local time the
   server still thinks it is yesterday: Today shows yesterday's list, `when: "today"`
   writes yesterday's date, `deadline` validation rejects "today" as past.
@@ -277,6 +279,17 @@ workaround can be deleted.
   migration also `sync/state.go` and `sync/detect.go`.
 - **Fix direction:** ADR-0003. Configurable IANA timezone, a `Clock` interface, and a
   civil-date type for every day-precision value.
+- **Fix:** `THINGS_TIMEZONE` (IANA name, checked at startup, zone data built in) and
+  `domain/civil` (`Date`, `Clock`, `Today`, wire encoding as midnight UTC).
+  `ownerToday()` (`server/today.go`) is taken once per request: the view classifier
+  compares `sr`/`dd` as civil dates, `when` (`today`, `YYYY-MM-DD`), `things_move_to_today`
+  and the deadline check use the owner's day, and `completed_after`/`completed_before`
+  dates start at the owner's midnight. Tests: `TestToday_KI03`, `TestParseWhen_KI03_OwnerDay`,
+  `TestParseDeadline_KI03_OwnerDay`, `TestViews_KI03_OwnerDay`.
+- **Not done (ADR-0003 notes):** list responses do not report `today` yet (output shape,
+  ADR-0006); the sandbox harness leaves `THINGS_TIMEZONE` unset and keeps its UTC
+  midnight window and `itemCivilToday` — they could follow a configured zone
+  (follow-up); `buildRepeatRule` is unwired and untouched (KI-01).
 
 ### KI-04 · Year-4001 sentinel leaks out as a real date
 - **Status:** fixed in tool output (PR #1); normalising at ingestion still recommended ·

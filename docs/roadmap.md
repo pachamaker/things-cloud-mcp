@@ -56,7 +56,7 @@ workarounds.
 
 | Item | Refs | Size |
 |---|---|---|
-| `THINGS_TIMEZONE`, `domain/civil` (Date, Clock), migrate all date logic | KI-03, ADR-0003 | M |
+| ~~`THINGS_TIMEZONE`, `domain/civil` (Date, Clock), migrate all date logic~~ (done on `KI-03-owner-timezone`; `today` in list output and the harness's zone remain, ADR-0003 notes) | KI-03, ADR-0003 | M |
 | Normalise year ≥ 4000 sentinels to null at ingestion | KI-04 | S |
 | Persist `rr`, `rt`, `sb`, `dds`, `tir` in the mirror: upstream SDK PR with a `TaskReplayVersion` bump, or a `replace` soft fork (spike report §4 B4) | KI-01, KI-02, ADR-0001 | M |
 | Move the classifier from `server/views.go` to `domain/view`; extend it once B4 fields exist (evening, `dds`, templates, projects in Today) | KI-02, KI-05, ADR-0005 | M |

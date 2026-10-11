@@ -62,7 +62,7 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `things_list_today` | Today view: start date today or earlier (overdue and scheduled-date-arrived to-dos), placed in Today, or no start date with a deadline today or earlier; "today" is the server's UTC day | `limit`, `offset` |
+| `things_list_today` | Today view: start date today or earlier (overdue and scheduled-date-arrived to-dos), placed in Today, or no start date with a deadline today or earlier; "today" is the day in `THINGS_TIMEZONE` (UTC if unset) | `limit`, `offset` |
 | `things_list_inbox` | Tasks in the inbox | `limit`, `offset` |
 | `things_list_anytime` | Tasks in Anytime | `limit`, `offset` |
 | `things_list_someday` | Tasks in Someday (deferred, no start date) | `limit`, `offset` |
@@ -244,6 +244,7 @@ go build -v -o things-server ./server/
 export THINGS_USERNAME='...' THINGS_PASSWORD='...'   # sandbox account, never your real one
 export DATA_DIR="$PWD/.data"   # SQLite cache things-upstream.db; default /data
 export ENABLE_WRITES=true      # write tools are off unless this is true
+export THINGS_TIMEZONE=Europe/Moscow   # owner's IANA zone; "today" is the UTC day if unset
 ./things-server
 
 go test -race ./...

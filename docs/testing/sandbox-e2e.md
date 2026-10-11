@@ -57,8 +57,8 @@ send a write the official apps might choke on (rule 2). Layers, in the order the
    that outlasts the retries, or one on a commit (never retried), stops the run; cleanup
    then waits a minute first. Each CI step is a new process with a full initial sync, so
    the step after a long run can start rate-limited (KI-27).
-7. **Time.** The server's "today" is the UTC day (KI-03), so the harness skips itself
-   within 15 minutes of 00:00 UTC. With `THINGS_E2E_REQUIRE_RUN` set (CI sets it) this
+7. **Time.** The harness leaves `THINGS_TIMEZONE` unset, so the server's "today" is the
+   UTC day (ADR-0003), and the harness skips itself within 15 minutes of 00:00 UTC. With `THINGS_E2E_REQUIRE_RUN` set (CI sets it) this
    and the missing-credentials skip fail the test instead: a skipped run passes in
    GitHub and would look green without touching the account.
 8. **Public logs.** CI logs of this public repository are readable by anyone, and GitHub
@@ -239,7 +239,8 @@ ignores. Check `git ls-files .github` before committing.
 - It proves that Things Cloud accepts the writes and that the SDK reads them back as
   intended — not that the Things apps render them correctly. After a run that exercised
   a new or changed write, open Things on Mac and iOS (ADR-0004 round trip).
-- "Today" is the UTC day (KI-03); dates in assertions follow the server.
+- "Today" is the UTC day: the harness does not set `THINGS_TIMEZONE`, so the owner's-zone
+  paths (KI-03) are covered only by unit tests; dates in assertions follow the server.
 - Not exercised because the write is not verified: `things_edit_task` with `when: "none"`
   (writes `sr`/`tir` without `st`; the firewall would refuse it), This Evening,
   reminders, reordering, deleting areas and tags, and anything recurring.

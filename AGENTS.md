@@ -45,8 +45,10 @@ feature unimplemented.
 6. **Never log secrets or personal data:** Things password, `Authorization` headers,
    OAuth tokens, API keys, full task notes. Debug dumps must redact them.
 7. **Calendar dates are civil dates in the owner's timezone.** Do not call
-   `time.Now()` or `.UTC()` to decide "today" in new code; use the clock and timezone
-   from config (ADR-0003). Until ADR-0003 lands, do not add new UTC-based date logic.
+   `time.Now()` or `.UTC()` to decide "today": take `ownerToday()` (`server/today.go`)
+   once per request and pass the `civil.Date` down; parse, compare and encode day
+   values with `domain/civil` (ADR-0003). Pure date logic takes `today` or a
+   `civil.Clock` as a parameter, never the wall clock.
 8. **Do not copy or patch SDK code in this repo.** The SDK is the
    `github.com/arthursoares/things-cloud-sdk` dependency, pinned in `go.mod`; generic
    fixes go upstream as PRs, or through a `replace` soft fork (ADR-0001). Upgrades go
@@ -55,9 +57,9 @@ feature unimplemented.
    without an explicit instruction.
 
 **Current top risks** (read before touching sync or writes): KI-01 (recurrence), KI-07
-(no auth on `/mcp`), KI-03 ("today" is the UTC day). KI-25 (`Task7`) is fixed by the
-upstream SDK; an unknown task kind now stops the sync with an error instead of being
-skipped.
+(no auth on `/mcp`). KI-03 ("today" is the UTC day) is fixed when `THINGS_TIMEZONE` is
+set; unset, the server keeps the UTC day. KI-25 (`Task7`) is fixed by the upstream SDK;
+an unknown task kind now stops the sync with an error instead of being skipped.
 
 ## 3. Before you start a task
 
@@ -98,6 +100,7 @@ Run the server locally **against the sandbox account only**:
 export THINGS_USERNAME="$THINGS_SANDBOX_USERNAME" THINGS_PASSWORD="$THINGS_SANDBOX_PASSWORD"
 export DATA_DIR="$PWD/.data"            # empty directory; the cache is $DATA_DIR/things-upstream.db
 export ENABLE_WRITES=true               # writes are off by default
+export THINGS_TIMEZONE=Europe/Moscow    # "today" is the UTC day if unset
 go run ./server
 ```
 
@@ -153,8 +156,9 @@ Configuration (environment variables):
 | `PORT` | no | Listen port, default `8080` |
 | `ENABLE_WRITES` | no | `true` registers the write tools and REST write endpoints. Unset or `false`: read-only, the write tools are not even listed (ADR-0004). Any other value stops the server at startup |
 | `DATA_DIR` | no | Directory of the SQLite cache `things-upstream.db`, default `/data` (created with mode 0700). The cache is disposable: delete the file to force a full resync |
+| `THINGS_TIMEZONE` | no (set it) | Owner's IANA zone, e.g. `Europe/Moscow`: decides "today" for views, `when`, deadlines and `completed_*` dates (ADR-0003). Unset: the UTC day, with a startup warning. An unknown name or `Local` stops the server at startup. Zone data is built in |
 
-Planned: `THINGS_TIMEZONE` (ADR-0003), OAuth settings (ADR-0002).
+Planned: OAuth settings (ADR-0002).
 
 Baseline: CI (`.github/workflows/ci.yml`) runs `go mod tidy -diff`, build, vet,
 `go test -race ./...` and `govulncheck` on Go 1.26.9 for every pull request and push to
@@ -170,6 +174,8 @@ failures.
 | `server/write.go` | Write commands, wire payload builders, ID generator, `historyWrite` | live |
 | `server/readmodel.go` | Read model over the SDK `State`: pagination, open-list filtering, completed range | live |
 | `server/views.go` | View classifier (Inbox/Today/Anytime/Someday/Upcoming), ADR-0005 | live |
+| `server/today.go` | `THINGS_TIMEZONE`, `ownerToday()` (ADR-0003) | live |
+| `domain/civil` | Civil date, clock, wire encoding of day values, zone loading (ADR-0003) | live |
 | `server/syncgate.go` | Serialises and coalesces syncs, 429 backoff | live |
 | `server/sandbox_*_test.go` | Sandbox e2e harness (tag `e2e`) and its pure rules (untagged, unit-tested) | sandbox only |
 | `tests/` | Shell e2e scripts against a running server (superseded by the Go harness) | sandbox only |
@@ -207,7 +213,7 @@ Details and target architecture: `docs/architecture.md`.
 | To-do / Project / Heading | `Task6`/`Task7` with `tp` = 0 / 1 / 2 | the server reads both and writes `Task6` |
 | Status | `ss`: 0 open, 2 canceled, 3 completed | `sp` = stop instant, never `0` |
 | Start state | `st`: 0 Inbox, 1 started, 2 deferred | |
-| Start date ("when") | `sr` (+ `tir` when placed in Today) | civil date as midnight UTC |
+| Start date ("when") | `sr` (+ `tir` when placed in Today) | civil date as midnight UTC (`civil.Date.Wire`) |
 | This Evening | `sb = 1` | not exposed yet |
 | Deadline | `dd`; suppressed overdue: `dds` | year 4001 = "never" (KI-04) |
 | Project / subtask parent | `pr` | heading membership in `agr` (KI-13) |
@@ -231,7 +237,7 @@ templates are not recognised yet (the SDK does not store `rr`/`rt`).
 | Create to-do (title, notes, when, deadline, project, parent, tags) | `things_create_task` | ✅ verified |
 | Edit title / notes / when / deadline / project / area / tags | `things_edit_task` | ✅ verified; to-dos only, target and references checked first (KI-10) |
 | Complete / reopen / trash / untrash to-do | `things_*_task` | ✅ verified |
-| Move to Today / Anytime / Someday / Inbox | `things_move_to_*` | ✅ verified (Today uses UTC date, KI-03) |
+| Move to Today / Anytime / Someday / Inbox | `things_move_to_*` | ✅ verified (Today is the owner's day, `THINGS_TIMEZONE`) |
 | Create project / area / tag / heading | `things_create_*` | ✅ create only |
 | Checklist add / complete / reopen / delete | `things_*_checklist_item` | ✅ verified |
 | Recurrence (`repeat`) | create/edit | ⛔ forbidden (KI-01) |
