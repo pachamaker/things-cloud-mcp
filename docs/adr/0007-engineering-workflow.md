@@ -20,8 +20,11 @@ Implemented so far: CI (`ci.yml`, PR #7 and #8), sandbox e2e harness and workflo
 ### Branching and review
 - `main` is protected and always green. Work happens on short-lived branches named
   `ki-NN-short-slug` or `feat-short-slug`; merge by PR.
-- PR description in Russian (maintainer convention), with a checklist: tests added,
-  docs updated, KI/ADR referenced, wire-format evidence attached if a write changed.
+- Commit messages, PR titles and PR descriptions in English (AGENTS.md §10), with a
+  checklist: tests added, docs updated, KI/ADR referenced, wire-format evidence attached
+  if a write changed.
+- Agents open the PR themselves as soon as the local checks pass (AGENTS.md §10);
+  merging stays with the owner.
 
 ### Test pyramid
 | Layer | What | Where | Runs |
