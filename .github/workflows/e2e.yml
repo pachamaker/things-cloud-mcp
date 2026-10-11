@@ -4,7 +4,7 @@
 # only, secrets THINGS_SANDBOX_USERNAME and THINGS_SANDBOX_PASSWORD).
 #
 # THINGS_E2E_REQUIRE_RUN makes a skipped test fail: GitHub counts skips as
-# passes, so a run near 00:00 UTC or without secrets would otherwise look green
+# passes, so a run near midnight or without secrets would otherwise look green
 # without touching the account (KI-34).
 #
 # Never add push, pull_request or pull_request_target triggers: the job runs
@@ -17,8 +17,9 @@ name: Sandbox e2e
 on:
   workflow_dispatch:
   schedule:
-    # Once a day, far from 00:00 UTC: the server's "today" is the UTC day
-    # (KI-03) and the harness skips itself near midnight.
+    # Once a day, far from 00:00 UTC: the job leaves THINGS_TIMEZONE unset, so
+    # the server's "today" is the UTC day, and the harness skips itself within
+    # 15 minutes of midnight in the server's zone.
     - cron: "17 3 * * *"
 
 permissions:

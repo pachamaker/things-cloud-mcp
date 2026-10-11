@@ -57,10 +57,14 @@ send a write the official apps might choke on (rule 2). Layers, in the order the
    that outlasts the retries, or one on a commit (never retried), stops the run; cleanup
    then waits a minute first. Each CI step is a new process with a full initial sync, so
    the step after a long run can start rate-limited (KI-27).
-7. **Time.** The harness leaves `THINGS_TIMEZONE` unset, so the server's "today" is the
-   UTC day (ADR-0003), and the harness skips itself within 15 minutes of 00:00 UTC. With `THINGS_E2E_REQUIRE_RUN` set (CI sets it) this
-   and the missing-credentials skip fail the test instead: a skipped run passes in
-   GitHub and would look green without touching the account.
+7. **Time.** The harness reads `THINGS_TIMEZONE` from its environment the way the
+   server does (ADR-0003): an IANA name makes the server's "today" that zone's day,
+   unset keeps the UTC day, an unknown name fails the test. It skips itself within
+   15 minutes of midnight in that zone, where a run could straddle two days, and the
+   wire check takes the day of each write from its `md`/`cd` instant in the same zone.
+   With `THINGS_E2E_REQUIRE_RUN` set (CI sets it) this and the missing-credentials skip
+   fail the test instead: a skipped run passes in GitHub and would look green without
+   touching the account.
 8. **Public logs.** CI logs of this public repository are readable by anyone, and GitHub
    masks only exact secret values. The harness prints UUIDs, field names, statuses,
    dates, entity kinds and its own strings (run-prefixed titles it wrote, seed titles from
@@ -141,6 +145,13 @@ go test -tags e2e -run '^TestSandboxSeedChecks$' -count=1 -v ./server
 go test -tags e2e -run '^TestSandboxCleanupLeftovers$' -count=1 -v ./server
 ```
 
+To run in the owner's zone, as the deployment does, add `THINGS_TIMEZONE` to the
+environment (not to the sandbox env file, which holds credentials only):
+
+```bash
+export THINGS_TIMEZONE=Europe/Moscow
+```
+
 `-count=1` defeats the test cache. Run one test at a time and never two runs on the same
 account at once. A full `TestSandboxE2E` run makes roughly 250 Things Cloud requests and
 takes about five minutes at the default throttle.
@@ -162,6 +173,11 @@ concurrency group `things-sandbox` (one run at a time, none cancelled), and pass
 secrets only to the steps that run tests. Steps: the offline self-test (no secrets),
 `TestSandboxE2E`, `TestSandboxSeedChecks`, then a cleanup of the run's own objects that
 runs after failures and cancellations too.
+
+The workflow does not set `THINGS_TIMEZONE`, so CI runs on the UTC day and skips near
+00:00 UTC; the nightly 03:17 UTC run is far from it. To exercise the owner's zone in
+CI, add `THINGS_TIMEZONE: Europe/Moscow` (not a secret) to the job's `env` in `e2e.yml`
+and keep the schedule away from midnight in that zone (03:17 UTC is 06:17 in Moscow).
 
 One-time setup by the owner:
 
@@ -239,8 +255,9 @@ ignores. Check `git ls-files .github` before committing.
 - It proves that Things Cloud accepts the writes and that the SDK reads them back as
   intended — not that the Things apps render them correctly. After a run that exercised
   a new or changed write, open Things on Mac and iOS (ADR-0004 round trip).
-- "Today" is the UTC day: the harness does not set `THINGS_TIMEZONE`, so the owner's-zone
-  paths (KI-03) are covered only by unit tests; dates in assertions follow the server.
+- One zone per run: the one in `THINGS_TIMEZONE`, or UTC. The owner's-zone paths
+  (KI-03) run end to end only when it is set, which CI does not do; otherwise unit tests
+  cover them. Dates in assertions follow the server's day.
 - Not exercised because the write is not verified: `things_edit_task` with `when: "none"`
   (writes `sr`/`tir` without `st`; the firewall would refuse it), This Evening,
   reminders, reordering, deleting areas and tags, and anything recurring.
