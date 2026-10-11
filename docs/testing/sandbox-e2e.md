@@ -9,6 +9,7 @@ history. Tracking issue: KI-34. Layer "Sandbox e2e" of the test pyramid in ADR-0
 |---|---|
 | `server/sandbox_e2e_test.go` | `TestSandboxE2E`, `TestSandboxSeedChecks`, `TestSandboxCleanupLeftovers` (build tag `e2e`) |
 | `server/sandbox_harness_e2e_test.go` | Harness: server start, throttled transport, write firewall, 409 injection, observer client, cleanup (tag `e2e`) |
+| `server/sandbox_capture_e2e_test.go` | `TestSandboxRecurrenceCapture`: read-only, writes a sanitized capture of what the Things apps wrote for the repeating seeds (tag `e2e`, see "Capturing the apps' writes") |
 | `server/sandbox_rules_test.go` | Pure rules (account guard, wire rules, firewall, env file); no tag, unit-tested by `go test ./...` |
 | `server/sandbox_fakecloud_e2e_test.go` | In-memory stand-in for Things Cloud for an offline self-test of the harness (tags `e2e fakecloud`) |
 | `.github/workflows/e2e.yml` | Manual and nightly CI run in the `things-sandbox` environment (see "CI") |
@@ -181,6 +182,23 @@ except loopback; proves harness logic only):
 go test -tags 'e2e fakecloud' -run '^TestSandbox' -count=1 ./server
 ```
 
+### Capturing the apps' writes
+
+`TestSandboxRecurrenceCapture` is read-only like the seed checks. It collects every
+history item of the repeating seeds (12, 13): the templates, the instances generated
+from them (`rt`), and checklist items, subtasks and tombstones of either, sanitizes them
+(only seed titles, IDs of seeds and captured objects, numbers, booleans and type tags
+survive; the rest is replaced and listed) and writes the fixture to the file named by
+`THINGS_E2E_CAPTURE_OUT` (default: the test's temp directory). Its log carries UUIDs,
+indexes and key names only. Run it after doing something new to the repeating seeds in
+the Things app, review the file, and commit it as
+`testdata/captures/<feature>-<date>.json` with a line in `testdata/captures/README.md`
+(`docs/protocol/things-cloud.md` §8):
+
+```bash
+THINGS_E2E_CAPTURE_OUT="$PWD/testdata/captures/recurrence-seeds-$(date +%F).json" go test -tags e2e -run '^TestSandboxRecurrenceCapture$' -count=1 -v ./server
+```
+
 ## CI (GitHub Actions)
 
 `.github/workflows/e2e.yml` runs on `workflow_dispatch` and nightly at 03:17 UTC, never
@@ -232,7 +250,8 @@ ignores. Check `git ls-files .github` before committing.
 - **At most once a day**, the nightly workflow included. Each run costs ~250 requests to a
   service that rate-limits (KI-27) and leaves one area and one tag behind.
 - `TestSandboxSeedChecks` is read-only; run it after SDK upgrades and changes to reading
-  or view classification.
+  or view classification. `TestSandboxRecurrenceCapture` is read-only too; run it when a
+  new capture is needed.
 - `TestSandboxCleanupLeftovers` only when a run was killed or its cleanup reported errors.
 - Every few weeks, delete the `[e2e-…]` areas and tags in the Things app: the server has
   no verified write to delete them (cleanup lists them).
