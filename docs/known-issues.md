@@ -340,8 +340,10 @@ workaround can be deleted.
   `"unknown"` and are logged.
 
 ### KI-13 · Tasks under headings are missing from project listings
-- **Status:** fixed (branch `read-fixes-KI-04-KI-13`) · **Evidence:** likely; the
-  sandbox seed check now fails if `SEED under heading` is missing from its project
+- **Status:** fixed (branch `read-fixes-KI-04-KI-13`) · **Evidence:** confirmed on the
+  sandbox account (e2e run 38139217523 on `main`, 2026-10-11: `SEED under heading`
+  missing from its project); the fix is checked offline only so far. The seed check now
+  fails if the to-do is missing
 - **Root cause:** SDK `State.TasksInProject` filters on `project_uuid`. In
   Things, a task placed under a heading carries the heading in `agr` and usually no
   `pr`; its project is the heading's project.
