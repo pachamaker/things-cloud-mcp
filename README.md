@@ -73,7 +73,7 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 | `things_list_projects` | All projects | `limit`, `offset` |
 | `things_list_areas` | All areas | `limit`, `offset` |
 | `things_list_tags` | All tags | `limit`, `offset` |
-| `things_list_project_tasks` | Tasks in a project | `project_uuid`, `limit`, `offset` |
+| `things_list_project_tasks` | To-dos in a project, those under its headings included: first the to-dos directly in the project, then each heading's in heading order; to-dos under a heading carry `heading_id` and `heading_title` | `project_uuid`, `limit`, `offset` |
 | `things_list_area_tasks` | Tasks in an area | `area_uuid`, `limit`, `offset` |
 | `things_list_completed` | Recently completed tasks | `limit`, `completed_after`, `completed_before` |
 | `things_list_checklist_items` | Checklist items for a task | `task_uuid` |

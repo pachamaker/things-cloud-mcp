@@ -30,6 +30,8 @@ type taskOutput struct {
 	Deadline     string   `json:"deadline,omitempty"`
 	ScheduledFor string   `json:"scheduled_for,omitempty"`
 	ProjectID    string   `json:"project_id,omitempty"`
+	HeadingID    string   `json:"heading_id,omitempty"`
+	HeadingTitle string   `json:"heading_title,omitempty"`
 	AreaID       string   `json:"area_id,omitempty"`
 	Tags         []string `json:"tags,omitempty"`
 }
@@ -90,6 +92,9 @@ func formatTask(t *things.Task) taskOutput {
 	if len(t.ParentTaskIDs) > 0 {
 		o.ProjectID = t.ParentTaskIDs[0]
 	}
+	if len(t.ActionGroupIDs) > 0 {
+		o.HeadingID = t.ActionGroupIDs[0]
+	}
 	if len(t.AreaIDs) > 0 {
 		o.AreaID = t.AreaIDs[0]
 	}
@@ -120,6 +125,21 @@ func tasksResult(tasks []*things.Task) *mcp.CallToolResult {
 	outputs := make([]taskOutput, len(tasks))
 	for i, t := range tasks {
 		outputs[i] = formatTask(t)
+	}
+	return jsonToolResultWithIndent(outputs, true)
+}
+
+// projectTasksResult names each to-do's heading, so the model can group a
+// project without another call (KI-13).
+func projectTasksResult(tasks, headings []*things.Task) *mcp.CallToolResult {
+	titles := make(map[string]string, len(headings))
+	for _, h := range headings {
+		titles[h.UUID] = h.Title
+	}
+	outputs := make([]taskOutput, len(tasks))
+	for i, t := range tasks {
+		outputs[i] = formatTask(t)
+		outputs[i].HeadingTitle = titles[outputs[i].HeadingID]
 	}
 	return jsonToolResultWithIndent(outputs, true)
 }
@@ -352,11 +372,11 @@ func mcpListProjectTasks(_ context.Context, req mcp.CallToolRequest) (*mcp.CallT
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	tasks, err := readState().TasksInProject(projectUUID, opts)
+	tasks, headings, err := readState().TasksInProject(projectUUID, opts)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return tasksResult(tasks), nil
+	return projectTasksResult(tasks, headings), nil
 }
 
 func mcpListAreaTasks(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -887,7 +907,7 @@ func newMCPHandler(writes bool) http.Handler {
 	), mcpListAllTasks)
 
 	s.AddTool(mcp.NewTool("things_list_project_tasks",
-		mcp.WithDescription("List tasks in a specific Things project"),
+		mcp.WithDescription("List to-dos in a specific Things project, including those under its headings: first the to-dos directly in the project, then each heading's to-dos in heading order. To-dos under a heading carry heading_id and heading_title."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uuid",
 			mcp.Required(),

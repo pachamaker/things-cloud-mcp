@@ -26,6 +26,8 @@ type mirrorReader interface {
 	AllTags() ([]*things.Tag, error)
 	TasksInProject(projectUUID string, opts sync.QueryOpts) ([]*things.Task, error)
 	TasksInArea(areaUUID string, opts sync.QueryOpts) ([]*things.Task, error)
+	HeadingsInProject(projectUUID string, opts sync.QueryOpts) ([]*things.Task, error)
+	TasksUnderHeading(headingUUID string, opts sync.QueryOpts) ([]*things.Task, error)
 }
 
 // readModel wraps the SDK state with the list queries the server exposes.
@@ -166,9 +168,46 @@ func (r readModel) TasksInUpcoming(opts listOpts) ([]*things.Task, error) {
 	return r.tasksInView(viewUpcoming, opts)
 }
 
-func (r readModel) TasksInProject(projectUUID string, opts listOpts) ([]*things.Task, error) {
-	tasks, err := withoutSentinels(r.mirror.TasksInProject(projectUUID, opts.QueryOpts))
-	return openList(tasks, err, opts)
+// TasksInProject lists a project's to-dos as Things groups them: those directly
+// in the project, then each heading's to-dos in heading order, each group by
+// index. A to-do under a heading carries it in agr and usually no pr, so the
+// SDK's TasksInProject misses it (KI-13). headings are all the project's
+// headings, for their titles.
+func (r readModel) TasksInProject(projectUUID string, opts listOpts) (tasks, headings []*things.Task, err error) {
+	headings, err = r.mirror.HeadingsInProject(projectUUID, sync.QueryOpts{IncludeCompleted: true, IncludeTrashed: true})
+	if err != nil {
+		return nil, nil, err
+	}
+	ofProject := make(map[string]bool, len(headings))
+	for _, h := range headings {
+		ofProject[h.UUID] = true
+	}
+	direct, err := r.mirror.TasksInProject(projectUUID, opts.QueryOpts)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, t := range direct {
+		if len(t.ActionGroupIDs) == 0 || !ofProject[t.ActionGroupIDs[0]] {
+			tasks = append(tasks, t)
+		}
+	}
+	for _, h := range headings {
+		// A trashed heading's to-dos count as trashed with it; whether Things
+		// also sets their tr is not verified.
+		if h.InTrash && !opts.IncludeTrashed {
+			continue
+		}
+		under, err := r.mirror.TasksUnderHeading(h.UUID, opts.QueryOpts)
+		if err != nil {
+			return nil, nil, err
+		}
+		tasks = append(tasks, under...)
+	}
+	for _, t := range tasks {
+		clearSentinels(t)
+	}
+	tasks, err = openList(tasks, nil, opts)
+	return tasks, headings, err
 }
 
 func (r readModel) TasksInArea(areaUUID string, opts listOpts) ([]*things.Task, error) {

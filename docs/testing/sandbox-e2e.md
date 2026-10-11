@@ -117,7 +117,7 @@ Unless stated otherwise, put each to-do in the area `MCP E2E SANDBOX` with no da
 | 8 | To-do tagged `SEED tag` | `SEED tagged` | its `tags` contain the tag |
 | 9 | Project in the area, with heading `SEED heading` | `SEED project` | listed by `things_list_projects` |
 | 10 | To-do directly in `SEED project` | `SEED in project` | in `things_list_project_tasks` |
-| 11 | To-do under heading `SEED heading` | `SEED under heading` | logged as KNOWN ISSUE KI-13 while it is missing from the project list |
+| 11 | To-do under heading `SEED heading` | `SEED under heading` | in `things_list_project_tasks` for `SEED project` (KI-13) |
 | 12 | Repeating to-do, every week, fixed schedule | `SEED repeat weekly` | template with `rr.fu = 256`, `rr.tp = 0`; generated instances are counted |
 | 13 | Repeating to-do, every month, after completion | `SEED repeat monthly after completion` | template with `rr.fu = 8`, `rr.tp = 1` |
 | 14 | To-do, then complete it | `SEED completed` | in `things_list_completed`; in no open list |

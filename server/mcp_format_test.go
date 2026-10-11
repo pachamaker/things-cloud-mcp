@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mark3labs/mcp-go/mcp"
+
 	things "github.com/arthursoares/things-cloud-sdk"
 )
 
@@ -142,5 +144,39 @@ func TestFormatTask_KI04_NoSentinelDates(t *testing.T) {
 				t.Errorf("scheduled_for = %q, deadline = %q, want both empty", got.ScheduledFor, got.Deadline)
 			}
 		})
+	}
+}
+
+func TestProjectTasksResult_KI13_HeadingFields(t *testing.T) {
+	t.Parallel()
+
+	tasks := []*things.Task{
+		{UUID: "direct", Type: things.TaskTypeTask, ParentTaskIDs: []string{"p"}},
+		{UUID: "under", Type: things.TaskTypeTask, ActionGroupIDs: []string{"h1"}},
+	}
+	headings := []*things.Task{{UUID: "h1", Title: "Errands", Type: things.TaskTypeHeading}}
+
+	res := projectTasksResult(tasks, headings)
+	if res.IsError {
+		t.Fatalf("result is an error: %+v", res)
+	}
+	var got []map[string]any
+	if err := json.Unmarshal([]byte(res.Content[0].(mcp.TextContent).Text), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d tasks, want 2", len(got))
+	}
+	if _, ok := got[0]["heading_id"]; ok {
+		t.Errorf("direct to-do has heading_id %v", got[0]["heading_id"])
+	}
+	if _, ok := got[0]["heading_title"]; ok {
+		t.Errorf("direct to-do has heading_title %v", got[0]["heading_title"])
+	}
+	if got[1]["heading_id"] != "h1" || got[1]["heading_title"] != "Errands" {
+		t.Errorf("under heading: heading_id = %v, heading_title = %v, want h1, Errands", got[1]["heading_id"], got[1]["heading_title"])
+	}
+	if got[0]["project_id"] != "p" {
+		t.Errorf("direct to-do project_id = %v, want p", got[0]["project_id"])
 	}
 }

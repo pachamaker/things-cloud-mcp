@@ -340,16 +340,33 @@ workaround can be deleted.
   `"unknown"` and are logged.
 
 ### KI-13 · Tasks under headings are missing from project listings
-- **Status:** open · **Evidence:** likely
+- **Status:** fixed (branch `read-fixes-KI-04-KI-13`) · **Evidence:** likely; the
+  sandbox seed check now fails if `SEED under heading` is missing from its project
 - **Root cause:** SDK `State.TasksInProject` filters on `project_uuid`. In
   Things, a task placed under a heading carries the heading in `agr` and usually no
   `pr`; its project is the heading's project.
-- **Fix direction:** resolve the project through the heading (`heading_uuid →
-  tasks.project_uuid`); return heading grouping in the output. The SDK already offers
-  `HeadingsInProject` and `TasksUnderHeading`.
+- **Fix:** `readModel.TasksInProject` (`server/readmodel.go`) lists the to-dos directly
+  in the project (SDK `TasksInProject`), then, for each of the project's headings in
+  heading order (SDK `HeadingsInProject`), its to-dos (SDK `TasksUnderHeading`); each
+  group keeps the SDK's index order. A to-do with both `pr` and `agr` is listed once,
+  under its heading. Open-list filtering (KI-05) and `limit`/`offset` apply to the
+  merged list. Every task output now carries `heading_id`; `things_list_project_tasks`
+  adds `heading_title`. Tests: `TestReadModel_KI13_ProjectIncludesHeadings`,
+  `TestReadModel_KI13_ProjectHeadings`, `TestProjectTasksResult_KI13_HeadingFields`;
+  the offline harness self-test checks `SEED under heading` against the SDK's SQLite
+  mirror.
+- **SDK limitations:** `HeadingsInProject` applies the to-do status/trash filters to
+  the headings themselves, so the server asks for all headings and lets each to-do's
+  own status decide (an archived heading does not hide an open to-do). Whether Things
+  also sets `tr` on the to-dos of a trashed heading is not verified; the server treats
+  them as trashed with it. One query per heading, on top of the SDK's query per row.
+- **Not done:** `project_id` stays the to-do's own `pr`, so it is empty for a to-do
+  under a heading (name-resolved project and heading: ADR-0006); `things_list_area_tasks`
+  and the view classifier do not resolve projects through headings.
 
 ### KI-14 · Output hides what the model needs; IDs instead of names
-- **Status:** open · **Evidence:** confirmed (`server/mcp.go:22-100`)
+- **Status:** open (`heading_id` in every task output and `heading_title` in project
+  listings since KI-13) · **Evidence:** confirmed (`server/mcp.go:22-100`)
 - **Symptom:** the model must make extra calls to turn `project_id`/`area_id`/tag UUIDs
   into names; it cannot see which view a task is in, whether it is in This Evening,
   under which heading, whether it repeats, or how many checklist items it has.
