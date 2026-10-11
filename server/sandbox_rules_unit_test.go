@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -546,6 +547,193 @@ func TestFoldHistory(t *testing.T) {
 	}
 	if isJSONNull(e.Fields["rr"]) {
 		t.Fatal("rr lost while folding")
+	}
+}
+
+func rawObject(t *testing.T, s string) map[string]json.RawMessage {
+	t.Helper()
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(s), &m); err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+func foldedOf(t *testing.T, uuid, kind, payload string) *foldedEntity {
+	t.Helper()
+	return &foldedEntity{UUID: uuid, Kinds: map[string]bool{kind: true}, Fields: rawObject(t, payload)}
+}
+
+func TestFoldHistoryWithDeleted_KI34(t *testing.T) {
+	t.Parallel()
+
+	items := []wireItem{
+		{UUID: "A", Action: 0, Kind: "Tag4", Payload: rawObject(t, `{"tt":"SEED tag"}`)},
+		{UUID: "B", Action: 0, Kind: "Tag4", Payload: rawObject(t, `{"tt":"SEED tag"}`)},
+		{UUID: "Z", Action: 0, Kind: "Tombstone2", Payload: rawObject(t, `{"dloid":"A"}`)},
+		{UUID: "B", Action: 2, Kind: "Tag4", Payload: rawObject(t, `{}`)},
+		{UUID: "C", Action: 0, Kind: "Tag4", Payload: rawObject(t, `{"tt":"first"}`)},
+		{UUID: "C", Action: 2, Kind: "Tag4", Payload: rawObject(t, `{}`)},
+		{UUID: "C", Action: 0, Kind: "Tag4", Payload: rawObject(t, `{"tt":"again"}`)},
+	}
+	live, deleted := foldHistoryWithDeleted(items)
+	for _, id := range []string{"A", "B"} {
+		if live[id] != nil {
+			t.Errorf("deleted %s is still live", id)
+		}
+		if e := deleted[id]; e == nil || e.title() != "SEED tag" || !e.Kinds["Tag4"] {
+			t.Errorf("deleted[%s] = %+v, want its state before the deletion", id, e)
+		}
+	}
+	if e := live["C"]; e == nil || e.title() != "again" {
+		t.Errorf("recreated C = %+v", e)
+	}
+	if deleted["C"] != nil {
+		t.Error("recreated C is still listed as deleted")
+	}
+	if live["Z"] != nil || deleted["Z"] != nil {
+		t.Error("the tombstone itself was folded")
+	}
+	if got := foldHistory(items); len(got) != 1 || got["C"] == nil {
+		t.Errorf("foldHistory = %v, want only C", sortedKeys(got))
+	}
+}
+
+func TestSeedCandidates_KI34(t *testing.T) {
+	t.Parallel()
+
+	folded := map[string]*foldedEntity{}
+	for _, e := range []*foldedEntity{
+		foldedOf(t, "tag2", "Tag4", `{"tt":"SEED tag"}`),
+		foldedOf(t, "tag1", "Tag3", `{"tt":"SEED tag"}`),
+		foldedOf(t, "area", "Area3", `{"tt":"SEED tag"}`),
+		foldedOf(t, "check", "ChecklistItem3", `{"tt":"SEED tag"}`),
+		foldedOf(t, "task", "Task7", `{"tt":"SEED tag"}`),
+		foldedOf(t, "todo", "Task7", `{"tt":"SEED tagged","tr":false}`),
+		foldedOf(t, "trashed", "Task7", `{"tt":"SEED tagged","tr":true}`),
+		foldedOf(t, "other", "Tag4", `{"tt":"SEED tag "}`),
+	} {
+		folded[e.UUID] = e
+	}
+	all := func(*foldedEntity) bool { return true }
+	uuids := func(found []*foldedEntity) []string {
+		var out []string
+		for _, e := range found {
+			out = append(out, e.UUID)
+		}
+		return out
+	}
+
+	tests := []struct {
+		title, kindPrefix string
+		keep              func(*foldedEntity) bool
+		want              []string
+	}{
+		{"SEED tag", "Tag", all, []string{"tag1", "tag2"}},
+		{"SEED tag", "Area", all, []string{"area"}},
+		{"SEED tag", "Task", all, []string{"task"}},
+		{"SEED tagged", "Task", all, []string{"todo"}},
+		{"SEED tag", "Tag", func(e *foldedEntity) bool { return e.UUID != "tag1" }, []string{"tag2"}},
+		{"SEED missing", "Tag", all, nil},
+	}
+	for _, tt := range tests {
+		got := uuids(seedCandidates(folded, tt.title, tt.kindPrefix, tt.keep))
+		if !slices.Equal(got, tt.want) {
+			t.Errorf("seedCandidates(%q, %q) = %v, want %v", tt.title, tt.kindPrefix, got, tt.want)
+		}
+	}
+}
+
+func TestSeedTagProblem_KI34(t *testing.T) {
+	t.Parallel()
+
+	seedTag := foldedOf(t, "SeedTag", "Tag4", `{"tt":"SEED tag"}`)
+	secondSeedTag := foldedOf(t, "SeedTag2", "Tag4", `{"tt":"SEED tag"}`)
+	live := map[string]*foldedEntity{}
+	for _, e := range []*foldedEntity{
+		seedTag,
+		secondSeedTag,
+		foldedOf(t, "Other", "Tag4", `{"tt":"Errand"}`),
+		foldedOf(t, "Variant", "Tag4", `{"tt":"seed tag "}`),
+		foldedOf(t, "Area", "Area3", `{"tt":"Home"}`),
+	} {
+		live[e.UUID] = e
+	}
+	deleted := map[string]*foldedEntity{"Gone": foldedOf(t, "Gone", "Tag4", `{"tt":"SEED tag"}`)}
+	tagged := func(tg ...string) *foldedEntity {
+		raw, err := json.Marshal(tg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &foldedEntity{UUID: "Tagged", Kinds: map[string]bool{"Task7": true}, Fields: map[string]json.RawMessage{"tt": json.RawMessage(`"SEED tagged"`), "tg": raw}}
+	}
+	const fixHint = `docs/testing/sandbox-e2e.md, "Fixing seeds"`
+
+	tests := []struct {
+		name     string
+		server   []string
+		tagged   *foldedEntity
+		seeds    []*foldedEntity
+		want     []string
+		mustNot  []string
+		wantNone bool
+	}{
+		{name: "carries the seed tag", server: []string{"Other", "SeedTag"}, tagged: tagged("Other", "SeedTag"), seeds: []*foldedEntity{seedTag}, wantNone: true},
+		{name: "carries one of two seed tags", server: []string{"SeedTag2"}, tagged: tagged("SeedTag2"), seeds: []*foldedEntity{seedTag, secondSeedTag}, wantNone: true},
+		{
+			name: "deleted tag", server: []string{"Gone"}, tagged: tagged("Gone"), seeds: []*foldedEntity{seedTag},
+			want: []string{"SEED tagged does not carry SEED tag [SeedTag]", "tags as [Gone]", `Gone is a deleted Tag4 titled "SEED tag"`, fixHint},
+		},
+		{
+			name: "tag with another title", server: []string{"Other"}, tagged: tagged("Other"), seeds: []*foldedEntity{seedTag},
+			want: []string{"Other is a live Tag4 with another title (6 chars)", fixHint}, mustNot: []string{"Errand"},
+		},
+		{
+			name: "title differs in case and spaces", server: []string{"Variant"}, tagged: tagged("Variant"), seeds: []*foldedEntity{seedTag},
+			want: []string{`Variant is a live Tag4 whose title differs from "SEED tag" only in case or surrounding spaces`, fixHint},
+		},
+		{
+			name: "not a tag", server: []string{"Area"}, tagged: tagged("Area"), seeds: []*foldedEntity{seedTag},
+			want: []string{"Area is a live Area3, not a tag", fixHint}, mustNot: []string{"Home"},
+		},
+		{
+			name: "not in history", server: []string{"Nowhere"}, tagged: tagged("Nowhere"), seeds: []*foldedEntity{seedTag},
+			want: []string{"Nowhere is not in history", fixHint},
+		},
+		{
+			name: "no tags", server: nil, tagged: tagged(), seeds: []*foldedEntity{seedTag},
+			want: []string{"it has no tags", fixHint},
+		},
+		{
+			name: "order differs between server and history", server: []string{"Gone", "Other"}, tagged: tagged("Other", "Gone"), seeds: []*foldedEntity{seedTag},
+			want: []string{"Gone is a deleted Tag4", "Other is a live Tag4"}, mustNot: []string{"read bug"},
+		},
+		{
+			name: "server reads other tags than history holds", server: nil, tagged: tagged("SeedTag"), seeds: []*foldedEntity{seedTag},
+			want: []string{"history has tg [SeedTag]", "a read bug, not a seed problem"}, mustNot: []string{fixHint},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := seedTagProblem(tt.server, tt.tagged, tt.seeds, live, deleted)
+			if tt.wantNone {
+				if got != "" {
+					t.Fatalf("seedTagProblem = %q, want none", got)
+				}
+				return
+			}
+			for _, w := range tt.want {
+				if !strings.Contains(got, w) {
+					t.Errorf("seedTagProblem = %q, want it to contain %q", got, w)
+				}
+			}
+			for _, w := range tt.mustNot {
+				if strings.Contains(got, w) {
+					t.Errorf("seedTagProblem = %q, must not contain %q", got, w)
+				}
+			}
+		})
 	}
 }
 

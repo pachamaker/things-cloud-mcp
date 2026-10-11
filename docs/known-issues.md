@@ -443,8 +443,17 @@ workaround can be deleted.
   lifecycle, checklist, `repeat` rejection, reads, 409 retry, observer mirror, wire
   check, cleanup of 13 objects); the next two steps, `TestSandboxSeedChecks` and
   `TestSandboxCleanupLeftovers`, failed with `429 Too Many Requests` (KI-27): each starts
-  a fresh server with a full initial sync right after the previous one. The seed list
-  is not verified yet · **Evidence:** confirmed
+  a fresh server with a full initial sync right after the previous one. Runs
+  [38139037091](https://github.com/pachamaker/things-cloud-mcp/actions/runs/38139037091)
+  and [38139217523](https://github.com/pachamaker/things-cloud-mcp/actions/runs/38139217523)
+  (2026-10-11, `main` `d4f20fc`) reached the seed checks and failed only on `SEED tagged`:
+  its `tg` held `DB1Y39WquEtbCvrGVFH8qg`, not the one live tag titled `SEED tag`. The
+  harness reads `tg` exactly as the SDK does, so this is seed data, not a read bug; the
+  seed check now says what the to-do carries (a deleted tag, a tag with another title,
+  an unknown UUID) and how to fix it in the app (`docs/testing/sandbox-e2e.md`, "Fixing
+  seeds"), and looks seeds up by kind, so a checklist item or area named like a seed no
+  longer counts (branch `KI-34-seed-tag-report`). The seed list is not verified yet ·
+  **Evidence:** confirmed
 - **Symptom:** the only end-to-end checks were the shell scripts in `tests/`. They write
   into whatever account the server uses, cover part of the tools, check nothing on the
   wire, and leave areas and tags behind. A payload regression of the KI-01/KI-26/KI-31

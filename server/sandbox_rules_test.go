@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -724,27 +725,136 @@ func (e *foldedEntity) title() string {
 }
 
 func foldHistory(items []wireItem) map[string]*foldedEntity {
-	out := map[string]*foldedEntity{}
+	live, _ := foldHistoryWithDeleted(items)
+	return live
+}
+
+// foldHistoryWithDeleted also returns the last state of every object deleted
+// in history (action 2 or a Tombstone2) and not created again.
+func foldHistoryWithDeleted(items []wireItem) (live, deleted map[string]*foldedEntity) {
+	live, deleted = map[string]*foldedEntity{}, map[string]*foldedEntity{}
+	remove := func(uuid string) {
+		if e := live[uuid]; e != nil {
+			deleted[uuid] = e
+			delete(live, uuid)
+		}
+	}
 	for _, it := range items {
 		if it.Kind == "Tombstone2" {
 			if target, ok := jsonString(it.Payload["dloid"]); ok {
-				delete(out, target)
+				remove(target)
 			}
 			continue
 		}
 		if it.Action == 2 {
-			delete(out, it.UUID)
+			remove(it.UUID)
 			continue
 		}
-		e := out[it.UUID]
+		e := live[it.UUID]
 		if e == nil || it.Action == 0 {
 			e = &foldedEntity{UUID: it.UUID, Kinds: map[string]bool{}, Fields: map[string]json.RawMessage{}}
-			out[it.UUID] = e
+			live[it.UUID] = e
+			delete(deleted, it.UUID)
 		}
 		e.Kinds[it.Kind] = true
 		for k, val := range it.Payload {
 			e.Fields[k] = val
 		}
 	}
-	return out
+	return live, deleted
+}
+
+// hasKindPrefix reports whether any kind the entity was written as starts
+// with prefix: "Task" (Task6, Task7, …), "Area", "Tag".
+func hasKindPrefix(e *foldedEntity, prefix string) bool {
+	for k := range e.Kinds {
+		if strings.HasPrefix(k, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// seedCandidates returns the live, untrashed entities titled exactly title
+// whose kind starts with kindPrefix and that keep accepts, sorted by UUID.
+// The kind keeps a checklist item or an area named like a tag seed out.
+func seedCandidates(folded map[string]*foldedEntity, title, kindPrefix string, keep func(*foldedEntity) bool) []*foldedEntity {
+	var found []*foldedEntity
+	for _, e := range folded {
+		if e.title() == title && hasKindPrefix(e, kindPrefix) && string(e.Fields["tr"]) != "true" && keep(e) {
+			found = append(found, e)
+		}
+	}
+	sort.Slice(found, func(i, j int) bool { return found[i].UUID < found[j].UUID })
+	return found
+}
+
+// seedTagProblem says why the to-do SEED tagged does not carry a SEED tag
+// seed, or returns "" when it carries one. serverTags are its tags as
+// things_get_task reads them. The message names UUIDs, kinds and title
+// lengths only: CI logs are public (docs/testing/sandbox-e2e.md).
+func seedTagProblem(serverTags []string, tagged *foldedEntity, seedTags []*foldedEntity, live, deleted map[string]*foldedEntity) string {
+	var seedIDs []string
+	for _, e := range seedTags {
+		if slices.Contains(serverTags, e.UUID) {
+			return ""
+		}
+		seedIDs = append(seedIDs, e.UUID)
+	}
+	var historyTags []string
+	if raw := tagged.Fields["tg"]; !isJSONNull(raw) {
+		if err := json.Unmarshal(raw, &historyTags); err != nil {
+			return fmt.Sprintf("SEED tagged does not carry SEED tag %v: its tg in history is not a list of UUIDs: %v", seedIDs, err)
+		}
+	}
+	msg := fmt.Sprintf("SEED tagged does not carry SEED tag %v: things_get_task reads its tags as %v", seedIDs, serverTags)
+	if !sameStringSet(serverTags, historyTags) {
+		return msg + fmt.Sprintf(", but history has tg %v: a read bug, not a seed problem", historyTags)
+	}
+	if len(serverTags) == 0 {
+		msg += "; it has no tags"
+	}
+	for _, id := range serverTags {
+		msg += fmt.Sprintf("; %s is %s", id, describeTagReference(id, live, deleted))
+	}
+	return msg + `; fix the seed in the Things app (docs/testing/sandbox-e2e.md, "Fixing seeds")`
+}
+
+func describeTagReference(id string, live, deleted map[string]*foldedEntity) string {
+	e, state := live[id], "live"
+	if e == nil {
+		e, state = deleted[id], "deleted"
+	}
+	if e == nil {
+		return "not in history"
+	}
+	kinds := strings.Join(sortedKeys(e.Kinds), "/")
+	if !hasKindPrefix(e, "Tag") {
+		return fmt.Sprintf("a %s %s, not a tag", state, kinds)
+	}
+	const want = "SEED tag"
+	switch title := e.title(); {
+	case title == want:
+		return fmt.Sprintf("a %s %s titled %q", state, kinds, want)
+	case strings.EqualFold(strings.TrimSpace(title), want):
+		return fmt.Sprintf("a %s %s whose title differs from %q only in case or surrounding spaces", state, kinds, want)
+	default:
+		return fmt.Sprintf("a %s %s with another title (%d chars)", state, kinds, len(title))
+	}
+}
+
+func sameStringSet(a, b []string) bool {
+	a, b = slices.Clone(a), slices.Clone(b)
+	slices.Sort(a)
+	slices.Sort(b)
+	return slices.Equal(slices.Compact(a), slices.Compact(b))
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

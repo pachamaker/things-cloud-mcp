@@ -127,6 +127,24 @@ Every to-do seed is also checked for its entity kind: at least one must be `Task
 (KI-25). Templates listed in open views are logged as KNOWN ISSUE KI-05. A mismatch in
 `rr.fu`/`rr.tp` means the protocol notes (§5.3, evidence 🟡) or the seed are wrong.
 
+### Fixing seeds
+
+`TestSandboxSeedChecks` finds each seed by its exact title among live, untrashed
+objects of its kind: to-dos, projects and headings among `Task*` items, the area among
+`Area*`, the tag among `Tag*`. A checklist item or an area named like the tag does not
+count. When a seed is wrong, the test names it and the UUIDs involved; a to-do's UUID is
+the `id=` part of the link Things copies for it (Share → Copy Link). Fix the seed in the
+Things app, let it sync, then run the seed checks again.
+
+| Message | Meaning | Fix in the Things app |
+|---|---|---|
+| `seed items missing …: X` | no live object of that kind has exactly that title | create it as in the seed list; check case and spaces in the title |
+| `seed "X" exists N times [UUIDs]` | several live objects of that kind have that title | keep one, delete or rename the others; for `SEED tag` keep the one `SEED tagged` carries |
+| `SEED tagged does not carry SEED tag [UUID]: … U is a deleted Tag4 titled "SEED tag"` | the to-do still points at a tag that was deleted; the app shows the to-do without it | open `SEED tagged`, remove its tags, add `SEED tag` from the list |
+| `… U is a live Tag4 with another title (N chars)`, or `whose title differs from "SEED tag" only in case or surrounding spaces` | the to-do carries a different tag | remove that tag from `SEED tagged` and add `SEED tag`; delete the stray tag if it was made for the seeds |
+| `… U is not in history`, `U is a live Area3, not a tag`, `it has no tags` | the to-do carries no live tag called `SEED tag` | remove its tags, add `SEED tag` |
+| `… but history has tg [UUIDs]: a read bug, not a seed problem` | the server reads other tags than the account stores | leave the seeds alone; open a KI with the run link |
+
 ## Running
 
 ```bash
