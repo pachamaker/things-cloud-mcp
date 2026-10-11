@@ -274,8 +274,17 @@ templates are not recognised yet (the SDK does not store `rr`/`rt`).
 - [ ] Final report lists changed files with one line each, what was verified, and what
       still needs manual verification (e.g. "not checked on a real Things client").
 
-Commits: English, prefixed with the Jira-style key from the branch name if the branch
-matches `^[A-Z]+-\d+`, otherwise no prefix. PR descriptions: Russian, short bullets.
+Commits and pull requests are written in English: commit messages, PR titles and PR
+descriptions (short bullets: what changed and why, what was verified, what still needs
+manual checking). This repository rule overrides any personal default that asks for
+another language. Commit messages are prefixed with the Jira-style key from the branch
+name if the branch matches `^[A-Z]+-\d+`, otherwise no prefix.
+
+Opening the PR is part of done: once the work is finished and every local check above
+passes, push the branch and open a PR against `main` without asking first, unless the
+task says otherwise. CI then runs on the PR. Opening is not merging: never merge, enable
+auto-merge or deploy without the owner's explicit instruction. A plan for a non-trivial
+change still needs approval before coding (`CLAUDE.md`).
 
 ## 11. Where knowledge lives
 
