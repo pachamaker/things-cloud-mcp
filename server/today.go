@@ -7,8 +7,8 @@ import (
 	"github.com/pachamaker/things-cloud-mcp/domain/civil"
 )
 
-// ownerZone decides the owner's calendar day (ADR-0003, KI-03). main sets it
-// from THINGS_TIMEZONE before serving; the sandbox harness leaves it UTC.
+// ownerZone decides the owner's calendar day (ADR-0003, KI-03). main and the
+// sandbox harness set it from THINGS_TIMEZONE before serving.
 var ownerZone = time.UTC
 
 // ownerToday is the owner's current calendar day. A request computes it once
