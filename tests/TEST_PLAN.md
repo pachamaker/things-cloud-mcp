@@ -17,7 +17,7 @@ All tests live in the `tests/` directory and run against a deployed server URL t
 | `test-mcp.sh` | MCP write tools + read verification | `BASE_URL=https://your-app-name.fly.dev ./test-mcp.sh [cycle]` |
 | `test-mcp-read.sh` | MCP read-only tools | `BASE_URL=https://your-app-name.fly.dev ./test-mcp-read.sh` |
 | `test-mcp-protocol.sh` | MCP JSON-RPC protocol | `BASE_URL=https://your-app-name.fly.dev ./test-mcp-protocol.sh` |
-| `test-api.sh` | REST API endpoints | `BASE_URL=https://your-app-name.fly.dev API_KEY=... ./test-api.sh` |
+| `test-api.sh` | REST API endpoints | `BASE_URL=http://localhost:8080 ./test-api.sh` (server with `ENABLE_REST_API=true`; add `ACCESS_TOKEN=...` against an OAuth server) |
 
 Each script exits with code 0 on success, 1 on any failure.
 
@@ -218,7 +218,7 @@ These tests verify all read-only MCP tools return valid responses. They don't cr
 
 **Status: Implemented — 21/21 passing**
 
-Tests the `/api/*` endpoints which require Bearer token auth. Pass API key as second arg or via `API_KEY` env var.
+Tests the `/api/*` endpoints (server started with `ENABLE_REST_API=true`). Against an OAuth server pass an access token as the second arg or via `ACCESS_TOKEN`; against a local-only server (`INSECURE_NO_AUTH_LOCAL_ONLY=true`) omit it and the auth checks are skipped.
 
 ### Health & Auth
 

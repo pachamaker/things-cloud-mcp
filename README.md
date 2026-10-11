@@ -16,15 +16,17 @@ Built on a reverse-engineered, unofficial SDK — there is no official API docum
 > time, and a bad write can corrupt your Things data on every device. Use at your own risk,
 > test with a separate account first, and read [`docs/legal-and-risk.md`](docs/legal-and-risk.md).
 >
-> **Security warning.** The `/mcp` endpoint currently has no authentication (KI-07). Do not
-> expose it on a public address until OAuth lands.
+> **Authentication.** Every data route requires an OAuth 2.1 access token issued to you by
+> your own authorization server (Pocket ID, see [`docs/deployment/vps.md`](docs/deployment/vps.md));
+> without OAuth settings the server only starts in local-only mode on `127.0.0.1`. Sign-in
+> from Claude and ChatGPT through Pocket ID has not been verified end to end yet.
 
 ## What it does
 
 The server syncs your Things Cloud data into a local SQLite database and exposes it through two interfaces:
 
 - **MCP Endpoint** (`/mcp`) — [Model Context Protocol](https://modelcontextprotocol.io/) for AI assistants like Claude
-- **REST API** (`/api/*`) — Bearer token auth, for scripts and apps
+- **REST API** (`/api/*`) — off by default, same OAuth tokens, for scripts and apps
 
 Changes you make in the Things app show up immediately. Tasks Claude creates appear in Things within seconds. No restart required.
 The server performs an initial sync at startup and now exits if it cannot establish a clean local snapshot.
@@ -156,9 +158,9 @@ before anything is written. Recurrence writes have corrupted Things on macOS and
 
 See **[docs/installation.md](docs/installation.md)** for full setup instructions. The short version:
 
-1. Clone the repo and deploy to Fly.io
-2. Set your Things Cloud credentials as Fly secrets
-3. Add the MCP URL as a custom connector in Claude.ai
+1. Set up a VPS with Caddy and Pocket ID ([docs/deployment/vps.md](docs/deployment/vps.md))
+2. Configure your Things Cloud credentials and the OAuth settings
+3. Add `https://mcp.<your-domain>/mcp` as a custom connector in Claude or ChatGPT and sign in with your passkey
 4. Create a Skill file for your workflow
 
 ### Privacy and cost
@@ -177,15 +179,19 @@ See **[docs/skills.md](docs/skills.md)** for a step-by-step guide to creating yo
 
 ## REST API
 
-All `/api/*` endpoints require `Authorization: Bearer <API_KEY>` when `API_KEY` is set.
-The write endpoints and write tools exist only when the server runs with
-`ENABLE_WRITES=true`; by default it is read-only.
+The REST API is off unless the server runs with `ENABLE_REST_API=true`. Every `/api/*`
+endpoint then requires `Authorization: Bearer <access token>` from the same authorization
+server as `/mcp`, with the scope `things.read`; the write endpoints also need `things.write`.
+A local-only server (`INSECURE_NO_AUTH_LOCAL_ONLY=true`) needs no token. The write endpoints
+and write tools exist only when the server runs with `ENABLE_WRITES=true`; by default it is
+read-only.
 
 See **[docs/endpoints-and-things-cloud.md](docs/endpoints-and-things-cloud.md)** for how the REST and MCP surfaces sync from Things Cloud history, answer reads from the local SQLite mirror, and commit writes back to the cloud.
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /` | Health check |
+| `GET /` | Health check (no token) |
+| `GET /.well-known/oauth-protected-resource/mcp` | RFC 9728 protected-resource metadata (no token) |
 | `GET /api/verify` | Verify Things Cloud credentials |
 | `GET /api/sync` | Trigger sync, returns change count |
 | `GET /api/tasks/today` | Tasks scheduled for today. Optional query params: `limit`, `offset` |
@@ -225,8 +231,9 @@ daily) are in [docs/testing/sandbox-e2e.md](docs/testing/sandbox-e2e.md):
 THINGS_SANDBOX_ENV_FILE=~/.config/things-cloud-mcp/sandbox.env go test -tags e2e -run '^TestSandboxE2E$' -count=1 -v -timeout 30m ./server
 ```
 
-The older shell suites call a running server (started with `ENABLE_WRITES=true`) and
-create items in the account it is connected to — sandbox only. The writing suites stop
+The older shell suites call a running server (started with `ENABLE_WRITES=true` and
+`INSECURE_NO_AUTH_LOCAL_ONLY=true`) and create items in the account it is connected to —
+sandbox only. The writing suites stop
 before their first write unless the account has the area `MCP E2E SANDBOX`:
 
 ```bash
@@ -234,7 +241,7 @@ before their first write unless the account has the area `MCP E2E SANDBOX`:
 ./tests/test-mcp.sh 010        # All MCP write tools (44 checks)
 ./tests/test-mcp-read.sh       # All MCP read tools (29 checks)
 ./tests/test-mcp-protocol.sh   # JSON-RPC handshake and error handling (11 checks)
-API_KEY=your-key ./tests/test-api.sh  # All REST endpoints (18 checks)
+./tests/test-api.sh            # All REST endpoints (needs ENABLE_REST_API=true; ACCESS_TOKEN=… against an OAuth server)
 ```
 
 ## Local development
@@ -244,6 +251,7 @@ go build -v -o things-server ./server/
 export THINGS_USERNAME='...' THINGS_PASSWORD='...'   # sandbox account, never your real one
 export DATA_DIR="$PWD/.data"   # SQLite cache things-upstream.db; default /data
 export ENABLE_WRITES=true      # write tools are off unless this is true
+export INSECURE_NO_AUTH_LOCAL_ONLY=true   # no OAuth; listens on 127.0.0.1 only
 ./things-server
 
 go test -race ./...

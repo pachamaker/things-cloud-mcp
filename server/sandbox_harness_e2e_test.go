@@ -356,7 +356,7 @@ func startSandboxHarness(t *testing.T, mode harnessMode) *sandboxHarness {
 	h.today = time.Unix(todayMidnightUTC(), 0).UTC()
 
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", newMCPHandler(true))
+	mux.Handle("/mcp", localGate{}.protect(newMCPHandler(true), false))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 

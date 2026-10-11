@@ -286,33 +286,48 @@ func handleTags(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, tags)
 }
 
-func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		apiKey := os.Getenv("API_KEY")
-		if apiKey == "" {
-			next(w, r)
-			return
-		}
-		auth := r.Header.Get("Authorization")
-		if auth != "Bearer "+apiKey {
-			jsonError(w, "unauthorized", 401)
-			return
-		}
-		next(w, r)
-	}
-}
-
 // writesEnabled parses ENABLE_WRITES. Writes are off unless explicitly enabled,
 // so a new install cannot change the account by accident (ADR-0004).
 func writesEnabled(raw string) (bool, error) {
-	if raw == "" {
-		return false, nil
+	return parseSwitch("ENABLE_WRITES", raw)
+}
+
+// newRouter mounts every data route behind g: /mcp always, the REST API only
+// when restAPI is set (ADR-0002). "/" stays public as a health check.
+func newRouter(g gate, writes, restAPI bool) *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			jsonError(w, "not found", 404)
+			return
+		}
+		jsonResponse(w, map[string]string{"service": "things-cloud-api", "status": "ok", "version": version})
+	})
+	g.registerPublic(mux)
+	mux.Handle("/mcp", g.protect(newMCPHandler(writes), false))
+
+	if !restAPI {
+		return mux
 	}
-	v, err := strconv.ParseBool(raw)
-	if err != nil {
-		return false, fmt.Errorf("ENABLE_WRITES must be true or false, got %q", raw)
+	read := func(path string, h http.HandlerFunc) { mux.Handle(path, g.protect(h, false)) }
+	write := func(path string, h http.HandlerFunc) { mux.Handle(path, g.protect(h, true)) }
+	read("/api/verify", handleVerify)
+	read("/api/sync", handleSync)
+	read("/api/tasks/inbox", handleInbox)
+	read("/api/tasks/today", handleToday)
+	read("/api/tasks/anytime", handleAnytime)
+	read("/api/tasks/someday", handleSomeday)
+	read("/api/tasks/upcoming", handleUpcoming)
+	read("/api/projects", handleProjects)
+	read("/api/areas", handleAreas)
+	read("/api/tags", handleTags)
+	if writes {
+		write("/api/tasks/create", handleCreateTask)
+		write("/api/tasks/complete", handleCompleteTask)
+		write("/api/tasks/trash", handleTrashTask)
+		write("/api/tasks/edit", handleEditTask)
 	}
-	return v, nil
+	return mux
 }
 
 // newThingsClient never sets Client.Debug: upstream dumps whole requests,
@@ -406,6 +421,11 @@ func serveWithGracefulShutdown(ctx context.Context, srv shutdownServer, timeout 
 }
 
 func main() {
+	authCfg, err := loadAuthConfig(os.Getenv)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	username := os.Getenv("THINGS_USERNAME")
 	password := os.Getenv("THINGS_PASSWORD")
 	if username == "" || password == "" {
@@ -426,6 +446,10 @@ func main() {
 	} else {
 		log.Println("Read-only: write tools and endpoints are off; set ENABLE_WRITES=true to enable them")
 	}
+	restAPI, err := parseSwitch("ENABLE_REST_API", os.Getenv("ENABLE_REST_API"))
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	closeMirror, err := connectThings(username, password, os.Getenv("DATA_DIR"))
 	if err != nil {
@@ -433,40 +457,26 @@ func main() {
 	}
 	defer closeMirror()
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			jsonError(w, "not found", 404)
-			return
-		}
-		jsonResponse(w, map[string]string{"service": "things-cloud-api", "status": "ok", "version": version})
-	})
-
-	http.HandleFunc("/api/verify", authMiddleware(handleVerify))
-	http.HandleFunc("/api/sync", authMiddleware(handleSync))
-	http.HandleFunc("/api/tasks/inbox", authMiddleware(handleInbox))
-	http.HandleFunc("/api/tasks/today", authMiddleware(handleToday))
-	http.HandleFunc("/api/tasks/anytime", authMiddleware(handleAnytime))
-	http.HandleFunc("/api/tasks/someday", authMiddleware(handleSomeday))
-	http.HandleFunc("/api/tasks/upcoming", authMiddleware(handleUpcoming))
-	http.HandleFunc("/api/projects", authMiddleware(handleProjects))
-	http.HandleFunc("/api/areas", authMiddleware(handleAreas))
-	http.HandleFunc("/api/tags", authMiddleware(handleTags))
-
-	if writes {
-		http.HandleFunc("/api/tasks/create", authMiddleware(handleCreateTask))
-		http.HandleFunc("/api/tasks/complete", authMiddleware(handleCompleteTask))
-		http.HandleFunc("/api/tasks/trash", authMiddleware(handleTrashTask))
-		http.HandleFunc("/api/tasks/edit", authMiddleware(handleEditTask))
-	}
-
-	// MCP endpoint (no bearer auth — claude.ai connectors use OAuth which we don't implement)
-	http.Handle("/mcp", newMCPHandler(writes))
-
 	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	server := &http.Server{Addr: ":" + port}
 
-	log.Printf("Starting server %s on :%s", version, port)
+	var g gate
+	if authCfg.LocalOnly {
+		log.Println("Auth: WARNING: no authentication (INSECURE_NO_AUTH_LOCAL_ONLY=true); listening on 127.0.0.1 only")
+		g = localGate{}
+	} else {
+		og, err := newOAuthGate(authCfg.OAuth, writes, newAuthHTTPClient(), time.Now)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Auth: OAuth access tokens for %s from %s", authCfg.OAuth.Resource, authCfg.OAuth.Issuer)
+		og.warmUp(shutdownCtx)
+		g = og
+	}
+
+	server := &http.Server{Addr: listenAddr(authCfg, port), Handler: newRouter(g, writes, restAPI)}
+
+	log.Printf("Starting server %s on %s", version, server.Addr)
 	if err := serveWithGracefulShutdown(shutdownCtx, server, shutdownTimeout); err != nil {
 		log.Fatal(err)
 	}

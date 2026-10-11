@@ -6,6 +6,7 @@ toolchain go1.26.9
 
 require (
 	github.com/arthursoares/things-cloud-sdk v0.6.0
+	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.44.0
 )

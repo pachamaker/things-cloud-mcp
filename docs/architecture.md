@@ -77,7 +77,8 @@ flowchart TB
 ```
 
 Today `transport` and `engine` are fused in `server/` with package-level globals, there
-is no OAuth, no audit log, and deployment targets Fly.io. The target split is described
+is no audit log, and the OAuth resource server (`server/auth.go`) has not been run against
+Pocket ID yet. The target split is described
 in §7.
 
 ## 4. Code map (current)
@@ -90,7 +91,8 @@ used to carry: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4.
 
 | Path | Role | Notes |
 |---|---|---|
-| `server/main.go` | Process wiring, REST handlers, debug endpoints, graceful shutdown | Globals `client`, `syncer`, `history`; cache at `$DATA_DIR/things-upstream.db` |
+| `server/main.go` | Process wiring, router, REST handlers, graceful shutdown | Globals `client`, `syncer`, `history`; cache at `$DATA_DIR/things-upstream.db` |
+| `server/auth.go` | OAuth resource server: config, JWKS cache, RFC 9068 token checks, RFC 9728 metadata, per-tool scopes | Every data route goes through a `gate` (KI-07) |
 | `server/mcp.go` | MCP tool registry and read handlers, output formatting | `mark3labs/mcp-go` v0.44, Streamable HTTP, stateless |
 | `server/write.go` | All write commands, wire payload builders, ID generator, `historyWrite` | One item per commit; global `historyMu`; `repeat` always rejected (KI-01) |
 | `server/readmodel.go` | Read model over SDK `State`: pagination, open-list filtering (canceled excluded), completed range | Loads full lists, then pages in Go (KI-18) |
@@ -246,7 +248,7 @@ See [`roadmap.md`](roadmap.md).
 
 | Concern | Current | Target |
 |---|---|---|
-| AuthN to the server | none on `/mcp`; optional static bearer on `/api` | OAuth 2.1 single-user (ADR-0002) |
+| AuthN to the server | OAuth 2.1 bearer tokens on `/mcp` and `/api` (`server/auth.go`), or local-only without auth on `127.0.0.1` | same, verified end to end with Pocket ID (ADR-0002) |
 | Secrets | env vars; password logged in `DEBUG` (KI-09) | env/secret files; redaction tested |
 | Time | UTC everywhere | owner's IANA timezone, injectable clock (ADR-0003) |
 | Observability | `log.Printf` | structured logs (`log/slog`), request id, write audit log, `/healthz` + `/readyz` |
