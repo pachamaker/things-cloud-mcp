@@ -36,6 +36,7 @@ type shutdownServer interface {
 const shutdownTimeout = 10 * time.Second
 
 const (
+	defaultPort    = "8080"
 	defaultDataDir = "/data"
 	// syncDBFile differs from the embedded SDK's things.db (schema v4):
 	// upstream migrate() treats v4 as newer than its own v2 and would skip its
@@ -421,6 +422,14 @@ func serveWithGracefulShutdown(ctx context.Context, srv shutdownServer, timeout 
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		if err := runHealthcheck(os.Getenv, &http.Client{Timeout: healthcheckTimeout}); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	authCfg, err := loadAuthConfig(os.Getenv)
 	if err != nil {
 		log.Fatal(err)
@@ -434,7 +443,7 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = defaultPort
 	}
 
 	writes, err := writesEnabled(os.Getenv("ENABLE_WRITES"))

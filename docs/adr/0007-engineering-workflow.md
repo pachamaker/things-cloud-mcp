@@ -3,7 +3,7 @@
 ## Status
 Proposed (2026-10-10). Addresses KI-15 and the process gaps behind KI-01/KI-02.
 Implemented so far: CI (`ci.yml`, PR #7 and #8), sandbox e2e harness and workflow
-(PR #9, KI-34).
+(PR #9, KI-34), release image workflow (`release.yml`, KI-16).
 
 ## Context
 - CI has never run on GitHub (`.github/Workflows` instead of `.github/workflows`), and
@@ -59,7 +59,10 @@ Rules:
   pinned tag (ADR-0002).
 - Status (2026-10-11): `.github/workflows/ci.yml` runs the tidy check, build, vet and
   race tests, and `govulncheck` in a separate job, on the Go `toolchain` from `go.mod`
-  (KI-32), `staticcheck` (KI-33); release and Dependabot are not set up.
+  (KI-32), `staticcheck` (KI-33). `release.yml` runs the same checks on a `v*` tag
+  (`workflow_call`), then pushes a linux/amd64 + linux/arm64 image to GHCR tagged with
+  the git tag and `sha-<short>`; only that job has `packages: write`. Dependabot is not
+  set up.
 
 ### Agent workflow
 - `AGENTS.md` is the contract for every agent; `CLAUDE.md` imports it.

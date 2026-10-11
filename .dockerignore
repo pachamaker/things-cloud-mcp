@@ -1,0 +1,9 @@
+# Allowlist: the build context holds only what `go build ./server` needs, so
+# .git, .env files, .data and local notes never reach the builder or its cache.
+*
+!go.mod
+!go.sum
+!server
+!domain
+**/*_test.go
+**/testdata

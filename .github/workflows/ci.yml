@@ -1,4 +1,5 @@
-# Checks for every pull request and every push to main (KI-15, ADR-0007).
+# Checks for every pull request and every push to main (KI-15, ADR-0007), and
+# for every release tag before its image is built (release.yml calls it).
 # No secrets, no deployment, no Things Cloud access: unit tests and a vulnerability scan.
 # Go is the `toolchain` version from go.mod, which setup-go prefers over the `go` line (KI-32).
 # Actions are pinned to a full commit SHA; the comment names the release.
@@ -8,6 +9,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
