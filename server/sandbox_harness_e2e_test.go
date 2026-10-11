@@ -259,7 +259,8 @@ type sandboxHarness struct {
 	creds    sandboxCredentials
 	runID    string
 	prefix   string
-	today    civil.Date // the server's civil day: the UTC day, as the harness leaves THINGS_TIMEZONE unset
+	zone     *time.Location // the server's zone: THINGS_TIMEZONE, as in main, or UTC when unset
+	today    civil.Date     // the server's civil day in zone
 	red      *redactor
 	cloud    *cloudTransport
 	firewall *writeFirewall
@@ -295,10 +296,15 @@ func startSandboxHarness(t *testing.T, mode harnessMode) *sandboxHarness {
 	}
 	warnAboutEnvFile(t)
 
-	now := time.Now().UTC()
-	midnight := now.Truncate(24 * time.Hour)
-	if now.Sub(midnight) < sandboxMidnightMargin || midnight.Add(24*time.Hour).Sub(now) < sandboxMidnightMargin {
-		skipOrFail(t, "within 15 minutes of 00:00 UTC: the server's day is the UTC day (KI-03), so a run here could straddle two days; retry later")
+	zone, err := ownerTimezone(os.Getenv("THINGS_TIMEZONE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	prevZone := ownerZone
+	ownerZone = zone
+	t.Cleanup(func() { ownerZone = prevZone })
+	if sandboxNearMidnight(civil.SystemClock{}, zone, sandboxMidnightMargin) {
+		skipOrFail(t, fmt.Sprintf("within %s of midnight in %s, the server's timezone: a run here could straddle two days; retry later", sandboxMidnightMargin, zone))
 	}
 
 	interval := sandboxDefaultInterval
@@ -320,6 +326,7 @@ func startSandboxHarness(t *testing.T, mode harnessMode) *sandboxHarness {
 		creds:   creds,
 		runID:   runID,
 		prefix:  sandboxRunPrefix(runID),
+		zone:    zone,
 		red:     &redactor{},
 		covered: map[string]bool{},
 	}
@@ -337,7 +344,7 @@ func startSandboxHarness(t *testing.T, mode harnessMode) *sandboxHarness {
 	case harnessCleanup:
 		prefixes = []string{sandboxRunTitleRoot, smokeTestTitlePrefix}
 	}
-	h.firewall = newWriteFirewall(time.Now, prefixes...)
+	h.firewall = newWriteFirewall(time.Now, zone, prefixes...)
 
 	direct := http.DefaultTransport
 	h.cloud = &cloudTransport{
@@ -381,7 +388,7 @@ func startSandboxHarness(t *testing.T, mode harnessMode) *sandboxHarness {
 
 	h.guard(t, mode)
 	h.observer = newSandboxObserver(t, h)
-	t.Logf("sandbox harness ready: run %s, %d Things Cloud requests so far, one every %s at most", h.runID, h.cloud.stats().Requests, interval)
+	t.Logf("sandbox harness ready: run %s, server day %s in %s, %d Things Cloud requests so far, one every %s at most", h.runID, h.today, h.zone, h.cloud.stats().Requests, interval)
 	return h
 }
 

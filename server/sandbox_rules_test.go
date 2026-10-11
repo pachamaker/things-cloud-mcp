@@ -24,6 +24,8 @@ import (
 	"time"
 
 	thingscloud "github.com/arthursoares/things-cloud-sdk"
+
+	"github.com/pachamaker/things-cloud-mcp/domain/civil"
 )
 
 const (
@@ -427,17 +429,24 @@ func placementViolation(p map[string]json.RawMessage, today int64) string {
 }
 
 // itemCivilToday derives the civil day an item was written for from its own
-// md or cd instant (KI-03: the server's day is the UTC day), so checks done
-// later or around midnight compare against the day the server used.
-func itemCivilToday(p map[string]json.RawMessage, fallback time.Time) int64 {
-	at := fallback.UTC()
+// md or cd instant in the server's zone loc (ADR-0003), so checks done later or
+// around midnight compare against the day the server used; fallback is the day
+// for an item with neither. The result is the wire encoding, midnight UTC.
+func itemCivilToday(p map[string]json.RawMessage, loc *time.Location, fallback civil.Date) int64 {
 	for _, key := range []string{"md", "cd"} {
 		if f, ok := jsonFloat(p[key]); ok && f > 0 {
-			at = time.Unix(int64(f), 0).UTC()
-			break
+			return civil.DateOf(time.Unix(int64(f), 0).In(loc)).Wire()
 		}
 	}
-	return time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Unix()
+	return fallback.Wire()
+}
+
+// sandboxNearMidnight reports whether the clock is within margin of a midnight
+// in loc, where a run could straddle two of the server's days.
+func sandboxNearMidnight(c civil.Clock, loc *time.Location, margin time.Duration) bool {
+	now := c.Now()
+	today := civil.Today(c, loc)
+	return now.Sub(today.Start(loc)) < margin || today.AddDays(1).Start(loc).Sub(now) < margin
 }
 
 func isJSONNull(raw json.RawMessage) bool {
@@ -578,6 +587,7 @@ const (
 // seed items.
 type writeFirewall struct {
 	now func() time.Time
+	loc *time.Location // the server's zone, for the day of a Today placement
 
 	mu         gosync.Mutex
 	mode       firewallMode
@@ -586,8 +596,8 @@ type writeFirewall struct {
 	violations []string
 }
 
-func newWriteFirewall(now func() time.Time, titlePrefixes ...string) *writeFirewall {
-	return &writeFirewall{now: now, prefixes: titlePrefixes, owned: map[string]string{}}
+func newWriteFirewall(now func() time.Time, loc *time.Location, titlePrefixes ...string) *writeFirewall {
+	return &writeFirewall{now: now, loc: loc, prefixes: titlePrefixes, owned: map[string]string{}}
 }
 
 func (f *writeFirewall) setMode(m firewallMode) {
@@ -656,7 +666,7 @@ func (f *writeFirewall) check(items []wireItem) error {
 		problems = append(problems, "this harness run is read-only")
 	default:
 		for _, it := range items {
-			problems = append(problems, wireViolations(it, itemCivilToday(it.Payload, f.now()))...)
+			problems = append(problems, wireViolations(it, itemCivilToday(it.Payload, f.loc, civil.Today(civil.ClockFunc(f.now), f.loc)))...)
 			problems = append(problems, f.ownershipViolations(it)...)
 		}
 	}
