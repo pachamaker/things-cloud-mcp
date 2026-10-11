@@ -752,10 +752,17 @@ func mcpDeleteChecklistItem(_ context.Context, req mcp.CallToolRequest) (*mcp.Ca
 
 // newMCPHandler registers the write tools only when writes is true
 // (ENABLE_WRITES, ADR-0004); a read-only server does not even list them.
+// Mount it behind a gate: each request needs an access value in its
+// context, and write tools also need write access (KI-07).
 func newMCPHandler(writes bool) http.Handler {
-	s := server.NewMCPServer("Things Cloud", version)
+	writeTools := map[string]bool{}
+	s := server.NewMCPServer("Things Cloud", version,
+		server.WithToolFilter(toolFilter(writeTools)),
+		server.WithToolHandlerMiddleware(toolAccess(writeTools)),
+	)
 	addWrite := func(tool mcp.Tool, handler server.ToolHandlerFunc) {
 		if writes {
+			writeTools[tool.Name] = true
 			s.AddTool(tool, handler)
 		}
 	}

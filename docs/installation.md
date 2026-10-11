@@ -1,7 +1,10 @@
 # Installation Guide
 
-> **Legacy (Fly.io, unauthenticated `/mcp`).** Kept for reference. The supported target
-> is [`deployment/vps.md`](deployment/vps.md); see KI-07 before exposing the server.
+> **Legacy (Fly.io).** Kept for reference. The supported target is
+> [`deployment/vps.md`](deployment/vps.md). Since KI-07 the server does not start without
+> the OAuth settings (`OAUTH_ISSUER`, `MCP_PUBLIC_URL`, `OAUTH_ALLOWED_SUBJECT`) and an
+> authorization server that issues its tokens; set them as Fly secrets as described there.
+> `API_KEY` no longer exists.
 
 Self-host the Things Cloud MCP server to connect Claude (or any MCP-compatible AI assistant) to your Things 3 task manager.
 
@@ -57,12 +60,6 @@ When prompted, choose a region close to you. The included `fly.toml` configures 
 
 ```bash
 fly secrets set THINGS_USERNAME='your-things-email' THINGS_PASSWORD='your-things-password'
-```
-
-Optionally set an API key for the REST endpoints:
-
-```bash
-fly secrets set API_KEY='your-chosen-api-key'
 ```
 
 ### Deploy
@@ -127,7 +124,7 @@ Once connected, Claude has access to 36 tools:
 
 ## Privacy and credentials
 
-The server needs your Things Cloud email and password to sync your tasks. Since you're deploying this on your own Fly.io account, your credentials are stored as encrypted secrets on infrastructure you control — they're not shared with anyone. The MCP endpoint itself has no authentication, so consider that anyone with your server URL could access your tasks. If that's a concern, you can set an `API_KEY` and restrict access to the REST API.
+The server needs your Things Cloud email and password to sync your tasks. Since you're deploying this on your own Fly.io account, your credentials are stored as encrypted secrets on infrastructure you control — they're not shared with anyone. Every data route requires an OAuth access token issued to you (see [`deployment/vps.md`](deployment/vps.md)).
 
 ## Cost
 
@@ -139,7 +136,8 @@ Fly.io doesn't bill you if your monthly usage is under $5. The server scales to 
 |----------|----------|-------------|
 | `THINGS_USERNAME` | Yes | Your Things account email |
 | `THINGS_PASSWORD` | Yes | Your Things account password |
-| `API_KEY` | No | Bearer token for REST API endpoints (`/api/*`). If unset, no auth required. |
+| `OAUTH_ISSUER`, `MCP_PUBLIC_URL`, `OAUTH_ALLOWED_SUBJECT` | Yes | OAuth settings, see [`deployment/vps.md`](deployment/vps.md) |
+| `ENABLE_REST_API` | No | `true` serves `/api/*` behind the same tokens as `/mcp` |
 | `PORT` | No | Server port (default: `8080`) |
 | `DATA_DIR` | No | Directory of the SQLite cache `things-upstream.db` (default: `/data`) |
 | `ENABLE_WRITES` | No | `true` enables the write tools and endpoints; read-only otherwise |
@@ -156,6 +154,6 @@ fly deploy
 
 **Server won't start:** Check your credentials with `fly logs`. The most common issue is incorrect Things Cloud credentials.
 
-**Sync errors:** The server retries sync automatically. If issues persist, check `fly logs` for details. You can trigger a manual sync via `curl https://your-app-name.fly.dev/api/sync` (requires `API_KEY` if set).
+**Sync errors:** The server retries sync automatically. If issues persist, check `fly logs` for details. With `ENABLE_REST_API=true` you can trigger a manual sync via `curl -H "Authorization: Bearer <access token>" https://your-app-name.fly.dev/api/sync`.
 
 **Cold start latency:** The first request after idle may take a few seconds as Fly.io starts the machine and the server performs an initial sync. Subsequent requests are fast.

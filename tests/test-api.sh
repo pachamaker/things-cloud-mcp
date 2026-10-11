@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# REST API endpoint tests — verifies /api/* endpoints with auth.
-# Usage: ./test-api.sh [base_url] [api_key]
+# REST API endpoint tests — verifies /api/* endpoints (server started with ENABLE_REST_API=true).
+# Usage: ./test-api.sh [base_url] [access_token]
 # The base URL can also be set via BASE_URL env var.
-# The api_key can also be set via API_KEY env var.
+# The OAuth access token can also be set via ACCESS_TOKEN env var. Without one the
+# server must run with INSECURE_NO_AUTH_LOCAL_ONLY=true and the auth checks are skipped.
 
 BASE="${1:-${BASE_URL:-}}"
-API_KEY="${2:-${API_KEY:-}}"
+ACCESS_TOKEN="${2:-${ACCESS_TOKEN:-}}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_FILE="${SCRIPT_DIR}/test-results.log"
 
@@ -16,12 +17,11 @@ if [ -z "$BASE" ]; then
   exit 1
 fi
 
-if [ -z "$API_KEY" ]; then
-  echo "Error: API_KEY is required. Pass as second arg or set API_KEY env var."
-  exit 1
+if [ -n "$ACCESS_TOKEN" ]; then
+  AUTH_HEADER="Authorization: Bearer ${ACCESS_TOKEN}"
+else
+  AUTH_HEADER="X-No-Access-Token: local-only"
 fi
-
-AUTH_HEADER="Authorization: Bearer ${API_KEY}"
 
 PASS=0
 FAIL=0
@@ -113,8 +113,13 @@ check "service name" "$(json_field "$HEALTH" service)" "things-cloud-api"
 
 # 2-3. Auth
 echo "--- Auth ---"
-check "no auth returns 401" "$(api_get_no_auth /api/verify)" "401"
-check "with auth returns 200" "$(api_get_status /api/verify)" "200"
+if [ -n "$ACCESS_TOKEN" ]; then
+  check "no auth returns 401" "$(api_get_no_auth /api/verify)" "401"
+  check "with auth returns 200" "$(api_get_status /api/verify)" "200"
+else
+  echo "  (no ACCESS_TOKEN: local-only server, auth checks skipped)"
+  check "local-only returns 200" "$(api_get_status /api/verify)" "200"
+fi
 
 # 4-12. Read endpoints
 echo "--- Read Endpoints ---"

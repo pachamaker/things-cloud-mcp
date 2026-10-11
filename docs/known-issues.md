@@ -121,12 +121,23 @@ workaround can be deleted.
   both templates and instances, as upstream does.
 
 ### KI-07 · `/mcp` has no authentication
-- **Status:** open · **Evidence:** confirmed (`server/main.go:559-560`)
+- **Status:** fixed in code (`server/auth.go`) — not yet verified end to end with Pocket ID,
+  Claude and ChatGPT (roadmap Phase 2) · **Evidence:** confirmed (`server/main.go:559-560`
+  before the fix)
 - **Symptom:** anyone who learns the URL can read and modify the whole task database.
 - **Root cause:** OAuth was never implemented; the original Fly.io setup relied on an
   obscure hostname.
-- **Fix direction:** ADR-0002. OAuth 2.1 (single user) in front of `/mcp`. Until then,
-  do not expose the server on a public address.
+- **Fix:** ADR-0002 option B. The server is an OAuth 2.1 resource server: RFC 9728
+  metadata at `/.well-known/oauth-protected-resource/mcp`, `401` with
+  `WWW-Authenticate: Bearer resource_metadata=…` on `/mcp` and `/api/*`, RFC 9068 JWT
+  checks against the issuer's JWKS (`typ at+jwt`, `iss`, `aud` = `MCP_PUBLIC_URL`,
+  `exp`/`nbf`, `sub` = `OAUTH_ALLOWED_SUBJECT`, optional `client_id` allowlist). Scopes:
+  `things.read` for any request, `things.write` for write tools and REST writes;
+  `ENABLE_WRITES` stays the server-wide ceiling. Without OAuth settings the server starts
+  only with `INSECURE_NO_AUTH_LOCAL_ONLY=true` and then listens on `127.0.0.1` and refuses
+  non-loopback `Host`/`Origin` (DNS rebinding). The REST API is off by default and
+  `API_KEY` is gone. Tests: `server/auth_test.go`, `server/auth_mcp_test.go` (local test
+  issuer, no network).
 
 ### KI-08 · Destructive debug endpoints ship in the production binary
 - **Status:** fixed (phase 0) — every `/api/debug/*` route and the `DEBUG` variable are

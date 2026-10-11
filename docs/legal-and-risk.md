@@ -99,7 +99,7 @@ non-commercial open source excluded), and *Power Ventures*-style revocation risk
 |---|---|
 | Self-host only, one owner per instance; no hosted offering | `roadmap.md` (out of scope), README |
 | Prominent non-affiliation and risk disclaimer; "Things" used only to describe compatibility; no logos or screenshots | README |
-| Mandatory authentication on every data route | KI-07, ADR-0002 |
+| Mandatory authentication on every data route: OAuth tokens for the owner only, or no network exposure (local-only mode on `127.0.0.1`) | done in code (KI-07, ADR-0002) |
 | Guarded writes: allowlist, preconditions, recurrence disabled, audit log | ADR-0004 |
 | Read-only by default: write tools exist only with `ENABLE_WRITES=true` | done (phase 0, ADR-0004) |
 | Remove account surgery (sign-up, accept SLA, delete account) from the server | KI-08 |

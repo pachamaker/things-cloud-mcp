@@ -27,7 +27,7 @@ func listToolNames(t *testing.T, writes bool) []string {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	rec := httptest.NewRecorder()
-	newMCPHandler(writes).ServeHTTP(rec, req)
+	newMCPHandler(writes).ServeHTTP(rec, withAccessRequest(req, access{write: true}))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("tools/list status = %d, body %s", rec.Code, rec.Body.String())
 	}
