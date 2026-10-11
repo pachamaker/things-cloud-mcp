@@ -31,3 +31,5 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 	modernc.org/sqlite v1.45.0 // indirect
 )
+
+replace github.com/arthursoares/things-cloud-sdk => github.com/pachamaker/things-cloud-sdk v0.6.1-0.20261011124200-f41fcbbba5c1
