@@ -192,8 +192,9 @@ type taskRefs struct {
 
 // checkRefs resolves every referenced object. A project or parent to-do in
 // the trash is refused too: Things would show the new link under a trashed
-// container. So is a repeating template, which Things never shows; the
-// instances it generates are ordinary containers.
+// container. So is a repeating template: Things shows it only as its next
+// occurrence in Upcoming (KI-36), never as a container. The instances it
+// generates are ordinary containers.
 func checkRefs(m mirrorLookup, refs taskRefs) error {
 	for _, ref := range []struct {
 		field, uuid string
@@ -213,7 +214,7 @@ func checkRefs(m mirrorLookup, refs taskRefs) error {
 			return invalidInputf("%s %s is in the trash (KI-10)", ref.field, ref.uuid)
 		}
 		if p.IsRepeatingTemplate() {
-			return invalidInputf("%s %s is %s, which Things does not show; add to a visible one instead (KI-10)", ref.field, ref.uuid, repeatingRole(p))
+			return invalidInputf("%s %s is %s, not a container; link to a visible one, such as one of its instances, instead (KI-10)", ref.field, ref.uuid, repeatingRole(p))
 		}
 	}
 	if refs.Area != "" {

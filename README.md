@@ -145,9 +145,10 @@ before anything is written. Recurrence writes have corrupted Things on macOS and
 [`docs/known-issues/repeat-disabled.md`](docs/known-issues/repeat-disabled.md).
 
 Repeating to-dos and projects are read-only. Things keeps the rule on a hidden template
-and shows only the items it generates: lists never include templates (KI-05), and task
-output marks `repeating: "template"` (reachable through `things_get_task`) or
-`repeating: "instance"`. Completing, reopening, editing, moving, trashing or restoring
+and lists the items it generates. The server's lists never include templates (KI-05), so
+`things_list_upcoming` lacks the next occurrence the Things app shows there ("18 Oct",
+"Waiting"; KI-36). Task output marks `repeating: "template"` (reachable through
+`things_get_task`) or `repeating: "instance"`. Completing, reopening, editing, moving, trashing or restoring
 either, or changing its checklist, is refused before anything is written (KI-01); do it
 in the Things app.
 

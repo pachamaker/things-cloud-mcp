@@ -448,10 +448,10 @@ func repeatingMirror() listMirror {
 	}
 }
 
-// TestReadModel_KI05_HidesRepeatingTemplates: Things never lists the hidden
-// template of a repeating to-do or project; its generated instances are
-// ordinary items. Closed items included or not, no open list shows a
-// template. The Logbook query and lookups by UUID are unchanged.
+// TestReadModel_KI05_HidesRepeatingTemplates: no open list shows the hidden
+// template of a repeating to-do or project, closed items included or not
+// (its next occurrence in Upcoming is KI-36); its generated instances are
+// ordinary items. The Logbook query and lookups by UUID are unchanged.
 func TestReadModel_KI05_HidesRepeatingTemplates(t *testing.T) {
 	t.Parallel()
 

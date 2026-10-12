@@ -384,7 +384,26 @@ workaround can be deleted.
   `"instance"`. Tests: `TestReadModel_KI05_HidesRepeatingTemplates`,
   `TestFormatTask_KI05_RepeatingMarker`; the sandbox seed checks now fail when a template is
   listed or an open instance is not. Not handled: to-dos inside a repeating project's template (no evidence how
-  Things stores them).
+  Things stores them); the next occurrence the Things app shows in Upcoming (KI-36).
+
+### KI-36 · Upcoming lacks the next occurrence of repeating to-dos
+- **Status:** open · **Evidence:** confirmed (Things app on the sandbox, 2026-10-11:
+  Upcoming lists "18 Oct ⟳ SEED repeat weekly" and "Waiting ⟳ SEED repeat monthly after
+  completion"; capture `testdata/captures/recurrence-completion-2026-10-11.json`: the
+  template's `tir` is moved to the next occurrence)
+- **Symptom:** Things shows each repeating template in Upcoming, and in the Upcoming
+  section of its area or project, as its next occurrence: a date for a fixed schedule,
+  "Waiting" for an after-completion series whose current instance is still open.
+  `things_list_upcoming` lists neither, because the server hides templates from every
+  list (KI-05); before that they were wrongly listed in Someday.
+- **Root cause:** templates are hidden on purpose: listed as ordinary to-dos they invite
+  writes that break the series (KI-01). The next occurrence is the template's `tir`
+  (protocol notes §5.3), which the SDK mirror does not store (spike report §4 B4);
+  computing it from `rr` (SDK `NextScheduledAt`) would have to match the app.
+- **Fix direction:** list templates in Upcoming only, read-only (`repeating:
+  "template"`), dated by their next occurrence or marked waiting; needs `tir` in the
+  mirror (an SDK change like arthursoares/things-cloud-sdk#40) or a computation from
+  `rr` verified against the captures. Writes stay refused (KI-01).
 
 ### KI-13 · Tasks under headings are missing from project listings
 - **Status:** fixed ([#21](https://github.com/pachamaker/things-cloud-mcp/pull/21), `a53bb30`) · **Evidence:** confirmed on

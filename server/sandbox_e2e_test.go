@@ -706,7 +706,7 @@ func TestSandboxSeedChecks(t *testing.T) {
 			t.Errorf("things_get_task reports %q with repeating=%q, want template: the mirror lost rr (KI-05)", tc.e.title(), got)
 		}
 		if v := views(tc.e); len(v) > 0 {
-			t.Errorf("repeating template %q is listed in %v; Things never lists templates (KI-05)", tc.e.title(), v)
+			t.Errorf("repeating template %q is listed in %v; the server lists no template (KI-05; its Upcoming occurrence is KI-36)", tc.e.title(), v)
 		}
 		if containsTask(areaTasks, tc.e.UUID) {
 			t.Errorf("repeating template %q is listed in the %s area (KI-05)", tc.e.title(), sandboxMarkerArea)
