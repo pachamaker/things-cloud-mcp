@@ -121,6 +121,7 @@ go test -tags 'e2e fakecloud' -run '^TestSandbox' -count=1 ./server           # 
 go test -tags e2e -run '^TestSandboxE2E$' -count=1 -v -timeout 30m ./server   # writes! sandbox only
 go test -tags e2e -run '^TestSandboxSeedChecks$' -count=1 -v ./server         # read-only seed checks
 go test -tags e2e -run '^TestSandboxCleanupLeftovers$' -count=1 -v ./server   # trash leftovers of killed runs
+go test -tags e2e -run '^TestSandboxRecurrenceCapture$' -count=1 -v ./server  # read-only: sanitized capture of the repeating seeds
 ```
 
 CI: `.github/workflows/e2e.yml` (manual and nightly, never on push or PRs) runs the same
@@ -196,6 +197,7 @@ or push tags and never publish images.
 | `domain/civil` | Civil date, clock, wire encoding of day values, zone loading (ADR-0003) | live |
 | `server/syncgate.go` | Serialises and coalesces syncs, 429 backoff | live |
 | `server/sandbox_*_test.go` | Sandbox e2e harness (tag `e2e`) and its pure rules (untagged, unit-tested) | sandbox only |
+| `testdata/captures/` | Sanitized payloads the official Things apps wrote (protocol §8 evidence), checked by `server/recurrence_capture_test.go` | evidence |
 | `tests/` | Shell e2e scripts against a running server (superseded by the Go harness) | sandbox only |
 | `.github/workflows/ci.yml` | PR and `main` checks: tidy, build, vet, race tests, `govulncheck`; no secrets, no network to Things | live |
 | `.github/workflows/release.yml` | On `v*` tags: the CI checks, then the multi-arch image to GHCR; only job with `packages: write` | live |

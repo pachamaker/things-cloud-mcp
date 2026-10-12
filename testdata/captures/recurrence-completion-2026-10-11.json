@@ -1,0 +1,449 @@
+{
+  "source": "history of the sandbox account (docs/testing/sandbox-e2e.md) as written by the official Things apps, read back by TestSandboxRecurrenceCapture",
+  "captured_on": "2026-10-11",
+  "history_head": 439,
+  "objects": [
+    {
+      "uuid": "KAeeekg9q3mwmgrDTNNp8Z",
+      "role": "template \"SEED repeat weekly\""
+    },
+    {
+      "uuid": "DRmrGVuUHDya3zAHSAGgCv",
+      "role": "template \"SEED repeat monthly after completion\""
+    },
+    {
+      "uuid": "R2db17yZbh4Av1x5qeWASX",
+      "role": "instance 1 of \"SEED repeat weekly\""
+    },
+    {
+      "uuid": "Tk2uW6HDn7Y4AWaUVYAV5c",
+      "role": "instance 1 of \"SEED repeat monthly after completion\""
+    },
+    {
+      "uuid": "Vxtk9sizaiuUUQ8EgzZdoS",
+      "role": "instance 2 of \"SEED repeat weekly\""
+    }
+  ],
+  "items": [
+    {
+      "index": 280,
+      "slot_items": 1,
+      "uuid": "R2db17yZbh4Av1x5qeWASX",
+      "role": "instance 1 of \"SEED repeat weekly\"",
+      "t": 0,
+      "e": "Task7",
+      "p": {
+        "acrd": null,
+        "agr": [],
+        "ar": [
+          "Cj3gehf1RVeWt88dTetoEH"
+        ],
+        "ato": null,
+        "cd": 1791721500.033076,
+        "dd": null,
+        "dds": null,
+        "dl": [],
+        "do": 0,
+        "icc": 0,
+        "icp": false,
+        "icsd": null,
+        "ix": -867,
+        "lai": null,
+        "lt": false,
+        "md": 1791721500.4945531,
+        "nt": {
+          "_t": "tx",
+          "ch": 0,
+          "t": 1,
+          "v": ""
+        },
+        "pr": [],
+        "rmd": null,
+        "rp": null,
+        "rr": null,
+        "rt": [],
+        "sb": 0,
+        "sp": null,
+        "sr": null,
+        "ss": 0,
+        "st": 1,
+        "tg": [],
+        "ti": 0,
+        "tir": null,
+        "tp": 0,
+        "tr": false,
+        "tt": "SEED repeat weekly",
+        "xx": {
+          "_t": "oo",
+          "sn": {}
+        }
+      }
+    },
+    {
+      "index": 283,
+      "slot_items": 2,
+      "uuid": "KAeeekg9q3mwmgrDTNNp8Z",
+      "role": "template \"SEED repeat weekly\"",
+      "t": 0,
+      "e": "Task7",
+      "p": {
+        "acrd": null,
+        "agr": [],
+        "ar": [
+          "Cj3gehf1RVeWt88dTetoEH"
+        ],
+        "ato": null,
+        "cd": 1791721512.5223031,
+        "dd": null,
+        "dds": null,
+        "dl": [],
+        "do": 0,
+        "icc": 1,
+        "icp": false,
+        "icsd": 1792281600,
+        "ix": -867,
+        "lai": null,
+        "lt": false,
+        "md": 1791721512.5240209,
+        "nt": {
+          "_t": "tx",
+          "ch": 0,
+          "t": 1,
+          "v": ""
+        },
+        "pr": [],
+        "rmd": null,
+        "rp": null,
+        "rr": {
+          "ed": 64092211200,
+          "fa": 1,
+          "fu": 256,
+          "ia": 1791676800,
+          "of": [
+            {
+              "wd": 0
+            }
+          ],
+          "rc": 0,
+          "rrv": 4,
+          "sr": 1791676800,
+          "tp": 0,
+          "ts": 0
+        },
+        "rt": [],
+        "sb": 0,
+        "sp": null,
+        "sr": null,
+        "ss": 0,
+        "st": 2,
+        "tg": [],
+        "ti": 0,
+        "tir": 1792281600,
+        "tp": 0,
+        "tr": false,
+        "tt": "SEED repeat weekly",
+        "xx": {
+          "_t": "oo",
+          "sn": {}
+        }
+      }
+    },
+    {
+      "index": 283,
+      "slot_items": 2,
+      "uuid": "R2db17yZbh4Av1x5qeWASX",
+      "role": "instance 1 of \"SEED repeat weekly\"",
+      "t": 1,
+      "e": "Task7",
+      "p": {
+        "ix": -1406,
+        "md": 1791721512.5233419,
+        "rt": [
+          "KAeeekg9q3mwmgrDTNNp8Z"
+        ],
+        "sr": 1791676800,
+        "tir": 1791676800
+      }
+    },
+    {
+      "index": 285,
+      "slot_items": 2,
+      "uuid": "KAeeekg9q3mwmgrDTNNp8Z",
+      "role": "template \"SEED repeat weekly\"",
+      "t": 1,
+      "e": "Task7",
+      "p": {
+        "ti": -359
+      }
+    },
+    {
+      "index": 285,
+      "slot_items": 2,
+      "uuid": "Tk2uW6HDn7Y4AWaUVYAV5c",
+      "role": "instance 1 of \"SEED repeat monthly after completion\"",
+      "t": 0,
+      "e": "Task7",
+      "p": {
+        "acrd": null,
+        "agr": [],
+        "ar": [
+          "Cj3gehf1RVeWt88dTetoEH"
+        ],
+        "ato": null,
+        "cd": 1791721517.8733289,
+        "dd": null,
+        "dds": null,
+        "dl": [],
+        "do": 0,
+        "icc": 0,
+        "icp": false,
+        "icsd": null,
+        "ix": 0,
+        "lai": null,
+        "lt": false,
+        "md": 1791721518.4632411,
+        "nt": {
+          "_t": "tx",
+          "ch": 0,
+          "t": 1,
+          "v": ""
+        },
+        "pr": [],
+        "rmd": null,
+        "rp": null,
+        "rr": null,
+        "rt": [],
+        "sb": 0,
+        "sp": null,
+        "sr": 1792281600,
+        "ss": 0,
+        "st": 2,
+        "tg": [],
+        "ti": 0,
+        "tir": 1792281600,
+        "tp": 0,
+        "tr": false,
+        "tt": "SEED repeat monthly after completion",
+        "xx": {
+          "_t": "oo",
+          "sn": {}
+        }
+      }
+    },
+    {
+      "index": 287,
+      "slot_items": 2,
+      "uuid": "DRmrGVuUHDya3zAHSAGgCv",
+      "role": "template \"SEED repeat monthly after completion\"",
+      "t": 0,
+      "e": "Task7",
+      "p": {
+        "acrd": null,
+        "agr": [],
+        "ar": [
+          "Cj3gehf1RVeWt88dTetoEH"
+        ],
+        "ato": null,
+        "cd": 1791721523.5562949,
+        "dd": null,
+        "dds": null,
+        "dl": [],
+        "do": 0,
+        "icc": 1,
+        "icp": false,
+        "icsd": 1791763200,
+        "ix": -2031,
+        "lai": null,
+        "lt": false,
+        "md": 1791721523.5582089,
+        "nt": {
+          "_t": "tx",
+          "ch": 0,
+          "t": 1,
+          "v": ""
+        },
+        "pr": [],
+        "rmd": null,
+        "rp": null,
+        "rr": {
+          "ed": 64092211200,
+          "fa": 1,
+          "fu": 256,
+          "ia": 0,
+          "of": [],
+          "rc": 0,
+          "rrv": 4,
+          "sr": 1791676800,
+          "tp": 1,
+          "ts": 0
+        },
+        "rt": [],
+        "sb": 0,
+        "sp": null,
+        "sr": null,
+        "ss": 0,
+        "st": 2,
+        "tg": [],
+        "ti": 0,
+        "tir": null,
+        "tp": 0,
+        "tr": false,
+        "tt": "SEED repeat monthly after completion",
+        "xx": {
+          "_t": "oo",
+          "sn": {}
+        }
+      }
+    },
+    {
+      "index": 287,
+      "slot_items": 2,
+      "uuid": "Tk2uW6HDn7Y4AWaUVYAV5c",
+      "role": "instance 1 of \"SEED repeat monthly after completion\"",
+      "t": 1,
+      "e": "Task7",
+      "p": {
+        "ix": -2383,
+        "md": 1791721523.5572979,
+        "rt": [
+          "DRmrGVuUHDya3zAHSAGgCv"
+        ],
+        "sr": 1791676800,
+        "st": 1,
+        "ti": -375,
+        "tir": 1791676800
+      }
+    },
+    {
+      "index": 290,
+      "slot_items": 2,
+      "uuid": "DRmrGVuUHDya3zAHSAGgCv",
+      "role": "template \"SEED repeat monthly after completion\"",
+      "t": 1,
+      "e": "Task7",
+      "p": {
+        "md": 1791721533.956852,
+        "rr": {
+          "ed": 64092211200,
+          "fa": 1,
+          "fu": 8,
+          "ia": 0,
+          "of": [],
+          "rc": 0,
+          "rrv": 4,
+          "sr": 1791676800,
+          "tp": 1,
+          "ts": 0
+        }
+      }
+    },
+    {
+      "index": 438,
+      "slot_items": 5,
+      "uuid": "DRmrGVuUHDya3zAHSAGgCv",
+      "role": "template \"SEED repeat monthly after completion\"",
+      "t": 1,
+      "e": "Task7",
+      "p": {
+        "acrd": 1791676800,
+        "tir": 1794355200
+      }
+    },
+    {
+      "index": 438,
+      "slot_items": 5,
+      "uuid": "KAeeekg9q3mwmgrDTNNp8Z",
+      "role": "template \"SEED repeat weekly\"",
+      "t": 1,
+      "e": "Task7",
+      "p": {
+        "icc": 2,
+        "icsd": 1792368000,
+        "tir": 1792886400
+      }
+    },
+    {
+      "index": 438,
+      "slot_items": 5,
+      "uuid": "R2db17yZbh4Av1x5qeWASX",
+      "role": "instance 1 of \"SEED repeat weekly\"",
+      "t": 1,
+      "e": "Task7",
+      "p": {
+        "md": 1791726599.8247271,
+        "sp": 1791726599.824697,
+        "ss": 3
+      }
+    },
+    {
+      "index": 438,
+      "slot_items": 5,
+      "uuid": "Tk2uW6HDn7Y4AWaUVYAV5c",
+      "role": "instance 1 of \"SEED repeat monthly after completion\"",
+      "t": 1,
+      "e": "Task7",
+      "p": {
+        "md": 1791726599.3257639,
+        "sp": 1791726599.325722,
+        "ss": 3
+      }
+    },
+    {
+      "index": 438,
+      "slot_items": 5,
+      "uuid": "Vxtk9sizaiuUUQ8EgzZdoS",
+      "role": "instance 2 of \"SEED repeat weekly\"",
+      "t": 0,
+      "e": "Task7",
+      "p": {
+        "acrd": null,
+        "agr": [],
+        "ar": [
+          "Cj3gehf1RVeWt88dTetoEH"
+        ],
+        "ato": null,
+        "cd": 1791726601.3668461,
+        "dd": null,
+        "dds": null,
+        "dl": [],
+        "do": 0,
+        "icc": 0,
+        "icp": false,
+        "icsd": null,
+        "ix": -867,
+        "lai": null,
+        "lt": true,
+        "md": 1791726601.3680451,
+        "nt": {
+          "_t": "tx",
+          "ch": 0,
+          "t": 1,
+          "v": ""
+        },
+        "pr": [],
+        "rmd": null,
+        "rp": null,
+        "rr": null,
+        "rt": [
+          "KAeeekg9q3mwmgrDTNNp8Z"
+        ],
+        "sb": 0,
+        "sp": 1791726601.368026,
+        "sr": 1792281600,
+        "ss": 3,
+        "st": 2,
+        "tg": [],
+        "ti": -359,
+        "tir": 1792281600,
+        "tp": 0,
+        "tr": false,
+        "tt": "SEED repeat weekly",
+        "xx": {
+          "_t": "oo",
+          "sn": {}
+        }
+      }
+    }
+  ],
+  "redacted": []
+}

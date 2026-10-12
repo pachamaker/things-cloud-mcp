@@ -104,7 +104,7 @@ sends at most one Things Cloud request per second (`docs/testing/sandbox-e2e.md`
 | Key | Meaning | Values |
 |---|---|---|
 | `t` | action | `0` create ✅, `1` modify ✅, `2` delete 🟡 (behaviour unclear; prefer tombstones) |
-| `e` | entity kind | `Task6` ✅, `Task7` ✅ read (written by Things ≥ 3.23, Aug 2026 — **not handled by this repo yet, KI-25**), `ChecklistItem3` ✅, `Area3` ✅, `Tag4` ✅, `Tombstone2` ✅, `Settings3`/`Settings5` 🟡, `Command`/`Command3` 🟡 (Mail to Things queue); older kinds (`Task2/3/4`, `Area2`, `Tag2/3`, `ChecklistItem/2`) appear in old histories and must be readable |
+| `e` | entity kind | `Task6` ✅, `Task7` ✅ read (Things ≥ 3.23, Aug 2026, writes to-do, template and instance creates and modifies as `Task7`, capture `testdata/captures/recurrence-seeds-2026-10-11.json`; the server reads it since the SDK migration, KI-25, and never writes it), `ChecklistItem3` ✅, `Area3` ✅, `Tag4` ✅, `Tombstone2` ✅, `Settings3`/`Settings5` 🟡, `Command`/`Command3` 🟡 (Mail to Things queue); older kinds (`Task2/3/4`, `Area2`, `Tag2/3`, `ChecklistItem/2`) appear in old histories and must be readable |
 | `p` | payload | partial object; on modify, only changed keys are sent |
 
 **Identifiers** ✅: 21–22 character Base58 strings (Bitcoin alphabet, no `0 O I l`)
@@ -159,18 +159,23 @@ Tasks, projects and headings are all `Task6`, distinguished by `tp`.
 | `agr` | action group (heading) | `[headingUUID]` or `[]` | 🟡 |
 | `ar` | area | `[areaUUID]` or `[]` | ✅ |
 | `tg` | tags | `[tagUUID, ...]` | ✅ |
-| `ix` | index within its container | int | ✅ |
+| `ix` | index within its container | int; the official client writes negative values too (`-867`, `-2383` in the recurrence capture) | ✅ |
 | `cd` / `md` | creation / modification instant | | ✅ |
 | `rr` | recurrence rule | object or `null`, see §5.3 | ⛔ |
-| `rt` | repeating template | `[templateUUID]` on generated instances | 🟡 |
-| `icsd`, `icc`, `icp` | instance creation start date / count / completed-by-children | | ❓ |
-| `ato` | alarm time offset (reminder time, seconds from start of day) | int or `null` | ❓ |
-| `rmd`, `lai`, `acrd`, `do`, `dl`, `lt`, `rp` | reminder date, last alarm interaction, action-required date, due order, delegates, leaves tombstone, ? | defaults in `taskCreatePayload` | ❓ |
+| `rt` | repeating template | `[templateUUID]` on instances, `[]` on everything else | ✅ read (capture, §5.3) |
+| `icsd` | instance creation start date | calendar date on a template (§5.3), `null` elsewhere | 🟡 |
+| `icc` | instance creation count | on a template the instances so far (`1`, then `2` after the app generated one), `0` elsewhere | 🟡 |
+| `icp` | instance creation paused (?) | `false` on templates, instances and to-dos | ❓ |
+| `ato` | alarm time offset (reminder time, seconds from start of day) | int or `null` (`null` without a reminder) | ❓ |
+| `rmd`, `lai`, `do`, `dl`, `rp` | reminder date, last alarm interaction, due order, delegates, ? | defaults in `taskCreatePayload`; the official client sends the same values on to-dos, templates and instances (`rp` is `null` on all of them) | ❓ |
+| `acrd` | after-completion reference date (Things' own database column `afterCompletionReferenceDate`; the SDK calls it `ActionRequiredDate`) | `null` on create; the app sets it on an after-completion template to the day an instance was completed (§5.3) | 🟡 |
+| `lt` | leaves tombstone (?) | `false` on to-dos, templates and instances made from a to-do; `true` on an instance the app generated (§5.3) | ❓ |
 | `xx` | extension data | `{"sn": {}, "_t": "oo"}` on create; official clients put device metadata in `sn` | 🟡 |
 
 On **create** (`t: 0`) the official client sends every key. The server mirrors that in
-`taskCreatePayload` (no `omitempty`). On **modify** (`t: 1`) send only the keys you
-change plus `md`.
+`taskCreatePayload` (no `omitempty`); its key set equals the official client's to-do and
+template creates (`TestTaskCreatePayload_KeysMatchOfficialCreate`). On **modify**
+(`t: 1`) send only the keys you change plus `md`.
 
 ### 5.1 View placement (what the user sees)
 
@@ -207,6 +212,10 @@ Writing a placement — verified combinations only:
 `st=2` together with today's date was the original crash trigger in early SDK versions
 (`docs/client-side-bugs.md`, Bug 1). Never write it.
 
+Observed but not adopted: the official client created a dated to-do with
+`st=2, sr=tir=D` (D > today; recurrence capture, index 285), where the verified
+Upcoming write leaves `tir` empty.
+
 ### 5.2 Notes (`nt`)
 
 | Form | Shape | Evidence |
@@ -220,21 +229,101 @@ The server always writes full-text notes. Delta patches are applied with
 
 ### 5.3 Recurrence (`rr`) ⛔
 
-Do not write. See KI-01 and ADR-0004. Known keys, for reading only:
+Do not write `rr`, and do not write to templates or instances (KI-01, ADR-0004). The
+evidence below is for reading and for a future ADR; it comes from the official app
+making two to-dos repeat on the sandbox account
+(`testdata/captures/recurrence-seeds-2026-10-11.json`) and completing their instances
+(`recurrence-completion-2026-10-11.json`; README next to them, pinned by
+`server/recurrence_capture_test.go`). ✅ here means "seen in the official client's
+writes", not "safe for the server to write".
 
-| Key | Meaning (inferred) |
-|---|---|
-| `fu` | frequency unit: `16` daily, `256` weekly, `8` monthly, `4` yearly |
-| `fa` | frequency amplitude (every N units) |
-| `of` | detail list: `{"dy": n}`, `{"wd": n}`, `{"dy": n, "mo": n}`, `{"wdo": n, "wd": n}` — base (0/1) and weekday numbering unverified |
-| `tp` | `0` fixed schedule, `1` after completion |
-| `ia`, `sr` | anchor / start reference dates |
-| `ed` | end date (`4001-01-01` = never) |
-| `rc` | repeat count; `ts` time shift; `rrv` rule version (`4` observed) |
+**Shape.** A repeating to-do is two `Task7` objects: a hidden **template** that carries
+`rr`, and visible **instances** that carry `rt: [templateUUID]` and `rr: null`. The app
+never puts `rr` on a visible to-do. Making an existing to-do repeat is **one commit** of
+two items:
 
-Repetition is a client-side mechanism: a hidden template carries `rr`, and each
-Things app generates instances (`rt: [template]`) as days arrive. A server that only
-talks to the cloud sees an instance only after some Things app has created it.
+1. create of a new template (new UUID) with every key of a to-do create (§5), the
+   to-do's title and area, plus `rr`, `st: 2`, `sr: null`, `icsd`, `icc: 1`;
+2. modify of the existing to-do, which keeps its UUID and becomes instance 1:
+   `rt: [template]`, `sr` = `tir` = the first occurrence (here today, so it lands in
+   Today), a new `ix`, and `st: 1` / `ti` when they change.
+
+Changing the rule of a template is a modify carrying the whole `rr` object again (not
+only the changed key) and `md`; `icsd` and `icc` stay as they were.
+
+**Completing an instance** (both rule kinds ✅) is a modify of the instance with
+`ss: 3`, `sp` and `md`: the keys of a plain to-do's completion (§5). For an
+after-completion rule that is not the whole write: the same commit modifies the template
+with `acrd` = the day of the completion and `tir` = that day plus the rule's interval
+(2026-10-11 → 2026-11-11), leaves `icsd`/`icc` alone and creates no instance. For a fixed
+schedule the capture has no completion on its own: completing instance 1 shared its
+commit with generating instance 2, so whether a completion alone touches a fixed-schedule
+template is not known.
+
+**An instance the app generates** (✅ for an occurrence completed ahead of time: the
+weekly 2026-10-18 completed on 2026-10-11; the current apps allow that) is one create
+with every to-do key (§5) that copies the template as it stood: title, area, note, tags,
+`st: 2`, `tir`, `ix`, `ti` and the rest. It differs in `rt: [template]`, `rr: null`,
+`sr` = the template's `tir` (the occurrence), `icsd: null`, `icc: 0`, `lt: true`, its own
+`cd`/`md` and, created completed here, `ss: 3` and `sp`. The same commit modifies the
+template: `icc` + 1, `icsd` = the day after the occurrence, `tir` = the next occurrence
+(2026-10-25).
+
+The app's bookkeeping modifies of a template (`ti`; `icc`/`icsd`/`tir`; `acrd`/`tir`)
+carry no `md`; its rule change does. One commit can hold several user actions: the
+completions in two unrelated series and the early completion were one commit, because the
+app batches what it has not synced yet. Readers must not take a commit for one action.
+
+| Key | Template | Instance | Evidence |
+|---|---|---|---|
+| `rr` | rule object (below) | `null` | ✅ |
+| `rt` | `[]` | `[templateUUID]` | ✅ |
+| `st` | `2` | `1` (in Today); a generated instance copies the template's `2` | ✅ |
+| `sr` | `null` | the occurrence's date (a generated instance: the template's `tir`) | ✅ |
+| `tir` | the next occurrence. Fixed schedule: set with the rule (= `icsd`), moved on when an instance is generated (2026-10-18 → 2026-10-25). After completion: `null` until an instance is completed, then that day plus the interval | = `sr` | ✅ (one sample per rule kind); the generated instance took the template's `tir` as its date |
+| `icsd` | fixed schedule: the next occurrence when the rule is set, the day after an occurrence once it is generated; after completion: the day after the rule was set, unchanged by a completion | `null` | ✅ values; meaning 🟡 (a lower bound for the next instance's date) |
+| `icc` | instances so far: `1` when the rule is set, `+1` per generated instance; unchanged by a completion | `0` | ✅ values; meaning 🟡 |
+| `acrd` | fixed schedule: `null`; after completion: `null`, then the day an instance was completed | `null` | ✅ values; meaning 🟡 (`afterCompletionReferenceDate`, §5) |
+| `lt` | `false` | `false` when made from a to-do; `true` when generated | ✅ values; meaning ❓ |
+| `icp`, `rp`, `ato` | `false`, `null`, `null` | same | ✅ values (no reminder set); meaning ❓ |
+| `ix`, `ti` | own values; negative ones occur | same | ✅ |
+
+Rule object `rr` (weekly fixed schedule set on Sunday 2026-10-11; monthly after
+completion set the same day; all days as in §4):
+
+| Key | Meaning | Weekly, fixed | Monthly, after completion | Evidence |
+|---|---|---|---|---|
+| `fu` | frequency unit: `16` daily, `256` weekly, `8` monthly, `4` yearly | `256` | `8` | ✅ weekly, monthly; 🟡 daily, yearly |
+| `fa` | every N units | `1` | `1` | ✅ for 1; N > 1 not captured |
+| `tp` | `0` fixed schedule, `1` after completion | `0` | `1` | ✅ |
+| `of` | detail list | `[{"wd": 0}]` | `[]` | 🟡 `wd` 0 = Sunday, as Go's `time.Weekday` (one sample, a Sunday); after completion has no detail ✅; `dy`, `mo`, `wdo` of fixed monthly/yearly rules ❓ |
+| `ia` | anchor date | the first occurrence (2026-10-11) | `0` | ✅ values; meaning 🟡 |
+| `sr` | rule start date | the day the rule was set | same | ✅ |
+| `ed` | end date | `64092211200` (never) | same | ✅ |
+| `rc` | repeat count (?) | `0` | `0` | ✅ value; meaning ❓ |
+| `ts` | time shift (?) | `0` | `0` | ✅ value; meaning ❓ |
+| `rrv` | rule version | `4` | `4` | ✅ |
+
+The old encoder `buildRepeatRule` (unused since KI-01) produces exactly the weekly rule;
+for the after-completion one it differs in `ia` (it sends the start date, the app `0`)
+and `of` (it sends a day, the app `[]`). The rule was never the whole problem: the server
+put `rr` on the visible to-do, without a template, `icsd` or `icc` (KI-01).
+
+Repetition is a client-side mechanism: each Things app generates instances
+(`rt: [template]`) as days arrive, or at once when the user completes a future
+occurrence. A server that only talks to the cloud sees an instance only after some
+Things app has created it. Templates have `st: 2` and no `sr`,
+which the view rules of §5.1 read as Someday: readers must recognise them by `rr` and
+leave them out of views (KI-05).
+
+Not captured yet, so still unknown: an instance the app generates when its day arrives,
+without an early completion (open; its `st`/`tir`, and how far ahead the app generates;
+the next weekly occurrence is 2026-10-25, the after-completion one 2026-11-11); whether
+completing a fixed-schedule instance alone touches the template; in which zone `acrd` is
+taken; editing an instance or a template (title, when, note); ending or deleting a
+repetition; fixed monthly and yearly rules (`of` with `dy`/`mo`/`wdo`, and whether `dy`
+is 0-based), `fa` > 1, end dates and counts, daily and yearly units, reminders (`ato`),
+and two devices generating the same instance.
 
 ## 6. Other entities
 
@@ -261,9 +350,12 @@ talks to the cloud sees an instance only after some Things app has created it.
 ## 8. Adding a new write (procedure)
 
 1. Perform the action in the official Things app on a **sandbox account** while
-   capturing traffic (e.g. Proxyman/Charles on macOS).
+   capturing traffic (e.g. Proxyman/Charles on macOS). Payloads can also be read back
+   from the sandbox history afterwards, as `TestSandboxRecurrenceCapture` does; that
+   keeps the payload and the commit grouping, not the headers or the app version.
 2. Save the commit body, strip personal data, and commit it under
-   `testdata/captures/<feature>-<date>.json` with the Things app version.
+   `testdata/captures/<feature>-<date>.json` with the Things app version
+   (`testdata/captures/README.md`).
 3. Write a test that builds the payload with server code and diffs it against the
    capture (key set, value types, null vs absent).
 4. Round-trip on the sandbox account: cover the write in `TestSandboxE2E` and extend the

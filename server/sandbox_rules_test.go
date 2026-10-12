@@ -858,3 +858,212 @@ func sortedKeys[V any](m map[string]V) []string {
 	sort.Strings(keys)
 	return keys
 }
+
+// ---------------------------------------------------------------------------
+// Capture fixtures of the official apps' writes (docs/protocol/things-cloud.md §8)
+// ---------------------------------------------------------------------------
+
+// recurrenceSeedTitles are the repeating seeds of docs/testing/sandbox-e2e.md.
+var recurrenceSeedTitles = []string{"SEED repeat weekly", "SEED repeat monthly after completion"}
+
+// captureFixture is a sanitized excerpt of history: every item written for a
+// set of objects, in history order (testdata/captures/README.md).
+type captureFixture struct {
+	Source      string          `json:"source"`
+	CapturedOn  string          `json:"captured_on"`
+	HistoryHead int             `json:"history_head"`
+	Objects     []captureObject `json:"objects"`
+	Items       []captureItem   `json:"items"`
+	Redacted    []string        `json:"redacted"`
+}
+
+type captureObject struct {
+	UUID string `json:"uuid"`
+	Role string `json:"role"`
+}
+
+// captureItem is one entity of a history slot. Index is the slot (one
+// commit); SlotItems counts all entities of that slot, captured or not.
+type captureItem struct {
+	Index     int             `json:"index"`
+	SlotItems int             `json:"slot_items"`
+	UUID      string          `json:"uuid"`
+	Role      string          `json:"role"`
+	Action    int             `json:"t"`
+	Kind      string          `json:"e"`
+	Payload   json.RawMessage `json:"p"`
+}
+
+// buildRecurrenceCapture selects the repeating templates titled titles, the
+// instances generated from them (rt) and objects hanging off either
+// (checklist items, subtasks, tombstones), and returns all their items,
+// sanitized by sanitizeCaptureValue.
+func buildRecurrenceCapture(items []wireItem, titles []string) (captureFixture, error) {
+	live, deleted := foldHistoryWithDeleted(items)
+	var fx captureFixture
+	roles := map[string]string{}
+	addObject := func(uuid, role string) {
+		if roles[uuid] == "" {
+			roles[uuid] = role
+			fx.Objects = append(fx.Objects, captureObject{UUID: uuid, Role: role})
+		}
+	}
+
+	templates := map[string]string{}
+	for _, title := range titles {
+		found := seedCandidates(live, title, "Task", func(e *foldedEntity) bool { return !isJSONNull(e.Fields["rr"]) })
+		if len(found) != 1 {
+			return captureFixture{}, fmt.Errorf("want one repeating template titled %q, found %d", title, len(found))
+		}
+		templates[found[0].UUID] = title
+		addObject(found[0].UUID, fmt.Sprintf("template %q", title))
+	}
+	generated := map[string]int{}
+	for _, it := range items {
+		for _, ref := range jsonIDs(it.Payload["rt"]) {
+			if title, ok := templates[ref]; ok && roles[it.UUID] == "" {
+				generated[ref]++
+				addObject(it.UUID, fmt.Sprintf("instance %d of %q", generated[ref], title))
+			}
+		}
+	}
+	for grew := true; grew; {
+		grew = false
+		for _, it := range items {
+			for _, key := range []string{"ts", "pr", "dloid"} {
+				for _, ref := range jsonIDs(it.Payload[key]) {
+					if roles[ref] != "" && roles[it.UUID] == "" {
+						addObject(it.UUID, fmt.Sprintf("%s (%s) of %s", it.Kind, key, roles[ref]))
+						grew = true
+					}
+				}
+			}
+		}
+	}
+
+	keepID := func(id string) bool {
+		if roles[id] != "" {
+			return true
+		}
+		e := live[id]
+		if e == nil {
+			e = deleted[id]
+		}
+		return e != nil && isSeedTitle(e.title())
+	}
+	slotItems := map[int]int{}
+	var selected []wireItem
+	for _, it := range items {
+		slotItems[it.ServerIndex]++
+		if roles[it.UUID] != "" {
+			selected = append(selected, it)
+		}
+	}
+	sort.SliceStable(selected, func(i, j int) bool {
+		if selected[i].ServerIndex != selected[j].ServerIndex {
+			return selected[i].ServerIndex < selected[j].ServerIndex
+		}
+		return selected[i].UUID < selected[j].UUID
+	})
+	fx.Redacted = []string{}
+	for i, it := range selected {
+		p, err := sanitizeCapturePayload(it.Payload, fmt.Sprintf("items[%d].p", i), keepID, &fx.Redacted)
+		if err != nil {
+			return captureFixture{}, fmt.Errorf("item %s at index %d: %w", it.UUID, it.ServerIndex, err)
+		}
+		fx.Items = append(fx.Items, captureItem{
+			Index: it.ServerIndex, SlotItems: slotItems[it.ServerIndex], UUID: it.UUID, Role: roles[it.UUID],
+			Action: it.Action, Kind: it.Kind, Payload: p,
+		})
+	}
+	return fx, nil
+}
+
+// jsonIDs reads a reference field: one ID (dloid) or a list of IDs (rt, pr, ts).
+func jsonIDs(raw json.RawMessage) []string {
+	if s, ok := jsonString(raw); ok {
+		return []string{s}
+	}
+	var ids []string
+	if isJSONNull(raw) || json.Unmarshal(raw, &ids) != nil {
+		return nil
+	}
+	return ids
+}
+
+func isSeedTitle(title string) bool {
+	return strings.HasPrefix(title, "SEED ") || title == sandboxMarkerArea
+}
+
+var (
+	captureTypeTag = regexp.MustCompile(`^[a-z]{1,4}$`)
+	captureKey     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,15}$`)
+)
+
+func sanitizeCapturePayload(p map[string]json.RawMessage, path string, keepID func(string) bool, redacted *[]string) (json.RawMessage, error) {
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	if err := encodeCaptureJSON(&buf, sanitizeCaptureValue(v, "", path, keepID, redacted), ""); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSpace(buf.Bytes()), nil
+}
+
+// encodeCaptureJSON writes v without escaping <, > and &, so placeholders
+// stay readable in the fixture.
+func encodeCaptureJSON(w io.Writer, v any, indent string) error {
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", indent)
+	return enc.Encode(v)
+}
+
+// sanitizeCaptureValue keeps numbers, booleans, null, empty strings, type tags
+// (_t), seed titles (tt) and IDs keepID accepts. Other IDs become "<other id>";
+// every other string, and every map key that is not a short identifier, is
+// replaced and its path reported: a capture fixture is published, so it must
+// carry nothing that was not authored for the seeds (docs/testing/sandbox-e2e.md).
+func sanitizeCaptureValue(v any, key, path string, keepID func(string) bool, redacted *[]string) any {
+	switch x := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		for i, k := range sortedKeys(x) {
+			name := k
+			if !captureKey.MatchString(k) {
+				name = fmt.Sprintf("<redacted key %d>", i)
+				*redacted = append(*redacted, fmt.Sprintf("%s: key of %d chars", path, len(k)))
+			}
+			out[name] = sanitizeCaptureValue(x[k], k, path+"."+name, keepID, redacted)
+		}
+		return out
+	case []any:
+		out := make([]any, len(x))
+		for i, val := range x {
+			out[i] = sanitizeCaptureValue(val, key, fmt.Sprintf("%s[%d]", path, i), keepID, redacted)
+		}
+		return out
+	case string:
+		switch {
+		case x == "", key == "_t" && captureTypeTag.MatchString(x), key == "tt" && isSeedTitle(x):
+			return x
+		case isBase58UUID(x):
+			if keepID(x) {
+				return x
+			}
+			return "<other id>"
+		}
+		*redacted = append(*redacted, fmt.Sprintf("%s: %d chars", path, len(x)))
+		return fmt.Sprintf("<redacted %d chars>", len(x))
+	default:
+		return v
+	}
+}

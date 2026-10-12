@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"slices"
 	"strconv"
@@ -800,5 +801,86 @@ func TestSandboxRunRequired_KI34(t *testing.T) {
 		if got := sandboxRunRequired(getenv); got != tt.want {
 			t.Errorf("sandboxRunRequired(%q) = %v, want %v", tt.raw, got, tt.want)
 		}
+	}
+}
+
+func TestBuildRecurrenceCapture_KI01(t *testing.T) {
+	t.Parallel()
+
+	area, weekly, monthly, inst, other := generateUUID(), generateUUID(), generateUUID(), generateUUID(), generateUUID()
+	check, tomb, otherTag := generateUUID(), generateUUID(), generateUUID()
+	at := func(index int, uuid string, action int, kind, payload string) wireItem {
+		return wireItem{UUID: uuid, Action: action, Kind: kind, Payload: rawObject(t, payload), ServerIndex: index}
+	}
+	items := []wireItem{
+		at(1, area, 0, "Area3", `{"tt":"MCP E2E SANDBOX"}`),
+		at(2, weekly, 0, "Task7", `{"tt":"SEED repeat weekly","rr":{"fu":256,"tp":0},"rt":[],"ar":["`+area+`"],"tg":["`+otherTag+`"],`+
+			`"md":1770713623.4716659,"nt":{"_t":"tx","t":1,"ch":0,"v":""},"xx":{"_t":"oo","sn":{"Pavel's iPhone":"device 42"}}}`),
+		at(3, monthly, 0, "Task7", `{"tt":"SEED repeat monthly after completion","rr":{"fu":8,"tp":1},"rt":[]}`),
+		at(4, inst, 0, "Task7", `{"tt":"SEED repeat weekly","rr":null,"rt":["`+weekly+`"],"nt":{"_t":"tx","t":1,"v":"call the notary"}}`),
+		at(4, other, 0, "Task7", `{"tt":"Buy a flat","rt":[]}`),
+		at(5, weekly, 1, "Task7", `{"icsd":1791676800,"icc":1}`),
+		at(6, check, 0, "ChecklistItem3", `{"tt":"one","ts":["`+inst+`"]}`),
+		at(7, tomb, 0, "Tombstone2", `{"dloid":"`+check+`","dld":1791677000.5}`),
+		at(8, other, 1, "Task7", `{"tt":"Sell the flat"}`),
+	}
+
+	fx, err := buildRecurrenceCapture(items, recurrenceSeedTitles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantObjects := []captureObject{
+		{weekly, `template "SEED repeat weekly"`},
+		{monthly, `template "SEED repeat monthly after completion"`},
+		{inst, `instance 1 of "SEED repeat weekly"`},
+		{check, `ChecklistItem3 (ts) of instance 1 of "SEED repeat weekly"`},
+		{tomb, `Tombstone2 (dloid) of ChecklistItem3 (ts) of instance 1 of "SEED repeat weekly"`},
+	}
+	if !slices.Equal(fx.Objects, wantObjects) {
+		t.Errorf("objects = %+v\nwant %+v", fx.Objects, wantObjects)
+	}
+	var got []string
+	for _, it := range fx.Items {
+		got = append(got, fmt.Sprintf("%d/%d %s t=%d %s", it.Index, it.SlotItems, it.UUID, it.Action, it.Kind))
+	}
+	want := []string{
+		"2/1 " + weekly + " t=0 Task7", "3/1 " + monthly + " t=0 Task7", "4/2 " + inst + " t=0 Task7",
+		"5/1 " + weekly + " t=1 Task7", "6/1 " + check + " t=0 ChecklistItem3", "7/1 " + tomb + " t=0 Tombstone2",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("items = %q\nwant %q", got, want)
+	}
+
+	var buf bytes.Buffer
+	if err := encodeCaptureJSON(&buf, fx, ""); err != nil {
+		t.Fatal(err)
+	}
+	all := buf.String()
+	for _, leak := range []string{"flat", "notary", "Pavel", "device 42", otherTag, other, `"one"`} {
+		if strings.Contains(all, leak) {
+			t.Errorf("capture leaks %q: %s", leak, all)
+		}
+	}
+	for _, kept := range []string{`"tt":"SEED repeat weekly"`, `"ar":["` + area + `"]`, `"tg":["<other id>"]`, `"md":1770713623.4716659`, `"_t":"oo"`, `"v":""`, `"rt":["` + weekly + `"]`} {
+		if !strings.Contains(all, kept) {
+			t.Errorf("capture lost %s: %s", kept, all)
+		}
+	}
+	wantRedacted := []string{
+		"items[0].p.xx.sn: key of 14 chars",
+		"items[0].p.xx.sn.<redacted key 0>: 9 chars",
+		"items[2].p.nt.v: 15 chars",
+		"items[4].p.tt: 3 chars",
+	}
+	if !slices.Equal(fx.Redacted, wantRedacted) {
+		t.Errorf("redacted = %q\nwant %q", fx.Redacted, wantRedacted)
+	}
+
+	if _, err := buildRecurrenceCapture(items[:2], recurrenceSeedTitles); err == nil {
+		t.Error("a missing template was accepted")
+	}
+	dup := append(slices.Clone(items), at(9, generateUUID(), 0, "Task7", `{"tt":"SEED repeat weekly","rr":{"fu":256}}`))
+	if _, err := buildRecurrenceCapture(dup, recurrenceSeedTitles); err == nil {
+		t.Error("two weekly templates were accepted")
 	}
 }
