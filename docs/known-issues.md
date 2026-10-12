@@ -398,13 +398,18 @@ workaround can be deleted.
   `things_list_upcoming` lists neither, because the server hides templates from every
   list (KI-05); before that they were wrongly listed in Someday.
 - **Root cause:** templates are hidden on purpose: listed as ordinary to-dos they invite
-  writes that break the series (KI-01). The next occurrence is the template's `tir`
-  (protocol notes §5.3), which the SDK mirror does not store (spike report §4 B4);
-  computing it from `rr` (SDK `NextScheduledAt`) would have to match the app.
+  writes that break the series (KI-01). The app keeps the next occurrence in the
+  template's `tir` (protocol notes §5.3, captures): the weekly seed's template was
+  created with `tir` 2026-10-18 and moved to 2026-10-25 when the 18 October occurrence
+  was completed early; the after-completion template has `tir: null` while its instance
+  is open ("Waiting") and got 2026-11-11 when that instance was completed. A computation
+  from `rr` alone gives 18 October after the early completion. The SDK mirror does not
+  store `tir` (spike report §4 B4); arthursoares/things-cloud-sdk#41 proposes it.
 - **Fix direction (v2.1.0):** list templates in Upcoming only, read-only (`repeating:
-  "template"`), dated by their next occurrence or marked waiting, with dates computed
-  from `rr` and verified against the captures (persisting `tir`, `sb`, `dds` is a
-  separate SDK PR). Writes stay refused (KI-01).
+  "template"`), dated by the template's `tir`, or as waiting when `tir` is null; needs
+  `tir` in the mirror ([arthursoares/things-cloud-sdk#41](https://github.com/arthursoares/things-cloud-sdk/pull/41)).
+  Owner decision 2026-10-12: `tir`, not a computation from `rr`. Writes stay refused
+  (KI-01).
 
 ### KI-13 · Tasks under headings are missing from project listings
 - **Status:** fixed ([#21](https://github.com/pachamaker/things-cloud-mcp/pull/21), `a53bb30`) · **Evidence:** confirmed on
