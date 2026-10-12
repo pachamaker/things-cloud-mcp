@@ -164,10 +164,12 @@ Tasks, projects and headings are all `Task6`, distinguished by `tp`.
 | `rr` | recurrence rule | object or `null`, see §5.3 | ⛔ |
 | `rt` | repeating template | `[templateUUID]` on instances, `[]` on everything else | ✅ read (capture, §5.3) |
 | `icsd` | instance creation start date | calendar date on a template (§5.3), `null` elsewhere | 🟡 |
-| `icc` | instance creation count | `1` on templates with one instance, `0` elsewhere | 🟡 |
+| `icc` | instance creation count | on a template the instances so far (`1`, then `2` after the app generated one), `0` elsewhere | 🟡 |
 | `icp` | instance creation paused (?) | `false` on templates, instances and to-dos | ❓ |
 | `ato` | alarm time offset (reminder time, seconds from start of day) | int or `null` (`null` without a reminder) | ❓ |
-| `rmd`, `lai`, `acrd`, `do`, `dl`, `lt`, `rp` | reminder date, last alarm interaction, action-required date, due order, delegates, leaves tombstone, ? | defaults in `taskCreatePayload`; the official client sends the same values on to-dos, templates and instances (`rp` is `null` on all of them) | ❓ |
+| `rmd`, `lai`, `do`, `dl`, `rp` | reminder date, last alarm interaction, due order, delegates, ? | defaults in `taskCreatePayload`; the official client sends the same values on to-dos, templates and instances (`rp` is `null` on all of them) | ❓ |
+| `acrd` | after-completion reference date (Things' own database column `afterCompletionReferenceDate`; the SDK calls it `ActionRequiredDate`) | `null` on create; the app sets it on an after-completion template to the day an instance was completed (§5.3) | 🟡 |
+| `lt` | leaves tombstone (?) | `false` on to-dos, templates and instances made from a to-do; `true` on an instance the app generated (§5.3) | ❓ |
 | `xx` | extension data | `{"sn": {}, "_t": "oo"}` on create; official clients put device metadata in `sn` | 🟡 |
 
 On **create** (`t: 0`) the official client sends every key. The server mirrors that in
@@ -230,7 +232,8 @@ The server always writes full-text notes. Delta patches are applied with
 Do not write `rr`, and do not write to templates or instances (KI-01, ADR-0004). The
 evidence below is for reading and for a future ADR; it comes from the official app
 making two to-dos repeat on the sandbox account
-(`testdata/captures/recurrence-seeds-2026-10-11.json`, README next to it; pinned by
+(`testdata/captures/recurrence-seeds-2026-10-11.json`) and completing their instances
+(`recurrence-completion-2026-10-11.json`; README next to them, pinned by
 `server/recurrence_capture_test.go`). ✅ here means "seen in the official client's
 writes", not "safe for the server to write".
 
@@ -248,15 +251,40 @@ two items:
 Changing the rule of a template is a modify carrying the whole `rr` object again (not
 only the changed key) and `md`; `icsd` and `icc` stay as they were.
 
+**Completing an instance** (both rule kinds ✅) is a modify of the instance with
+`ss: 3`, `sp` and `md`: the keys of a plain to-do's completion (§5). For an
+after-completion rule that is not the whole write: the same commit modifies the template
+with `acrd` = the day of the completion and `tir` = that day plus the rule's interval
+(2026-10-11 → 2026-11-11), leaves `icsd`/`icc` alone and creates no instance. For a fixed
+schedule the capture has no completion on its own: completing instance 1 shared its
+commit with generating instance 2, so whether a completion alone touches a fixed-schedule
+template is not known.
+
+**An instance the app generates** (✅ for an occurrence completed ahead of time: the
+weekly 2026-10-18 completed on 2026-10-11; the current apps allow that) is one create
+with every to-do key (§5) that copies the template as it stood: title, area, note, tags,
+`st: 2`, `tir`, `ix`, `ti` and the rest. It differs in `rt: [template]`, `rr: null`,
+`sr` = the template's `tir` (the occurrence), `icsd: null`, `icc: 0`, `lt: true`, its own
+`cd`/`md` and, created completed here, `ss: 3` and `sp`. The same commit modifies the
+template: `icc` + 1, `icsd` = the day after the occurrence, `tir` = the next occurrence
+(2026-10-25).
+
+The app's bookkeeping modifies of a template (`ti`; `icc`/`icsd`/`tir`; `acrd`/`tir`)
+carry no `md`; its rule change does. One commit can hold several user actions: the
+completions in two unrelated series and the early completion were one commit, because the
+app batches what it has not synced yet. Readers must not take a commit for one action.
+
 | Key | Template | Instance | Evidence |
 |---|---|---|---|
 | `rr` | rule object (below) | `null` | ✅ |
 | `rt` | `[]` | `[templateUUID]` | ✅ |
-| `st` | `2` | `1` (in Today) | ✅ |
-| `sr` | `null` | the occurrence's date | ✅ |
-| `tir` | fixed schedule: the next occurrence (= `icsd`); after completion: `null` | = `sr` | ✅ values; meaning 🟡 (the app shows the template in Upcoming on that date, or as "Waiting") |
-| `icsd` | fixed schedule: the next occurrence; after completion: the day after the rule was set | `null` | ✅ values; meaning 🟡 |
-| `icc` | `1` (one instance so far) | `0` | ✅ values; meaning 🟡 |
+| `st` | `2` | `1` (in Today); a generated instance copies the template's `2` | ✅ |
+| `sr` | `null` | the occurrence's date (a generated instance: the template's `tir`) | ✅ |
+| `tir` | the next occurrence. Fixed schedule: set with the rule (= `icsd`), moved on when an instance is generated (2026-10-18 → 2026-10-25). After completion: `null` until an instance is completed, then that day plus the interval | = `sr` | ✅ (one sample per rule kind); the generated instance took the template's `tir` as its date |
+| `icsd` | fixed schedule: the next occurrence when the rule is set, the day after an occurrence once it is generated; after completion: the day after the rule was set, unchanged by a completion | `null` | ✅ values; meaning 🟡 (a lower bound for the next instance's date) |
+| `icc` | instances so far: `1` when the rule is set, `+1` per generated instance; unchanged by a completion | `0` | ✅ values; meaning 🟡 |
+| `acrd` | fixed schedule: `null`; after completion: `null`, then the day an instance was completed | `null` | ✅ values; meaning 🟡 (`afterCompletionReferenceDate`, §5) |
+| `lt` | `false` | `false` when made from a to-do; `true` when generated | ✅ values; meaning ❓ |
 | `icp`, `rp`, `ato` | `false`, `null`, `null` | same | ✅ values (no reminder set); meaning ❓ |
 | `ix`, `ti` | own values; negative ones occur | same | ✅ |
 
@@ -282,18 +310,20 @@ and `of` (it sends a day, the app `[]`). The rule was never the whole problem: t
 put `rr` on the visible to-do, without a template, `icsd` or `icc` (KI-01).
 
 Repetition is a client-side mechanism: each Things app generates instances
-(`rt: [template]`) as days arrive. A server that only talks to the cloud sees an
-instance only after some Things app has created it. Templates have `st: 2` and no `sr`,
+(`rt: [template]`) as days arrive, or at once when the user completes a future
+occurrence. A server that only talks to the cloud sees an instance only after some
+Things app has created it. Templates have `st: 2` and no `sr`,
 which the view rules of §5.1 read as Someday: readers must recognise them by `rr` and
 leave them out of views (KI-05).
 
-Not captured yet, so still unknown: how the app writes an instance it generates on its
-own and what it does to the template's `icsd`/`icc` then (the next weekly instance is due
-2026-10-18); completing an instance (both rule kinds; for after completion, when the next
-instance appears); editing an instance or a template (title, when, note); ending or
-deleting a repetition; fixed monthly and yearly rules (`of` with `dy`/`mo`/`wdo`, and
-whether `dy` is 0-based), `fa` > 1, end dates and counts, daily and yearly units,
-reminders (`ato`), and two devices generating the same instance.
+Not captured yet, so still unknown: an instance the app generates when its day arrives,
+without an early completion (open; its `st`/`tir`, and how far ahead the app generates;
+the next weekly occurrence is 2026-10-25, the after-completion one 2026-11-11); whether
+completing a fixed-schedule instance alone touches the template; in which zone `acrd` is
+taken; editing an instance or a template (title, when, note); ending or deleting a
+repetition; fixed monthly and yearly rules (`of` with `dy`/`mo`/`wdo`, and whether `dy`
+is 0-based), `fa` > 1, end dates and counts, daily and yearly units, reminders (`ato`),
+and two devices generating the same instance.
 
 ## 6. Other entities
 

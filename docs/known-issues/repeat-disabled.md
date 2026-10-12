@@ -88,15 +88,33 @@ encoder sends the start date and a day. Weekly `of` was `[{"wd": 0}]` for a Sund
 with Go's `time.Weekday` (one sample). Changing a template's rule is a modify that carries the
 whole `rr` object again.
 
+A second read the same day (`testdata/captures/recurrence-completion-2026-10-11.json`), after the
+owner completed both instances and, ahead of time, the weekly occurrence of 2026-10-18, adds:
+
+- **Completing an instance** writes `ss: 3`, `sp`, `md` on it, like a plain to-do. For an
+  after-completion series the same commit also sets the template's `acrd` (the completion day) and
+  `tir` (a month later) and creates no instance yet. A plain completion from the server would leave
+  the template part out; what the apps then do with the series is unknown, so completing an
+  instance stays on the list of writes the server must refuse (KI-01).
+- **An instance the app generates** is a create that copies the template (title, area, note,
+  `st: 2`, `tir`, `ix`, `ti`, …) with `rt: [template]`, `rr: null`, `sr` = the template's `tir`,
+  `icsd: null`, `icc: 0` and `lt: true`. In the same commit the template counts it (`icc: 2`) and
+  moves `icsd` to the day after the occurrence and `tir` to the next one.
+
 ## What's needed to re-enable
 
-The creation capture above exists. Still missing, each a capture of the app doing it on the
-sandbox account (never production — the blast radius of getting this wrong again is the same
-crash, and iOS has no local recovery):
+Captured so far: making a to-do repeat, changing a rule, completing instances of both rule kinds,
+and an instance the app generated for an occurrence completed ahead of time (with what it does to
+the template's `icsd`/`icc`/`tir`). Still missing, each a capture of the app doing it on the sandbox
+account (never production — the blast radius of getting this wrong again is the same crash, and iOS
+has no local recovery):
 
-- an instance the app generates on its own, and what it does to the template's `icsd`/`icc`;
-- completing an instance, for both rule kinds (for after completion: when the next instance
-  appears), and editing an instance or a template;
+- an instance the app generates when its day arrives (open, no early completion; the next weekly
+  occurrence is 2026-10-25), and when the after-completion template produces its next instance
+  (its `tir` is 2026-11-11);
+- completing a fixed-schedule instance on its own (here it shared a commit with generating the
+  next instance);
+- editing an instance or a template (title, when, notes);
 - fixed monthly and yearly rules (`of` with `dy`/`mo`/`wdo`), `fa` > 1, end dates and counts;
 - ending or deleting a repetition.
 

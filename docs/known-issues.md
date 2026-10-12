@@ -100,9 +100,10 @@ workaround can be deleted.
 - **Symptom:** after creating/editing a task with `repeat`, Things on macOS and iOS
   misbehaves irreversibly.
 - **Root cause:** `buildRepeatRule` (`server/write.go`) hand-assembled the `rr`
-  object from guesses, and the write path put it on one visible to-do. A capture of the
-  official app making two to-dos repeat now exists
-  (`testdata/captures/recurrence-seeds-2026-10-11.json`, protocol notes §5.3,
+  object from guesses, and the write path put it on one visible to-do. Captures of the
+  official app making two to-dos repeat and completing their instances now exist
+  (`testdata/captures/recurrence-seeds-2026-10-11.json`,
+  `recurrence-completion-2026-10-11.json`, protocol notes §5.3,
   [`known-issues/repeat-disabled.md`](known-issues/repeat-disabled.md)). Known gaps:
   - Things models repetition as a hidden *template* (`rr` set) plus *instances*
     (`rt: [template]`), confirmed by the capture: making a to-do repeat is one commit
@@ -111,6 +112,11 @@ workaround can be deleted.
     existing task that already has instances, history, and device metadata.
   - `icsd` (instance creation start date), `icc`, `rt` were never set consistently with
     `rr`: the app's template carries `icsd` (a date) and `icc: 1`, its instance `rt`.
+  - Completing an instance is `ss: 3`, `sp`, `md` on it, but for an after-completion
+    series the app also sets the template's `acrd` and `tir` in the same commit;
+    `completeTask` writes only the instance part. An instance the app generates is a copy
+    of the template (`lt: true`), and the template then counts it (`icc`) and moves
+    `icsd`/`tir`, all in one commit.
   - Detail encoding: the capture matches the encoder's weekly fixed rule (`wd` 0 for a
     Sunday, as Go's `time.Weekday`; one sample); for "after completion" the app sends
     `ia: 0` and `of: []`, the encoder a start date and a day. Monthly/yearly `dy`
@@ -125,8 +131,9 @@ workaround can be deleted.
 - **Fix direction:** ADR-0004. Disable `repeat` on all surfaces (reject with a clear
   error, including `repeat: "none"`) until captured, sanitized payloads from the
   official client exist as fixtures and a sandbox-account round trip passes on
-  Mac + iOS. The creation capture exists; generated instances, completions, edits and
-  fixed monthly/yearly rules still need one (`repeat-disabled.md`). Persist `rr`/`rt`
+  Mac + iOS. Captures of creation, completion and an instance generated for an early
+  completion exist; on-schedule generation, edits, fixed monthly/yearly rules and ending
+  a repetition still need one (`repeat-disabled.md`). Persist `rr`/`rt`
   read-only first; refuse complete/move/schedule/edit on both templates and instances,
   as upstream does.
 
