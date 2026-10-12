@@ -61,21 +61,50 @@ Independent of that contradiction, two real risk factors remain unaddressed in t
   methods (`NextScheduledAt`, `ComputeFirstScheduledAt`) — exactly the kind of logic that would
   compute these values — are currently dead code, called by nothing outside their own tests.
 
+## What the capture answers (2026-10-11)
+
+The owner made two to-dos repeat in a current Things app on the sandbox account
+(`SEED repeat weekly`, fixed schedule; `SEED repeat monthly after completion`). Every history
+item the app wrote for them is in `testdata/captures/recurrence-seeds-2026-10-11.json`
+(README next to it), pinned by `server/recurrence_capture_test.go`; the protocol notes are in
+`docs/protocol/things-cloud.md` §5.3. The two open questions above:
+
+1. **`icsd`/`icc`/`rp`.** The app populates `icsd` and `icc` on the template, not `rp`: the
+   template gets `icsd` = a calendar date (fixed schedule: the next occurrence, which is also
+   its `tir`; after completion: the day after the rule was set) and `icc: 1`; the instance
+   keeps `icsd: null`, `icc: 0`; `rp` is `null` on both. The old write path sent `rr` with
+   `icsd: null`, `icc: 0`, a combination the app never wrote here.
+2. **One record or two.** Two linked records, written in **one commit**: a new hidden
+   template (`Task7`, `rr` set, `st: 2`, `sr: null`) and the existing to-do, which keeps its
+   UUID and becomes instance 1 (`rt: [template]`, `rr: null`, dated today). The app never
+   put `rr` on a visible to-do. A single record with `rr` set, as this repo used to send, is
+   a shape the official client does not produce. That makes the report's correlation
+   between `repeat` and corruption plausible without proving the cause; the 2026-02
+   "no crash" test predates Things 3.23 and `Task7`.
+
+The rule object itself matched: `buildRepeatRule` produces exactly the app's weekly
+fixed-schedule `rr`; for "after completion" the app sends `ia: 0` and `of: []` where the
+encoder sends the start date and a day. Weekly `of` was `[{"wd": 0}]` for a Sunday, consistent
+with Go's `time.Weekday` (one sample). Changing a template's rule is a modify that carries the
+whole `rr` object again.
+
 ## What's needed to re-enable
 
-A genuine Things Cloud request/response capture of a repeating task created **directly in Things.app**
-(not through this connector), on a **dedicated test account** (never production — the blast radius of
-getting this wrong again is the same crash, and iOS has no local recovery). That capture would answer
-both open questions:
+The creation capture above exists. Still missing, each a capture of the app doing it on the
+sandbox account (never production — the blast radius of getting this wrong again is the same
+crash, and iOS has no local recovery):
 
-1. Does `icsd`/`icc`/`rp` need to be populated alongside `rr`, and with what values?
-2. Does the Cloud wire protocol need two linked `Task6` records (template + instance) for a repeating
-   task, or does a single record with `rr` set (as this repo already sends) fully satisfy it?
+- an instance the app generates on its own, and what it does to the template's `icsd`/`icc`;
+- completing an instance, for both rule kinds (for after completion: when the next instance
+  appears), and editing an instance or a template;
+- fixed monthly and yearly rules (`of` with `dy`/`mo`/`wdo`), `fa` > 1, end dates and counts;
+- ending or deleting a repetition.
 
-Until that capture exists and a sandbox round trip passes on Mac and iOS, do not remove
-`rejectRepeat` from `createTask()`/`editTask()` (`server/write.go`) and do not re-add `repeat` to
-the tool schemas. Re-enabling also needs the mirror to store `rr`/`rt`, so the server can refuse
-edits to templates and instances (KI-01 fix direction).
+Then a new ADR (which writes, as `Task7` or `Task6`), an encoder whose output is diffed against
+these fixtures (§8 of the protocol notes), and a sandbox round trip on Mac and iOS. Until then,
+do not remove `rejectRepeat` from `createTask()`/`editTask()` (`server/write.go`) and do not
+re-add `repeat` to the tool schemas. Re-enabling also needs the mirror to store `rr`/`rt`, so
+the server can refuse edits to templates and instances (KI-01 fix direction).
 
 ## Read-path gap (separate, lower-risk, unrelated to the crash)
 

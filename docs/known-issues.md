@@ -71,7 +71,10 @@ workaround can be deleted.
   cursor) on truly unknown kinds, and explicitly skip known non-task kinds. Writing
   `Task7` stays out of scope until ADR-0004 evidence exists; upstream's
   [task7-write-policy.md](https://github.com/arthursoares/things-cloud-sdk/blob/main/docs/task7-write-policy.md)
-  is the reference. Preferred route: adopt the upstream SDK (ADR-0001).
+  is the reference. Preferred route: adopt the upstream SDK (ADR-0001). The recurrence
+  capture (`testdata/captures/recurrence-seeds-2026-10-11.json`) shows a current app
+  writing creates and modifies of to-dos, templates and instances as `Task7`, with the
+  same 34 create keys `taskCreatePayload` sends as `Task6`.
 
 ### KI-26 · ~1 in 256 created IDs is not decodable by Things
 - **Status:** fixed: PR #3 on `main`; since the upstream SDK migration by the redraw
@@ -96,17 +99,22 @@ workaround can be deleted.
   **Evidence:** confirmed (incident 2026-08-18, earlier crash 2026-02-16)
 - **Symptom:** after creating/editing a task with `repeat`, Things on macOS and iOS
   misbehaves irreversibly.
-- **Root cause:** `buildRepeatRule` (`server/write.go:360`) hand-assembles the `rr`
-  object from guesses. Nothing in the repo is backed by a capture of the official
-  client creating a repeating to-do. Known gaps:
-  - Things models repetition as a hidden *template* (`rr` set) plus client-generated
-    *instances* (`rt: [template]`). The server writes `rr` onto an ordinary visible
-    task, and `editTask` (`server/write.go:746`) can bolt `rr` onto an existing task
-    that already has instances, history, and device metadata.
-  - `icsd` (instance creation start date), `icc`, `rt`, `ato` are never set
-    consistently with `rr`.
-  - Detail encoding is unverified: weekly `wd` uses Go's `time.Weekday` (Sunday = 0),
-    monthly/yearly `dy` is written 0-based (`server/write.go:451-454`).
+- **Root cause:** `buildRepeatRule` (`server/write.go`) hand-assembled the `rr`
+  object from guesses, and the write path put it on one visible to-do. A capture of the
+  official app making two to-dos repeat now exists
+  (`testdata/captures/recurrence-seeds-2026-10-11.json`, protocol notes §5.3,
+  [`known-issues/repeat-disabled.md`](known-issues/repeat-disabled.md)). Known gaps:
+  - Things models repetition as a hidden *template* (`rr` set) plus *instances*
+    (`rt: [template]`), confirmed by the capture: making a to-do repeat is one commit
+    that creates the template and turns the existing to-do into instance 1. The server
+    wrote `rr` onto an ordinary visible task, and `editTask` could bolt `rr` onto an
+    existing task that already has instances, history, and device metadata.
+  - `icsd` (instance creation start date), `icc`, `rt` were never set consistently with
+    `rr`: the app's template carries `icsd` (a date) and `icc: 1`, its instance `rt`.
+  - Detail encoding: the capture matches the encoder's weekly fixed rule (`wd` 0 for a
+    Sunday, as Go's `time.Weekday`; one sample); for "after completion" the app sends
+    `ia: 0` and `of: []`, the encoder a start date and a day. Monthly/yearly `dy`
+    (written 0-based by the encoder) is still uncaptured.
   - The mirror never stores `rr` or `rt` (SDK `sync/store.go`; spike report §4 B4), so the server
     cannot even tell a template from an instance after the fact.
   - Things 3.23 (Aug 2026) overhauled repeating to-dos (early completion, exceptions,
@@ -115,10 +123,12 @@ workaround can be deleted.
     ([wbopan#5](https://github.com/wbopan/things-cloud-mcp/issues/5)); the official URL
     scheme also refuses to change when/deadline/completion of repeating to-dos.
 - **Fix direction:** ADR-0004. Disable `repeat` on all surfaces (reject with a clear
-  error, including `repeat: "none"`) until a captured, sanitized payload from the
-  official client exists as a fixture and a sandbox-account round trip passes on
-  Mac + iOS. Persist `rr`/`rt` read-only first; refuse complete/move/schedule/edit on
-  both templates and instances, as upstream does.
+  error, including `repeat: "none"`) until captured, sanitized payloads from the
+  official client exist as fixtures and a sandbox-account round trip passes on
+  Mac + iOS. The creation capture exists; generated instances, completions, edits and
+  fixed monthly/yearly rules still need one (`repeat-disabled.md`). Persist `rr`/`rt`
+  read-only first; refuse complete/move/schedule/edit on both templates and instances,
+  as upstream does.
 
 ### KI-07 · `/mcp` has no authentication
 - **Status:** fixed in code (`server/auth.go`) — not yet verified end to end with Pocket ID,
@@ -522,4 +532,4 @@ workaround can be deleted.
 | KI-28 | History key change or `404 AccountIssue` after an account reset leaves a stale cursor | [wbopan#27](https://github.com/wbopan/things-cloud-mcp/issues/27), [#35](https://github.com/wbopan/things-cloud-mcp/issues/35) | Detect key change / 404, rebuild the mirror |
 | KI-29 | One malformed historical tombstone can block processing | [arthursoares#37](https://github.com/arthursoares/things-cloud-sdk/issues/37) | Quarantine bad items with a log entry instead of aborting or skipping silently |
 | KI-30 | Client identity is a Things 3.22-era build (`ThingsMac/32209501`; 3.23 is `32300536`) | SDK `client.go` (`DefaultClientInfo`, `ThingsUserAgent`) | Hypothesis: the cloud may adapt responses to the client version. Decide deliberately (see `legal-and-risk.md`); do not change blindly |
-| KI-31 | Negative `ix` crashed Things on Mac and iOS at launch in another implementation | [wbopan#16](https://github.com/wbopan/things-cloud-mcp/issues/16) | Never write negative indexes; verify what the official client sends for new items |
+| KI-31 | Negative `ix` crashed Things on Mac and iOS at launch in another implementation | [wbopan#16](https://github.com/wbopan/things-cloud-mcp/issues/16) | Never write negative indexes; verify what the official client sends for new items. The official client itself writes negative `ix` and `ti` (`-867`, `-2383`; `testdata/captures/recurrence-seeds-2026-10-11.json`), so the sign alone does not explain the crash; the rule stays until a capture does |
