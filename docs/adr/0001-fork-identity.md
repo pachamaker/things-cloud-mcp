@@ -5,6 +5,9 @@ Accepted (2026-10-11): option B. Spike verdict "conditional GO" — see
 `docs/2026-10-10-upstream-sdk-spike.md`. Implemented on `main` by PR #6 (2026-10-10,
 `15e5b6b`), including the phase 2 safety adapters (PR #4) and the phase 3 view
 classifier (ADR-0005). Upstream PRs from the spike report §6 are still open items.
+For `v2.0.0` (2026-10-12) the owner chose the soft-fork fallback of decision 2 if the
+mirror-field PRs upstream are not released in time: `replace` to `pachamaker/things-cloud-sdk`
+pinned to a commit or tag, back to upstream once released (`docs/roadmap.md`, Releases).
 
 ## Context
 - Lineage: `nicolai86/things-cloud-sdk` (MIT, 2017, Raphael Randschau; dormant since

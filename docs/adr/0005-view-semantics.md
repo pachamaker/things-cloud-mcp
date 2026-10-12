@@ -2,6 +2,9 @@
 
 ## Status
 Proposed (2026-10-10). Fixes KI-02, KI-05, KI-13.
+Release plan (2026-10-12): the classifier with This Evening, deadline suppression and
+hidden repeating templates, plus the conformance harness, ship in `v2.0.0`; future
+occurrences of repeating to-dos in Upcoming are deferred to `v2.1.0` (`docs/roadmap.md`).
 
 ## Context
 - Things computes Inbox/Today/Upcoming/Anytime/Someday/Logbook on the client from
