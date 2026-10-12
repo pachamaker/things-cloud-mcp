@@ -1,0 +1,7 @@
+# Dev-only: the conformance exporter (docs/testing/conformance.md). Install into a
+# virtual environment outside the repository:
+#   python3 -m venv ~/.venvs/things-conformance
+#   ~/.venvs/things-conformance/bin/pip install --require-hashes -r scripts/conformance/requirements.txt
+# things.py 1.0.1 ships as an sdist only and has no dependencies.
+things.py==1.0.1 \
+    --hash=sha256:6d760727e57c0cfb85f18a63b36459287573f7d7c0442874a76d4ef38b92089d
