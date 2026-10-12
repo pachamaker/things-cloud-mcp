@@ -387,7 +387,8 @@ workaround can be deleted.
   Things stores them); the next occurrence the Things app shows in Upcoming (KI-36).
 
 ### KI-36 · Upcoming lacks the next occurrence of repeating to-dos
-- **Status:** open · **Evidence:** confirmed (Things app on the sandbox, 2026-10-11:
+- **Status:** open, planned for v2.1.0 (owner decision 2026-10-12: v2.0.0 keeps
+  templates hidden in every list, Upcoming included) · **Evidence:** confirmed (Things app on the sandbox, 2026-10-11:
   Upcoming lists "18 Oct ⟳ SEED repeat weekly" and "Waiting ⟳ SEED repeat monthly after
   completion"; capture `testdata/captures/recurrence-completion-2026-10-11.json`: the
   template's `tir` is moved to the next occurrence)
@@ -400,10 +401,10 @@ workaround can be deleted.
   writes that break the series (KI-01). The next occurrence is the template's `tir`
   (protocol notes §5.3), which the SDK mirror does not store (spike report §4 B4);
   computing it from `rr` (SDK `NextScheduledAt`) would have to match the app.
-- **Fix direction:** list templates in Upcoming only, read-only (`repeating:
-  "template"`), dated by their next occurrence or marked waiting; needs `tir` in the
-  mirror (an SDK change like arthursoares/things-cloud-sdk#40) or a computation from
-  `rr` verified against the captures. Writes stay refused (KI-01).
+- **Fix direction (v2.1.0):** list templates in Upcoming only, read-only (`repeating:
+  "template"`), dated by their next occurrence or marked waiting, with dates computed
+  from `rr` and verified against the captures (persisting `tir`, `sb`, `dds` is a
+  separate SDK PR). Writes stay refused (KI-01).
 
 ### KI-13 · Tasks under headings are missing from project listings
 - **Status:** fixed ([#21](https://github.com/pachamaker/things-cloud-mcp/pull/21), `a53bb30`) · **Evidence:** confirmed on
