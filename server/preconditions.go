@@ -22,10 +22,10 @@ type mirrorLookup interface {
 // write is judged against the account as it is now, not as of the last read.
 // Tests replace it.
 var writeMirror = func() (mirrorLookup, error) {
-	if err := syncForRead(); err != nil {
+	if err := syncForWrite(); err != nil {
 		return nil, fmt.Errorf("sync before write failed: %w", err)
 	}
-	return syncer.State(), nil
+	return mirrorState(), nil
 }
 
 // precheck runs one write's preconditions against a fresh mirror before any

@@ -226,6 +226,16 @@ func syncForRead() error {
 	return nil
 }
 
+// syncForWrite syncs before a write's preconditions, and checks the
+// account's history unless a check ran within the last minute (KI-28).
+func syncForWrite() error {
+	if _, err := mirror.SyncForWrite(); err != nil {
+		log.Printf("[SYNC] pre-write sync failed: %v", err)
+		return err
+	}
+	return nil
+}
+
 // syncAfterWrite syncs after a write to refresh local state.
 // Errors are logged but not returned (best-effort refresh).
 func syncAfterWrite() {
@@ -515,6 +525,19 @@ func buildRepeatRule(repeat string, refDate time.Time) (*json.RawMessage, error)
 // ---------------------------------------------------------------------------
 // Core write operations (used by both HTTP handlers and MCP tools)
 // ---------------------------------------------------------------------------
+
+// useHistory points the writer at the account's history key: at startup and
+// after a rebuild moved the mirror onto a new history (KI-28).
+func useHistory(c *thingscloud.Client, key string) error {
+	h := c.HistoryWithID(key)
+	if err := h.Sync(); err != nil {
+		return fmt.Errorf("failed to sync history: %w", redactRequestURL(err))
+	}
+	historyMu.Lock()
+	history = h
+	historyMu.Unlock()
+	return nil
+}
 
 // historyWrite syncs the history to get the latest ancestor index, then writes.
 // If the write still fails with 409 (race with Things app), it retries once.

@@ -658,7 +658,7 @@ func (h *sandboxHarness) cleanupRun(t *testing.T) {
 
 	trashed, failed := 0, 0
 	for _, o := range tasks {
-		if task, err := syncer.State().Task(o.UUID); err == nil && task != nil && task.InTrash {
+		if task, err := mirrorState().Task(o.UUID); err == nil && task != nil && task.InTrash {
 			continue
 		}
 		if err := h.trash(o.UUID); err != nil {

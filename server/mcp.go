@@ -430,7 +430,7 @@ func mcpListChecklistItems(_ context.Context, req mcp.CallToolRequest) (*mcp.Cal
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	items, err := syncer.State().ChecklistItems(taskUUID)
+	items, err := mirrorState().ChecklistItems(taskUUID)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -463,7 +463,7 @@ func mcpGetArea(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	area, err := syncer.State().Area(uuid)
+	area, err := mirrorState().Area(uuid)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -481,7 +481,7 @@ func mcpGetTag(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult,
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	tag, err := syncer.State().Tag(uuid)
+	tag, err := mirrorState().Tag(uuid)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
