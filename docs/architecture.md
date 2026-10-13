@@ -103,7 +103,7 @@ used to carry: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4.
 | `server/json_body.go` | Bounded JSON body decoding for REST | |
 | `server/redact.go` | Hides the URL of a failed Things Cloud request where SDK errors enter the server (sync gate, `historyWrite`, startup) | The URL carries the history key, a bearer capability (KI-35) |
 | SDK `thingscloud` | HTTP client, histories, items, wire types (`Task6`/`Task7`), Base58 codec, notes, account | `History.Write` refuses non-canonical IDs |
-| SDK `sync` | `Syncer`: incremental pull, per-batch cursor, cache replay with backup, SQLite store, `State` queries | Stores no `tir`, `dds`, `sb`, `rr`, `rt` |
+| SDK `sync` | `Syncer`: incremental pull, per-batch cursor, cache replay with backup, SQLite store, `State` queries | Stores no `tir`, `dds`, `sb`; `rr`/`rt` only in the fork `go.mod` replaces it with (arthursoares/things-cloud-sdk#40) |
 | `tests/*.sh` | Black-box scripts against a deployed server | Hit a real account; must target a sandbox |
 
 ## 5. Runtime flows (current)

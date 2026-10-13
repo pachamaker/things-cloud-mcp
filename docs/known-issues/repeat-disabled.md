@@ -122,7 +122,8 @@ Then a new ADR (which writes, as `Task7` or `Task6`), an encoder whose output is
 these fixtures (§8 of the protocol notes), and a sandbox round trip on Mac and iOS. Until then,
 do not remove `rejectRepeat` from `createTask()`/`editTask()` (`server/write.go`) and do not
 re-add `repeat` to the tool schemas. Re-enabling also needs the mirror to store `rr`/`rt`, so
-the server can refuse edits to templates and instances (KI-01 fix direction).
+the server can refuse edits to templates and instances (KI-01 fix direction); the SDK fork does,
+and the refusal exists on branch `recurrence-sdk-fork-KI-05-KI-10`.
 
 ## Read-path gap (separate, lower-risk, unrelated to the crash)
 
