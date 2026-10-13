@@ -225,9 +225,11 @@ as `github.com/arthursoares/things-cloud-sdk` (`things`/`thingscloud`) and
 `github.com/arthursoares/things-cloud-sdk/sync`. What the SDK version differs in from
 the old embedded copy: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4. Until
 [arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40)
-is released, `go.mod` replaces the SDK with the fork `github.com/pachamaker/things-cloud-sdk`
-at `f41fcbb`, which stores `rr`/`rt` (`Task.Repeater`, `RecurrenceIDs`); point it back at
-an upstream release, or keep it as a deliberate soft fork (ADR-0001), before merging.
+and [#41](https://github.com/arthursoares/things-cloud-sdk/pull/41) are released, `go.mod`
+replaces the SDK with the fork `github.com/pachamaker/things-cloud-sdk` at `9d70eb8`, which
+stores `rr`/`rt` (`Task.Repeater`, `RecurrenceIDs`) and `sb`/`dds`/`tir` (`StartBucket`,
+`DeadlineSuppressionDate`, `TodayIndexReferenceDate`); point it back at an upstream release,
+or keep it as a deliberate soft fork (ADR-0001), before merging.
 
 ## 6. Architecture in one minute
 

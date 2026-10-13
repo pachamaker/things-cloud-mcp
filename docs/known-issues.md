@@ -125,7 +125,8 @@ workaround can be deleted.
   - SDK v0.6.0 never stores `rr` or `rt` (SDK `sync/store.go`; spike report §4 B4), so the server
     cannot even tell a template from an instance after the fact. Fixed in
     [arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40);
-    until it is released, `go.mod` replaces the SDK with the fork commit `f41fcbb`.
+    until it is released, `go.mod` replaces the SDK with the fork commit `9d70eb8` (#40 and
+    #41).
   - Things 3.23 (Aug 2026) overhauled repeating to-dos (early completion, exceptions,
     rule updates) and moved to `Task7` (KI-25), so the encoder targets an obsolete model.
   - Elsewhere, completing a recurring task through the cloud protocol destroyed it
