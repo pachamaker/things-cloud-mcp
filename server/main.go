@@ -22,10 +22,10 @@ import (
 var version = "dev"
 
 var (
-	client  *things.Client
-	syncer  *sync.Syncer
-	mirror  *syncGate
-	history *things.History
+	client   *things.Client
+	mirrorDB *mirrorFile
+	mirror   *syncGate
+	history  *things.History
 )
 
 type shutdownServer interface {
@@ -339,10 +339,15 @@ func newThingsClient(endpoint, username, password string) *things.Client {
 }
 
 // connectThings sets the package globals the handlers use (KI-17): the
-// client, the mirror under dataDir after an initial sync, and the write
-// history. The sandbox e2e harness starts the server through it too.
+// client, the mirror under dataDir, synced onto the account's current history
+// (rebuilt first if it follows another one, KI-28), and the write history. The
+// sandbox e2e harness starts the server through it too.
 func connectThings(username, password, dataDir string) (closeMirror func() error, err error) {
-	client = newThingsClient(things.APIEndpoint, username, password)
+	return connectThingsAt(things.APIEndpoint, username, password, dataDir)
+}
+
+func connectThingsAt(endpoint, username, password, dataDir string) (closeMirror func() error, err error) {
+	client = newThingsClient(endpoint, username, password)
 
 	dbPath := syncDBPath(dataDir)
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o700); err != nil {
@@ -350,35 +355,34 @@ func connectThings(username, password, dataDir string) (closeMirror func() error
 	}
 	log.Printf("Sync database: %s", dbPath)
 
-	syncer, err = sync.Open(dbPath, client)
+	file, err := openMirrorFile(dbPath, client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open sync database: %w", err)
 	}
-	mirror = newSyncGate(syncer, time.Now)
-
-	if err := runInitialSync(mirror); err != nil {
-		syncer.Close()
+	guard := newHistoryGuard(file, client)
+	if err := guard.resync(); err != nil {
+		file.Close()
 		return nil, err
 	}
-
-	history, err = client.OwnHistory()
-	if err != nil {
-		syncer.Close()
-		return nil, fmt.Errorf("failed to get history: %w", err)
-	}
-	if err := history.Sync(); err != nil {
-		syncer.Close()
-		return nil, fmt.Errorf("failed to sync history: %w", redactRequestURL(err))
-	}
+	mirrorDB = file
+	mirror = newSyncGate(file, time.Now)
+	mirror.guard = guard
+	mirror.lastCheck = time.Now()
 	log.Println("History ready for writes")
-	return syncer.Close, nil
+	return file.Close, nil
+}
+
+// mirrorState is the read side of the current mirror.
+func mirrorState() *sync.State {
+	return mirrorDB.State()
 }
 
 func runInitialSync(s changeSyncer) error {
 	log.Println("Performing initial sync...")
 	changes, err := s.Sync()
+	logSkippedItems(changes)
 	if err != nil {
-		return fmt.Errorf("initial sync failed: %w", err)
+		return fmt.Errorf("initial sync failed: %w", redactRequestURL(err))
 	}
 	log.Printf("Initial sync complete: %d changes", len(changes))
 	return nil
