@@ -380,6 +380,7 @@ func mirrorState() *sync.State {
 func runInitialSync(s changeSyncer) error {
 	log.Println("Performing initial sync...")
 	changes, err := s.Sync()
+	logSkippedItems(changes)
 	if err != nil {
 		return fmt.Errorf("initial sync failed: %w", redactRequestURL(err))
 	}
