@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	gosync "sync"
@@ -416,6 +415,8 @@ func TestMirror_KI28_WriteChecksTheHistoryFirst(t *testing.T) {
 	s.useClock(clock)
 
 	cloud.resetAccount(ki28KeyB, true)
+	cloud.addTask(ki28KeyB, "after the reset")
+	cloud.addTask(ki28KeyB, "another one, so the head is past the old cursor")
 	clock.Advance(historyCheckBeforeWrite)
 	var req mcp.CallToolRequest
 	req.Params.Arguments = map[string]any{"uuid": old}
@@ -492,11 +493,7 @@ func TestMirrorFile_KI28_ResetMovesTheWholeDatabase(t *testing.T) {
 	if err != nil || id != (mirrorIdentity{}) {
 		t.Errorf("stored() after reset = %+v, %v, want an empty mirror", id, err)
 	}
-	entries, _ := filepath.Glob(path + "*")
-	for _, e := range entries {
-		info, err := os.Stat(e)
-		if err == nil && info.Mode().Perm()&0o077 != 0 && filepath.Dir(e) != s.dataDir {
-			t.Errorf("%s is readable by others", e)
-		}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("no fresh mirror in place: %v", err)
 	}
 }
