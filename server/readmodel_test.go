@@ -9,6 +9,8 @@ import (
 
 	things "github.com/arthursoares/things-cloud-sdk"
 	"github.com/arthursoares/things-cloud-sdk/sync"
+
+	"github.com/pachamaker/things-cloud-mcp/domain/civil"
 )
 
 func TestPaginate(t *testing.T) {
@@ -503,6 +505,36 @@ func TestReadModel_KI05_HidesRepeatingTemplates(t *testing.T) {
 		task, err := r.Task(uuid)
 		if err != nil || task == nil || !task.IsRepeatingTemplate() {
 			t.Errorf("Task(%q) = %+v, %v; want the template itself", uuid, task, err)
+		}
+	}
+}
+
+// TestReadModel_TasksInViewOn_GivenDay: the conformance harness classifies a
+// snapshot on the day it was taken, so the read model takes the day as an
+// argument instead of reading the clock (ADR-0005, AGENTS.md rule 7).
+func TestReadModel_TasksInViewOn_GivenDay(t *testing.T) {
+	t.Parallel()
+
+	d := time.Date(2030, 1, 2, 0, 0, 0, 0, time.UTC)
+	r := readModel{mirror: listMirror{
+		{UUID: "scheduled", Type: things.TaskTypeTask, Schedule: things.TaskScheduleSomeday, ScheduledDate: &d},
+	}}
+	tests := []struct {
+		day  civil.Date
+		view listView
+	}{
+		{civil.Date{Year: 2030, Month: 1, Day: 1}, viewUpcoming},
+		{civil.Date{Year: 2030, Month: 1, Day: 2}, viewToday},
+	}
+	for _, tt := range tests {
+		for _, view := range []listView{viewInbox, viewToday, viewAnytime, viewSomeday, viewUpcoming} {
+			got, err := r.tasksInViewOn(view, listOpts{}, tt.day)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if listed := len(got) == 1; listed != (view == tt.view) {
+				t.Errorf("on %s, view %d lists the to-do: %v; want it only in view %d", tt.day, view, listed, tt.view)
+			}
 		}
 	}
 }

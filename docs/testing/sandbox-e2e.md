@@ -10,6 +10,7 @@ history. Tracking issue: KI-34. Layer "Sandbox e2e" of the test pyramid in ADR-0
 | `server/sandbox_e2e_test.go` | `TestSandboxE2E`, `TestSandboxSeedChecks`, `TestSandboxCleanupLeftovers` (build tag `e2e`) |
 | `server/sandbox_harness_e2e_test.go` | Harness: server start, throttled transport, write firewall, 409 injection, observer client, cleanup (tag `e2e`) |
 | `server/sandbox_capture_e2e_test.go` | `TestSandboxRecurrenceCapture`: read-only, writes a sanitized capture of what the Things apps wrote for the repeating seeds (tag `e2e`, see "Capturing the apps' writes") |
+| `server/conformance_dump_e2e_test.go` | `TestSandboxConformanceDump`: read-only, writes the server's half of a conformance snapshot; run by `scripts/conformance/snapshot.sh` (`docs/testing/conformance.md`) |
 | `server/sandbox_rules_test.go` | Pure rules (account guard, wire rules, firewall, env file); no tag, unit-tested by `go test ./...` |
 | `server/sandbox_fakecloud_e2e_test.go` | In-memory stand-in for Things Cloud for an offline self-test of the harness (tags `e2e fakecloud`) |
 | `.github/workflows/e2e.yml` | Manual and nightly CI run in the `things-sandbox` environment (see "CI") |
@@ -65,7 +66,9 @@ send a write the official apps might choke on (rule 2). Layers, in the order the
    wire check takes the day of each write from its `md`/`cd` instant in the same zone.
    With `THINGS_E2E_REQUIRE_RUN` set (CI sets it) this and the missing-credentials skip
    fail the test instead: a skipped run passes in GitHub and would look green without
-   touching the account.
+   touching the account. The conformance dump does not skip near midnight (a snapshot
+   just after midnight is one of its purposes); it checks instead that its day is the
+   day the Things app's export was taken on.
 8. **Public logs.** CI logs of this public repository are readable by anyone, and GitHub
    masks only exact secret values. The harness prints UUIDs, field names, statuses,
    dates, entity kinds and its own strings (run-prefixed titles it wrote, seed titles from

@@ -286,6 +286,12 @@ workaround can be deleted.
   listed in Anytime, and a deferred one with a future `tir` and no start date in Someday ·
   **Evidence:** confirmed in code; exact Things rules `likely` (to be verified with the
   conformance harness, ADR-0005)
+- **Conformance harness:** built (`docs/testing/conformance.md`): snapshots of the Things
+  app's views (things.py over the app's database) and of the server's mirror, replayed by
+  `TestConformance_Snapshots` in `go test ./...`. The remaining gaps above are listed there
+  as known gaps (`conformanceKnownGaps`): projects not listed, This Evening, dismissed
+  deadlines (KI-02), repeating templates and canceled to-dos in Logbook (KI-05). No
+  snapshot is committed yet; the Phase 1 exit criterion needs three.
 - The table below describes the baseline `3164e8a`, before PR #1.
 - **Symptom:** `things_list_today` misses tasks the Things app shows in Today; they show
   up in Upcoming, Someday, or Anytime instead.
