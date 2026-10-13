@@ -205,7 +205,7 @@ or push tags and never publish images.
 | `server/mcp.go` | MCP tool registry, read handlers, output formatting | live |
 | `server/write.go` | Write commands, wire payload builders, ID generator, `historyWrite` | live |
 | `server/readmodel.go` | Read model over the SDK `State`: pagination, open-list filtering, completed range | live |
-| `server/views.go` | View classifier (Inbox/Today/Anytime/Someday/Upcoming), ADR-0005 | live |
+| `server/views.go` | View classifier (Inbox/Today/Anytime/Someday/Upcoming, This Evening), ADR-0005 | live |
 | `server/today.go` | `THINGS_TIMEZONE`, `ownerToday()` (ADR-0003) | live |
 | `domain/civil` | Civil date, clock, wire encoding of day values, zone loading (ADR-0003) | live |
 | `server/syncgate.go` | Serialises and coalesces syncs, 429 backoff | live |
@@ -225,9 +225,11 @@ as `github.com/arthursoares/things-cloud-sdk` (`things`/`thingscloud`) and
 `github.com/arthursoares/things-cloud-sdk/sync`. What the SDK version differs in from
 the old embedded copy: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4. Until
 [arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40)
-is released, `go.mod` replaces the SDK with the fork `github.com/pachamaker/things-cloud-sdk`
-at `f41fcbb`, which stores `rr`/`rt` (`Task.Repeater`, `RecurrenceIDs`); point it back at
-an upstream release, or keep it as a deliberate soft fork (ADR-0001), before merging.
+and [#41](https://github.com/arthursoares/things-cloud-sdk/pull/41) are released, `go.mod`
+replaces the SDK with the fork `github.com/pachamaker/things-cloud-sdk` at `9d70eb8`, which
+stores `rr`/`rt` (`Task.Repeater`, `RecurrenceIDs`) and `sb`/`dds`/`tir` (`StartBucket`,
+`DeadlineSuppressionDate`, `TodayIndexReferenceDate`); point it back at an upstream release,
+or keep it as a deliberate soft fork (ADR-0001), before merging.
 
 ## 6. Architecture in one minute
 
@@ -256,7 +258,7 @@ Details and target architecture: `docs/architecture.md`.
 | Status | `ss`: 0 open, 2 canceled, 3 completed | `sp` = stop instant, never `0` |
 | Start state | `st`: 0 Inbox, 1 started, 2 deferred | |
 | Start date ("when") | `sr` (+ `tir` when placed in Today) | civil date as midnight UTC (`civil.Date.Wire`) |
-| This Evening | `sb = 1` | not exposed yet |
+| This Evening | `sb = 1` | read: `evening: true` in `things_list_today`; not written |
 | Deadline | `dd`; suppressed overdue: `dds` | year 4001 = "never" (KI-04) |
 | Project / subtask parent | `pr` | heading membership in `agr` (KI-13) |
 | Area / Tags | `ar` / `tg` | arrays of UUIDs |

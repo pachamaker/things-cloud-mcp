@@ -8,6 +8,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	things "github.com/arthursoares/things-cloud-sdk"
+
+	"github.com/pachamaker/things-cloud-mcp/domain/civil"
 )
 
 func TestFormatTaskJSONShape(t *testing.T) {
@@ -211,5 +213,47 @@ func TestFormatTask_KI05_RepeatingMarker(t *testing.T) {
 				t.Errorf("repeating = %v, want %v (JSON %s)", got["repeating"], tt.want, b)
 			}
 		})
+	}
+}
+
+// TestTodayTasksResult_KI02_EveningFlag: things_list_today marks This Evening
+// to-dos with "evening": true and leaves the key out for the rest; other
+// lists never carry it, because This Evening is a section of Today only.
+func TestTodayTasksResult_KI02_EveningFlag(t *testing.T) {
+	t.Parallel()
+
+	day := time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)
+	today := civil.DateOf(day)
+	tasks := []*things.Task{
+		{UUID: "main", Type: things.TaskTypeTask, Schedule: things.TaskScheduleAnytime, ScheduledDate: &day},
+		{UUID: "evening", Type: things.TaskTypeTask, Schedule: things.TaskScheduleAnytime, ScheduledDate: &day, StartBucket: 1},
+	}
+	decode := func(res *mcp.CallToolResult) []map[string]any {
+		t.Helper()
+		if res.IsError {
+			t.Fatalf("result is an error: %+v", res)
+		}
+		var got []map[string]any
+		if err := json.Unmarshal([]byte(res.Content[0].(mcp.TextContent).Text), &got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+
+	got := decode(todayTasksResult(tasks, today))
+	if len(got) != 2 {
+		t.Fatalf("got %d tasks, want 2", len(got))
+	}
+	if v, ok := got[0]["evening"]; ok {
+		t.Errorf("main section to-do has evening %v", v)
+	}
+	if got[1]["evening"] != true {
+		t.Errorf("This Evening to-do: evening = %v, want true", got[1]["evening"])
+	}
+
+	for _, o := range decode(tasksResult(tasks)) {
+		if v, ok := o["evening"]; ok {
+			t.Errorf("%v: a list other than Today has evening %v", o["uuid"], v)
+		}
 	}
 }

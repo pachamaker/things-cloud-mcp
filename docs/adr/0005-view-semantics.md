@@ -71,7 +71,7 @@ Decision 4, the conformance harness, is built (`docs/testing/conformance.md`); d
    (`<YYYY-MM-DDTHHMM>-<label>`), not only the date.
 3. **`input.json` records the mirror and history.** `mirror` is the SDK's `things.Task`
    as the server held it (title and note cleared); `wire` is history folded per key,
-   which also keeps `tir`, `sb`, `dds`, `rr`, `rt` the SDK mirror lacks today. The test
+   which also keeps `tir`, `sb`, `dds`, `rr`, `rt` for SDK versions that did not. The test
    fails where the two disagree (an SDK read bug) and where the app's database and Things
    Cloud disagree on a view-deciding field (an unsynced change: retake the snapshot).
 4. **Titles** are HMAC-SHA256 under a one-off key that is never committed, so hashes
@@ -81,8 +81,10 @@ Decision 4, the conformance harness, is built (`docs/testing/conformance.md`); d
    is no Trash tool; Logbook is `things_list_completed`.
 6. **Known gaps** are explicit entries (`conformanceKnownGaps`, each with a KI) that
    explain a difference only for items that have the gap's cause and only when
-   correcting for it makes the views equal: projects not listed, This Evening, dismissed
-   deadlines (KI-02), repeating templates and canceled to-dos (KI-05).
+   correcting for it makes the views equal: projects not listed (KI-02), repeating
+   templates and canceled to-dos (KI-05). This Evening and dismissed deadlines were gaps
+   until the classifier read `sb` and `dds` (KI-02); the harness now compares the
+   evening flag too.
 7. **things.py is the reference**, so the harness inherits its blind spots: to-dos of a
    Someday project count as Anytime, and future occurrences of repeating to-dos are not
    in Upcoming. Comparing with the app's own lists (AppleScript `to dos of list "Today"`)

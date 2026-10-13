@@ -194,17 +194,24 @@ func TestServerViews(t *testing.T) {
 		{UUID: "canceled", Type: things.TaskTypeTask, Status: things.TaskStatusCanceled},
 		{UUID: "trashed", Type: things.TaskTypeTask, Schedule: things.TaskScheduleAnytime, InTrash: true},
 		{UUID: "project", Type: things.TaskTypeProject, Schedule: things.TaskScheduleAnytime},
+		{UUID: "evening", Type: things.TaskTypeTask, Schedule: things.TaskScheduleAnytime, ScheduledDate: day("2026-10-12"), StartBucket: 1},
+		{UUID: "evening-anytime", Type: things.TaskTypeTask, Schedule: things.TaskScheduleAnytime, StartBucket: 1},
+		{UUID: "dismissed", Type: things.TaskTypeTask, Schedule: things.TaskScheduleAnytime, DeadlineDate: day("2026-10-10"), DeadlineSuppressionDate: day("2026-10-11")},
 	}
-	got, err := serverViews(mirror, today)
+	got, evening, err := serverViews(mirror, today)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := map[string][]string{
 		"inbox": {"inbox"}, "inbox-due": {"inbox", "today"}, "today": {"today"}, "anytime": {"anytime"},
 		"arrived": {"today"}, "upcoming": {"upcoming"}, "someday": {"someday"}, "never": {"someday"}, "done": {"logbook"},
+		"evening": {"today"}, "evening-anytime": {"anytime"}, "dismissed": {"anytime"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("serverViews = %v\nwant %v", got, want)
+	}
+	if want := map[string]bool{"evening": true}; !reflect.DeepEqual(evening, want) {
+		t.Errorf("This Evening = %v, want %v", evening, want)
 	}
 }
 
@@ -220,11 +227,11 @@ func conformanceFixture(t *testing.T, app *expectedTask, mirror *things.Task, wi
 		c.Want, c.WantEvening = appViewsAsServer(app.Views), app.Evening
 	}
 	if mirror != nil {
-		got, err := serverViews([]things.Task{*mirror}, today)
+		got, evening, err := serverViews([]things.Task{*mirror}, today)
 		if err != nil {
 			t.Fatal(err)
 		}
-		c.Got = got[mirror.UUID]
+		c.Got, c.GotEvening = got[mirror.UUID], evening[mirror.UUID]
 	}
 	return c
 }
@@ -240,6 +247,9 @@ func TestJudgeConformanceCase(t *testing.T) {
 	d := stringPtr
 	anytimeToDo := &things.Task{UUID: "X", Type: things.TaskTypeTask, Schedule: things.TaskScheduleAnytime}
 	todayToDo := &things.Task{UUID: "X", Type: things.TaskTypeTask, Schedule: things.TaskScheduleAnytime, ScheduledDate: day("2026-10-12")}
+	eveningToDo := &things.Task{UUID: "X", Type: things.TaskTypeTask, Schedule: things.TaskScheduleAnytime, ScheduledDate: day("2026-10-12"), StartBucket: 1}
+	dueToDo := &things.Task{UUID: "X", Type: things.TaskTypeTask, Schedule: things.TaskScheduleAnytime, DeadlineDate: day("2026-10-10")}
+	dismissedToDo := &things.Task{UUID: "X", Type: things.TaskTypeTask, Schedule: things.TaskScheduleAnytime, DeadlineDate: day("2026-10-10"), DeadlineSuppressionDate: day("2026-10-11")}
 
 	evening := fields(1, d("2026-10-12"), nil)
 	evening.Bucket = intPtr(1)
@@ -253,6 +263,10 @@ func TestJudgeConformanceCase(t *testing.T) {
 	project.Type = intPtr(1)
 	moved := fields(1, nil, nil)
 	moved.Start = intPtr(2)
+	placed := fields(1, d("2026-10-12"), nil)
+	placed.TodayRef = d("2026-10-12")
+	noBucket := fields(1, nil, nil)
+	noBucket.Bucket = nil
 
 	tests := []struct {
 		name      string
@@ -277,20 +291,33 @@ func TestJudgeConformanceCase(t *testing.T) {
 		{
 			name: "this evening",
 			c: conformanceFixture(t, &expectedTask{Type: "to-do", Views: []string{"anytime", "today"}, Evening: true, App: evening},
-				todayToDo, ptr(evening)),
-			gaps: []string{"KI-02 this-evening"},
+				eveningToDo, ptr(evening)),
 		},
 		{
-			name: "evening flag in the app without sb on the cloud is no known gap",
+			name: "This Evening in the app only",
 			c: conformanceFixture(t, &expectedTask{Type: "to-do", Views: []string{"anytime", "today"}, Evening: true, App: fields(1, d("2026-10-12"), nil)},
 				todayToDo, ptr(fields(1, d("2026-10-12"), nil))),
-			problem: "(This Evening), the server lists [today]",
+			problem: "the app shows [today] (This Evening), the server lists [today]",
+		},
+		{
+			name: "This Evening on the server only",
+			c: conformanceFixture(t, &expectedTask{Type: "to-do", Views: []string{"anytime", "today"}, App: evening},
+				eveningToDo, ptr(evening)),
+			problem: "the app shows [today], the server lists [today] (This Evening)",
 		},
 		{
 			name: "dismissed deadline",
 			c: conformanceFixture(t, &expectedTask{Type: "to-do", Views: []string{"anytime"}, App: dismissed},
-				&things.Task{UUID: "X", Type: things.TaskTypeTask, Schedule: things.TaskScheduleAnytime, DeadlineDate: day("2026-10-10")}, ptr(dismissed)),
-			gaps: []string{"KI-02 dismissed-deadline"},
+				dismissedToDo, ptr(dismissed)),
+		},
+		{
+			name: "placed in Today with tir",
+			c: conformanceFixture(t, &expectedTask{Type: "to-do", Views: []string{"anytime", "today"}, App: placed},
+				&things.Task{UUID: "X", Type: things.TaskTypeTask, Schedule: things.TaskScheduleAnytime, ScheduledDate: day("2026-10-12"), TodayIndexReferenceDate: day("2026-10-12")}, ptr(placed)),
+		},
+		{
+			name: "history without sb is the main section",
+			c:    conformanceFixture(t, &expectedTask{Type: "to-do", Views: []string{"anytime"}, App: noBucket}, anytimeToDo, ptr(noBucket)),
 		},
 		{
 			name: "project",
@@ -312,9 +339,9 @@ func TestJudgeConformanceCase(t *testing.T) {
 		},
 		{
 			name: "a known gap that does not explain everything",
-			c: conformanceFixture(t, &expectedTask{Type: "to-do", Views: []string{"someday", "today"}, Evening: true, App: evening},
-				todayToDo, ptr(evening)),
-			problem: "not explained by the known gaps KI-02 this-evening",
+			c: conformanceFixture(t, &expectedTask{Type: "to-do", Views: []string{"logbook", "today"}, App: canceled},
+				&things.Task{UUID: "X", Type: things.TaskTypeTask, Schedule: things.TaskScheduleAnytime, Status: things.TaskStatusCanceled}, ptr(canceled)),
+			problem: "not explained by the known gaps KI-05 canceled-not-in-logbook",
 		},
 		{
 			name: "drift between the app and the cloud",
@@ -332,6 +359,21 @@ func TestJudgeConformanceCase(t *testing.T) {
 			name:    "the SDK mirror disagrees with history",
 			c:       conformanceFixture(t, &expectedTask{Type: "to-do", Views: []string{"anytime"}, App: fields(1, nil, nil)}, anytimeToDo, ptr(fields(2, nil, nil))),
 			problem: "the SDK mirror disagrees with history on st: mirror 1, history 2",
+		},
+		{
+			name:    "the SDK mirror lost dds",
+			c:       conformanceFixture(t, &expectedTask{Type: "to-do", Views: []string{"anytime"}, App: dismissed}, dueToDo, ptr(dismissed)),
+			problem: `the SDK mirror disagrees with history on dds: mirror null, history "2026-10-11"`,
+		},
+		{
+			name:    "the SDK mirror lost sb",
+			c:       conformanceFixture(t, &expectedTask{Type: "to-do", Views: []string{"anytime", "today"}, Evening: true, App: evening}, todayToDo, ptr(evening)),
+			problem: "the SDK mirror disagrees with history on sb: mirror 0, history 1",
+		},
+		{
+			name:    "the SDK mirror lost tir",
+			c:       conformanceFixture(t, &expectedTask{Type: "to-do", Views: []string{"anytime", "today"}, App: placed}, todayToDo, ptr(placed)),
+			problem: `the SDK mirror disagrees with history on tir: mirror null, history "2026-10-12"`,
 		},
 		{
 			name:    "missing from the mirror",

@@ -30,19 +30,29 @@ func isClosed(t *things.Task) bool {
 //   - started (st=1) or deferred (st=2) with a start date on or before today:
 //     overdue carry-over and scheduled items whose date has arrived but that no
 //     Things client has confirmed yet;
-//   - no start date and a deadline on or before today, Inbox included.
+//   - no start date and a deadline on or before today that the user has not
+//     dismissed from Today (dds null), Inbox included.
 //
 // today is the owner's calendar day (ADR-0003); sr and dd are compared as the
-// calendar dates they encode, never as instants.
-// The SDK mirror does not keep tir, dds or sb (spike report §4 B4), so to-dos
-// placed in Today only through tir are missed, dismissed deadlines still show,
-// and This Evening is not flagged.
+// calendar dates they encode, never as instants. tir decides nothing: neither
+// §5.1 nor things.py reads it (KI-02 open question).
 func inToday(t *things.Task, today civil.Date) bool {
 	if t.ScheduledDate != nil {
 		started := t.Schedule == things.TaskScheduleAnytime || t.Schedule == things.TaskScheduleSomeday
 		return started && !civil.FromWireTime(*t.ScheduledDate).After(today)
 	}
-	return t.DeadlineDate != nil && !civil.FromWireTime(*t.DeadlineDate).After(today)
+	return t.DeadlineDate != nil && t.DeadlineSuppressionDate == nil &&
+		!civil.FromWireTime(*t.DeadlineDate).After(today)
+}
+
+// eveningBucket is the sb value of Today's This Evening section; 0 is the
+// main section (docs/protocol/things-cloud.md §5).
+const eveningBucket = 1
+
+// inEvening reports whether Today lists t under This Evening: Today ∩ sb=1
+// (docs/protocol/things-cloud.md §5.1).
+func inEvening(t *things.Task, today civil.Date) bool {
+	return t.StartBucket == eveningBucket && inToday(t, today)
 }
 
 // inView reports view membership. Today and Anytime partition st=1; an Inbox or
@@ -66,7 +76,8 @@ func inView(t *things.Task, view listView, today civil.Date) bool {
 }
 
 // tasksInView filters to-dos already ordered by index and orders them as the
-// Things lists do: Today by today index, Upcoming by start date.
+// Things lists do: Today's main section, then This Evening, each by today
+// index; Upcoming by start date.
 func tasksInView(tasks []*things.Task, view listView, today civil.Date) []*things.Task {
 	var out []*things.Task
 	for _, t := range tasks {
@@ -76,7 +87,12 @@ func tasksInView(tasks []*things.Task, view listView, today civil.Date) []*thing
 	}
 	switch view {
 	case viewToday:
-		sort.SliceStable(out, func(i, j int) bool { return out[i].TodayIndex < out[j].TodayIndex })
+		sort.SliceStable(out, func(i, j int) bool {
+			if ei, ej := inEvening(out[i], today), inEvening(out[j], today); ei != ej {
+				return ej
+			}
+			return out[i].TodayIndex < out[j].TodayIndex
+		})
 	case viewUpcoming:
 		sort.SliceStable(out, func(i, j int) bool { return out[i].ScheduledDate.Before(*out[j].ScheduledDate) })
 	}
