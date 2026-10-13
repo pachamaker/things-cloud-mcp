@@ -4,6 +4,25 @@ Phased plan from the inherited codebase (baseline `3164e8a`) to a safe, correct,
 remotely usable single-user server. Each phase has exit criteria; do not start a phase
 before the previous one's P0 items are done. IDs refer to `known-issues.md` and `adr/`.
 
+## Releases
+
+| Version | Contents | Ships when |
+|---|---|---|
+| `v2.0.0` | Phases −1, 0, 1 and the server side of Phase 2 (OAuth on `/mcp`, release image) | Phase 1 exit criterion is met (owner's decision, 2026-10-12) |
+| `v2.1.0` | Phase 3 — tool surface v2; repeating to-dos' future occurrences in Upcoming | after `v2.0.0` |
+
+Decisions for `v2.0.0` (owner, 2026-10-12):
+
+- **SDK dependency.** The missing mirror fields go upstream: `rr`/`rt` in
+  [arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40),
+  `sb`/`dds`/`tir` in a separate PR stacked on it. If upstream has not released them
+  when Phase 1 is done, `v2.0.0` ships on the fork `pachamaker/things-cloud-sdk` through a
+  `go.mod` `replace` pinned to a commit or tag (ADR-0001 soft fork), and moves back to an
+  upstream release afterwards.
+- **Repeating templates** are hidden from every list, Upcoming included. Showing their
+  future occurrences in Upcoming, as the Things app does, needs dates computed from `rr`
+  and is planned for `v2.1.0`.
+
 ## Phase −1 — Hotfixes before any other use (1–2 days)
 
 These two defects affect every user of a current Things app and can permanently
@@ -49,7 +68,7 @@ change is checked automatically.
 **Exit:** CI green on `main`; no route can delete history/account; `repeat` rejected;
 writes to unknown UUIDs fail with a clear error.
 
-## Phase 1 — Correct reads (≈ 1–2 weeks)
+## Phase 1 — Correct reads (≈ 1–2 weeks) — required for `v2.0.0`
 
 Goal: `things_list_today` matches the Things app at any hour; the assistant needs no
 workarounds.
@@ -87,7 +106,7 @@ Goal: Claude (web, desktop, iOS) and ChatGPT reach the server on the VPS securel
 task; an unauthenticated request to `/mcp` gets 401 with `WWW-Authenticate` pointing
 to resource metadata.
 
-## Phase 3 — Tool surface v2 (≈ 2 weeks)
+## Phase 3 — Tool surface v2 (≈ 2 weeks) — `v2.1.0`
 
 Goal: typical requests take 1–2 tool calls and never require UUID lookups.
 
