@@ -18,7 +18,7 @@ Start with [`../AGENTS.md`](../AGENTS.md) if you are about to change code.
 | [`legal-and-risk.md`](legal-and-risk.md) | Legal and Terms-of-Service risk notes (not legal advice) |
 | [`installation.md`](installation.md) | Legacy Fly.io installation guide (superseded by `deployment/vps.md`) |
 | [`skills.md`](skills.md) | Writing Claude Skills on top of the tools |
-| [`sdk.md`](sdk.md) | SDK and sync engine usage, written for the embedded copy; the SDK is now the [`arthursoares/things-cloud-sdk`](https://github.com/arthursoares/things-cloud-sdk) dependency, whose README is authoritative |
+| [`sdk.md`](sdk.md) | SDK and sync engine usage, written for the embedded copy; the SDK is now the [`arthursoares/things-cloud-sdk`](https://github.com/arthursoares/things-cloud-sdk) dependency, built from one commit of the fork [`pachamaker/things-cloud-sdk`](https://github.com/pachamaker/things-cloud-sdk/tree/fork-integration) (ADR-0001), whose README is authoritative |
 | [`endpoints-and-things-cloud.md`](endpoints-and-things-cloud.md) | How REST/MCP endpoints map to Things Cloud calls |
 
 ## Historical records (do not update; read for context)
