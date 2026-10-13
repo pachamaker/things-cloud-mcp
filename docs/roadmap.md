@@ -63,7 +63,7 @@ workarounds.
 | ~~Resolve project membership through headings~~ (done for `things_list_project_tasks`, with `heading_id`/`heading_title`) | KI-13 | S |
 | Conformance harness (built: `docs/testing/conformance.md`) + first snapshots (incl. post-midnight and "Mac closed for a day") | ADR-0005 | M |
 | ~~Freshness-bounded, coalesced sync on read; backoff on 429~~ (done: `server/syncgate.go`, PR #4) | architecture §7, KI-27 | S |
-| Rebuild mirror on history-key change / 404 AccountIssue; quarantine malformed items | KI-28, KI-29 | S |
+| ~~Rebuild mirror on history-key change / 404 AccountIssue~~ (done: `server/mirror.go`, history checks in the sync gate); quarantine malformed items: SDK fix for tombstones in [arthursoares#42](https://github.com/arthursoares/things-cloud-sdk/pull/42), wiring through the fork pending; whole-page decode is KI-37 | KI-28, KI-29 | S |
 
 **Exit:** conformance suite passes on ≥ 3 snapshots taken at different times of day;
 the operator's Today/UTC/status/4001 workarounds are deleted from assistant

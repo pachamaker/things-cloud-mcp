@@ -297,7 +297,12 @@ Test a restore once: stop the stack, restore volumes on a fresh VM, start, verif
   - TLS certificate expiry
 - Heartbeat ping from the backup job.
 - `docker compose ps`: restarts and the `healthy`/`unhealthy` state of `things-mcp`;
-  `docker compose logs things-mcp` for sync errors (`429`, `409`, `404 AccountIssue`).
+  `docker compose logs things-mcp` for sync errors (`429`, `409`, `404 AccountIssue`) and
+  `[MIRROR]` lines: after a Things Cloud account reset the server rebuilds its cache by
+  itself (KI-28) and keeps the old one as `/data/things-upstream.db.before-rebuild`. Delete
+  that file once the server reads the new history correctly; it holds the old account's
+  tasks. A `rebuilding the local Things mirror failed` error retries on its own with
+  backoff up to an hour.
 
 ## 9. Updating
 
