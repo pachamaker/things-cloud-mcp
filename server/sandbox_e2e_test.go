@@ -497,7 +497,7 @@ func TestSandboxCleanupLeftovers(t *testing.T) {
 		}
 		t.Logf("cleaning up run %s only", h.runID)
 	}
-	st := syncer.State()
+	st := mirrorState()
 	opts := sync.QueryOpts{IncludeCompleted: true}
 
 	var leftovers []*things.Task
