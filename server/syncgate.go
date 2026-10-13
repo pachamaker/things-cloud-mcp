@@ -28,7 +28,7 @@ const (
 var (
 	errSyncRateLimited = errors.New("sync rate limited by Things Cloud (HTTP 429)")
 
-	errHistoryNotFound     = errors.New("Things Cloud answered 404 for the mirrored history (account reset or account issue, KI-28)")
+	errHistoryNotFound     = errors.New("the mirrored history is not found in Things Cloud (HTTP 404: account reset or account issue, KI-28)")
 	errMirrorRebuilding    = errors.New("the local Things mirror is being rebuilt because the account's Things Cloud history changed (KI-28); try again in a minute")
 	errMirrorStale         = errors.New("the local Things mirror no longer follows the account's Things Cloud history (KI-28)")
 	errMirrorRebuildFailed = errors.New("rebuilding the local Things mirror failed (KI-28)")

@@ -343,7 +343,7 @@ func TestConnectThings_KI28_NoHistoryKey(t *testing.T) {
 
 	cloud.update(func(c *ki28Cloud) { c.key = "" })
 	err := s.connect()
-	if err == nil || !strings.Contains(err.Error(), "Things Cloud returned no history key for the account") {
+	if err == nil || !strings.Contains(err.Error(), "the account has no history key in Things Cloud") {
 		t.Fatalf("connectThings error = %v, want the missing history key", err)
 	}
 	if _, err := os.Stat(s.backup()); !errors.Is(err, os.ErrNotExist) {

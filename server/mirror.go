@@ -184,7 +184,7 @@ func fetchCloudIdentity(c *things.Client) (cloudIdentity, error) {
 		return cloudIdentity{}, fmt.Errorf("verify the account: %w", redactRequestURL(err))
 	}
 	if v.HistoryKey == "" {
-		return cloudIdentity{}, errors.New("Things Cloud returned no history key for the account")
+		return cloudIdentity{}, errors.New("the account has no history key in Things Cloud")
 	}
 	h, err := c.History(v.HistoryKey)
 	if err != nil {
