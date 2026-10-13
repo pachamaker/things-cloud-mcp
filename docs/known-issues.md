@@ -550,7 +550,7 @@ workaround can be deleted.
 | KI-38 | The SDK sync engine does not apply legacy `Tombstone` items (they become `UnknownChange`) and does not map legacy identifiers, unlike its `state/memory` store, so deletions from pre-migration histories may stay visible in the mirror | SDK `sync/process.go` `processItem`, `state/memory/memory.go` | SDK: handle `Tombstone` and legacy identifiers in `sync` as `state/memory` does; check an old account's history first |
 
 ### KI-28 · A reset account leaves the mirror on a dead history
-- **Status:** fixed (this branch, `server/mirror.go`, `server/syncgate.go`) · **Evidence:**
+- **Status:** fixed ([#30](https://github.com/pachamaker/things-cloud-mcp/pull/30), `server/mirror.go`, `server/syncgate.go`) · **Evidence:**
   confirmed in SDK v0.6.0 code; the reports come from another implementation
   ([wbopan#27](https://github.com/wbopan/things-cloud-mcp/issues/27),
   [#35](https://github.com/wbopan/things-cloud-mcp/issues/35)); not reproduced on a real
