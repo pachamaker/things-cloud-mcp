@@ -253,6 +253,7 @@ const (
 	harnessRun      harnessMode = iota // writes with this run's title prefix
 	harnessCleanup                     // trashes leftovers of earlier runs
 	harnessReadOnly                    // seed checks: no commit leaves the process
+	harnessSnapshot                    // conformance dump: read-only, at any hour (it checks its day itself)
 )
 
 type sandboxHarness struct {
@@ -303,7 +304,7 @@ func startSandboxHarness(t *testing.T, mode harnessMode) *sandboxHarness {
 	prevZone := ownerZone
 	ownerZone = zone
 	t.Cleanup(func() { ownerZone = prevZone })
-	if sandboxNearMidnight(civil.SystemClock{}, zone, sandboxMidnightMargin) {
+	if mode != harnessSnapshot && sandboxNearMidnight(civil.SystemClock{}, zone, sandboxMidnightMargin) {
 		skipOrFail(t, fmt.Sprintf("within %s of midnight in %s, the server's timezone: a run here could straddle two days; retry later", sandboxMidnightMargin, zone))
 	}
 
@@ -411,7 +412,7 @@ func (h *sandboxHarness) guard(t *testing.T, mode harnessMode) {
 	if err := checkSandboxAccount(h.creds, os.Getenv("THINGS_USERNAME"), verified.Email, titles); err != nil {
 		t.Fatal(err)
 	}
-	if mode == harnessReadOnly {
+	if mode == harnessReadOnly || mode == harnessSnapshot {
 		h.firewall.setMode(firewallReadOnly)
 	} else {
 		h.firewall.setMode(firewallWrites)

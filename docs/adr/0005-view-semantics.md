@@ -53,3 +53,37 @@ Option B.
   safely materialise virtual instances from stored `rr`, a repeating to-do appears
   only after any Things app has generated it. The tool output says so when templates
   exist for the day.
+
+## Implementation notes (2026-10-12)
+Decision 4, the conformance harness, is built (`docs/testing/conformance.md`); decisions
+1–3 and 5 are not yet. Differences from the text above:
+
+1. **No `cmd/conformance`.** The exporter is a dev-only Python script
+   (`scripts/conformance/export_things.py`, things.py pinned by hash); the dump is an
+   `e2e`-tagged test (`TestSandboxConformanceDump`) so that it runs behind the sandbox
+   harness's account guard, read-only firewall and redaction; the comparison
+   (`TestConformance_Snapshots`) lives in `server/` because it replays the snapshot
+   through the read-model methods the list tools call, which are in package `main`.
+   `scripts/conformance/snapshot.sh` runs the three steps.
+2. **Snapshots are sandbox-only**, not "sandbox or owner": the exporter requires the
+   marker area `MCP E2E SANDBOX` in the app's database and the dump requires the same
+   area UUID on Things Cloud. Directory names carry the local time and a label
+   (`<YYYY-MM-DDTHHMM>-<label>`), not only the date.
+3. **`input.json` records the mirror and history.** `mirror` is the SDK's `things.Task`
+   as the server held it (title and note cleared); `wire` is history folded per key,
+   which also keeps `tir`, `sb`, `dds`, `rr`, `rt` the SDK mirror lacks today. The test
+   fails where the two disagree (an SDK read bug) and where the app's database and Things
+   Cloud disagree on a view-deciding field (an unsynced change: retake the snapshot).
+4. **Titles** are HMAC-SHA256 under a one-off key that is never committed, so hashes
+   match across the two files but not against guessed titles.
+5. **The app's views are mapped to the server's conventions** before comparing: the
+   app's Anytime includes Today's started to-dos, `things_list_anytime` does not; there
+   is no Trash tool; Logbook is `things_list_completed`.
+6. **Known gaps** are explicit entries (`conformanceKnownGaps`, each with a KI) that
+   explain a difference only for items that have the gap's cause and only when
+   correcting for it makes the views equal: projects not listed, This Evening, dismissed
+   deadlines (KI-02), repeating templates and canceled to-dos (KI-05).
+7. **things.py is the reference**, so the harness inherits its blind spots: to-dos of a
+   Someday project count as Anytime, and future occurrences of repeating to-dos are not
+   in Upcoming. Comparing with the app's own lists (AppleScript `to dos of list "Today"`)
+   would close them; not done.
