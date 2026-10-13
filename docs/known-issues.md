@@ -278,21 +278,42 @@ workaround can be deleted.
 ## P1 — Read correctness (the "Today is wrong" family)
 
 ### KI-02 · View classification does not match Things
-- **Status:** in-progress — PR #1 (`f79b05e`) implements the things.py rules in SQL on
-  `main`; the classifier compares civil dates in the owner's timezone (KI-03);
-  remaining: `dds`, This Evening, projects in Today, conformance harness (templates are
-  hidden on branch `recurrence-sdk-fork-KI-05-KI-10`, KI-05). Since the upstream SDK migration the rules live
-  in `server/views.go` over SDK `State.AllTasks` (SDK `TasksIn*` are not used, spike
-  report §4 B3); `tir` is not mirrored, so a to-do placed in Today only through `tir` is
-  listed in Anytime, and a deferred one with a future `tir` and no start date in Someday ·
-  **Evidence:** confirmed in code; exact Things rules `likely` (to be verified with the
-  conformance harness, ADR-0005)
+- **Status:** in-progress — PR #1 (`f79b05e`) implements the things.py rules; the
+  classifier compares civil dates in the owner's timezone (KI-03); templates are hidden
+  on branch `recurrence-sdk-fork-KI-05-KI-10` (KI-05); dismissed deadlines and This
+  Evening are done on branch `KI-02-evening-dds` (below). Remaining: projects in Today,
+  the move to `domain/view` (ADR-0005 decision 1), snapshots. Since the upstream SDK
+  migration the rules live in `server/views.go` over SDK `State.AllTasks` (SDK `TasksIn*`
+  are not used, spike report §4 B3) · **Evidence:** confirmed in code; exact Things rules
+  `likely` (to be verified with the conformance harness, ADR-0005)
+- **Fix (dismissed deadlines, This Evening):** the SDK fork `9d70eb8`
+  ([arthursoares/things-cloud-sdk#41](https://github.com/arthursoares/things-cloud-sdk/pull/41))
+  mirrors `sb`, `dds` and `tir`. A deadline on or before today puts a to-do without a
+  start date in Today only while `dds` is null (§5.1; things.py `deadline_suppressed=False`).
+  This Evening is Today ∩ `sb = 1`: `things_list_today` marks those to-dos
+  `evening: true` and lists them after the main section, each section by today index;
+  no other list carries the flag, and there is no filter parameter (the tool surface is
+  ADR-0006's). Tests: `TestViews_KI02_DismissedDeadline`, `TestViews_KI02_ThisEvening`,
+  `TestTasksInView_KI02_EveningLast`, `TestTodayTasksResult_KI02_EveningFlag`. Not yet
+  checked against the Things app (no snapshot, no sandbox run).
+- **Open questions** (for snapshots to answer, not to guess):
+  - **`tir`** decides no view: neither §5.1 nor things.py, the harness's reference, reads
+    it, and `TestViews_KI02_TodayIndexReferenceDate` pins that. No capture shows an open
+    to-do with `tir` but no `sr`; whether the Things app lists one in Today is unknown. A
+    snapshot holding one answers it (`input.json` records `wire.tir`). A deferred item
+    with a future `tir` and no start date is a repeating template: hidden (KI-05), dated
+    by that `tir` in Upcoming in v2.1.0 (KI-36).
+  - **`dds`** counts as set or not, as things.py reads it. Whether the app compares it with
+    the deadline, for example after a dismissed deadline is moved later and passes again,
+    or clears it when the deadline changes, is unknown; `things_edit_task` changes `dd`
+    and leaves `dds` as it is.
 - **Conformance harness:** built (`docs/testing/conformance.md`): snapshots of the Things
   app's views (things.py over the app's database) and of the server's mirror, replayed by
-  `TestConformance_Snapshots` in `go test ./...`. The remaining gaps above are listed there
-  as known gaps (`conformanceKnownGaps`): projects not listed, This Evening, dismissed
-  deadlines (KI-02), repeating templates and canceled to-dos in Logbook (KI-05). No
-  snapshot is committed yet; the Phase 1 exit criterion needs three.
+  `TestConformance_Snapshots` in `go test ./...`. It compares This Evening and checks the
+  mirror against history on `sb`, `dds` and `tir` too. The remaining gaps are listed there
+  as known gaps (`conformanceKnownGaps`): projects not listed (KI-02), repeating templates
+  and canceled to-dos in Logbook (KI-05). No snapshot is committed yet; the Phase 1 exit
+  criterion needs three.
 - The table below describes the baseline `3164e8a`, before PR #1.
 - **Symptom:** `things_list_today` misses tasks the Things app shows in Today; they show
   up in Upcoming, Someday, or Anytime instead.

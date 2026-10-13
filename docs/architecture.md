@@ -96,14 +96,14 @@ used to carry: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4.
 | `server/mcp.go` | MCP tool registry and read handlers, output formatting | `mark3labs/mcp-go` v0.44, Streamable HTTP, stateless |
 | `server/write.go` | All write commands, wire payload builders, ID generator, `historyWrite` | One item per commit; global `historyMu`; `repeat` always rejected (KI-01) |
 | `server/readmodel.go` | Read model over SDK `State`: pagination, open-list filtering (canceled excluded), completed range | Loads full lists, then pages in Go (KI-18) |
-| `server/views.go` | View classifier (Inbox/Today/Anytime/Someday/Upcoming) over `State.AllTasks` | Compares civil dates against the owner's day; no `tir`/`dds`/`sb` in the SDK mirror (KI-02) |
+| `server/views.go` | View classifier (Inbox/Today/Anytime/Someday/Upcoming, This Evening) over `State.AllTasks` | Compares civil dates against the owner's day; reads `dds` and `sb`, not `tir` (KI-02) |
 | `server/today.go` | `THINGS_TIMEZONE` parsing, `ownerToday()` | Global `ownerZone`, set once in `main` |
 | `domain/civil` | Civil date, clock, owner's "today", wire encoding of day values, zone loading (ADR-0003) | Pure; embeds `time/tzdata` |
 | `server/syncgate.go` | Serialises and coalesces `Syncer.Sync()`, backs off on 429 | The SDK `Syncer` has no lock |
 | `server/json_body.go` | Bounded JSON body decoding for REST | |
 | `server/redact.go` | Hides the URL of a failed Things Cloud request where SDK errors enter the server (sync gate, `historyWrite`, startup) | The URL carries the history key, a bearer capability (KI-35) |
 | SDK `thingscloud` | HTTP client, histories, items, wire types (`Task6`/`Task7`), Base58 codec, notes, account | `History.Write` refuses non-canonical IDs |
-| SDK `sync` | `Syncer`: incremental pull, per-batch cursor, cache replay with backup, SQLite store, `State` queries | Stores no `tir`, `dds`, `sb`; `rr`/`rt` only in the fork `go.mod` replaces it with (arthursoares/things-cloud-sdk#40) |
+| SDK `sync` | `Syncer`: incremental pull, per-batch cursor, cache replay with backup, SQLite store, `State` queries | `rr`/`rt` and `sb`/`dds`/`tir` only in the fork `go.mod` replaces it with (arthursoares/things-cloud-sdk#40, #41) |
 | `tests/*.sh` | Black-box scripts against a deployed server | Hit a real account; must target a sandbox |
 
 ## 5. Runtime flows (current)

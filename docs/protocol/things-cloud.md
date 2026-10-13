@@ -150,11 +150,11 @@ Tasks, projects and headings are all `Task6`, distinguished by `tp`.
 | `tr` | in trash | bool | ✅ |
 | `st` | start state | `0` not started (Inbox), `1` started (Anytime/Today), `2` deferred (Someday/Upcoming) | ✅ |
 | `sr` | start date ("when") | calendar date or `null` | ✅ |
-| `tir` | today index reference date | calendar date or `null`; set together with `sr` when a task is put into Today | ✅ |
+| `tir` | today index reference date | calendar date or `null`; set together with `sr` when a task is put into Today; on a repeating template, the next occurrence (§5.3) | ✅ (SDK `Task.TodayIndexReferenceDate`; decides no view, §5.1) |
 | `ti` | today index (ordering within Today) | int | 🟡 |
-| `sb` | start bucket | `0` normal, `1` This Evening | 🟡 (named `SubtaskBehavior` in `types.go`, which is wrong) |
+| `sb` | start bucket | `0` normal, `1` This Evening | 🟡 (Things' own database column `startBucket`; the SDK mirrors it as `Task.StartBucket` since arthursoares/things-cloud-sdk#41, its payload field is still named `SubtaskBehavior`) |
 | `dd` | deadline | calendar date or `null` | ✅ |
-| `dds` | deadline suppression date | calendar date or `null`; set when the user dismisses an overdue deadline from Today | 🟡 |
+| `dds` | deadline suppression date | calendar date or `null`; set when the user dismisses an overdue deadline from Today | 🟡 (database column `deadlineSuppressionDate`, which things.py's `today()` requires to be null; SDK `Task.DeadlineSuppressionDate`) |
 | `pr` | parent | `[projectUUID]` for a task in a project; `[taskUUID]` for a subtask; `[]` otherwise | ✅ |
 | `agr` | action group (heading) | `[headingUUID]` or `[]` | 🟡 |
 | `ar` | area | `[areaUUID]` or `[]` | ✅ |
@@ -192,12 +192,16 @@ conformance harness (ADR-0005):
 |---|---|
 | Inbox | `tp=0`, `st=0`, open, not trashed |
 | Today | open, not trashed, `tp∈{0,1}`, and one of: (`st=1` and `sr ≠ null`) · (`st=2` and `sr ≤ today`) · (`sr = null` and `dd ≤ today` and `dds = null`) |
-| This Evening | Today ∩ `sb=1` |
+| This Evening | Today ∩ `sb=1`; the app shows it as the last section of Today |
 | Upcoming | `st=2` and `sr > today` (plus future instances of repeating templates, generated client-side) |
 | Anytime | `st=1`, not in Today; excludes items whose project is deferred |
 | Someday | `st=2` and `sr = null` |
 | Logbook | `ss ∈ {2,3}`, not trashed |
 | Trash | `tr = true` |
+
+`tir` is in no rule: things.py does not read it, and no capture shows an open to-do with
+`tir` but no `sr`. Whether the app lists such a to-do in Today is an open question
+(KI-02); the server classifies by `sr`. `dds` counts as set or null, as things.py reads it.
 
 Writing a placement — verified combinations only:
 
