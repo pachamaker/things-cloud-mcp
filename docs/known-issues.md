@@ -543,7 +543,7 @@ workaround can be deleted.
 |---|---|---|---|
 | KI-27 | `429 AbusePrevention` on reads: every tool call syncs, bursts of calls trip it | [wbopan#32](https://github.com/wbopan/things-cloud-mcp/issues/32) | Coalesce/throttle syncs (freshness window), backoff on 429 — done for syncs in `server/syncgate.go` (PR #4); writes are not gated. The sandbox harness retries GETs after a 429 (phase 0): consecutive CI steps hit it on the first run (KI-34) |
 | KI-28 | ~~History key change or `404 AccountIssue` after an account reset leaves a stale cursor~~ — fixed: the server checks the account's history and rebuilds the mirror (details below) | [wbopan#27](https://github.com/wbopan/things-cloud-mcp/issues/27), [#35](https://github.com/wbopan/things-cloud-mcp/issues/35) | Done in `server/mirror.go`, `server/syncgate.go` |
-| KI-29 | ~~One malformed historical tombstone can block processing~~ — fixed: tombstones need only `dloid`, target-less ones are skipped and logged (details below) | [arthursoares#37](https://github.com/arthursoares/things-cloud-sdk/issues/37) | Done: SDK fork commit `4d63f48` ([arthursoares#42](https://github.com/arthursoares/things-cloud-sdk/pull/42)), log in `server/syncgate.go` |
+| KI-29 | ~~One malformed historical tombstone can block processing~~ — fixed: tombstones need only `dloid`, target-less ones are skipped and logged (details below) | [arthursoares#37](https://github.com/arthursoares/things-cloud-sdk/issues/37) | Done ([#32](https://github.com/pachamaker/things-cloud-mcp/pull/32)): SDK fork commit `4d63f48` ([arthursoares#42](https://github.com/arthursoares/things-cloud-sdk/pull/42)), log in `server/syncgate.go` |
 | KI-30 | Client identity is a Things 3.22-era build (`ThingsMac/32209501`; 3.23 is `32300536`) | SDK `client.go` (`DefaultClientInfo`, `ThingsUserAgent`) | Hypothesis: the cloud may adapt responses to the client version. Decide deliberately (see `legal-and-risk.md`); do not change blindly |
 | KI-31 | Negative `ix` crashed Things on Mac and iOS at launch in another implementation | [wbopan#16](https://github.com/wbopan/things-cloud-mcp/issues/16) | Never write negative indexes; verify what the official client sends for new items. The official client itself writes negative `ix` and `ti` (`-867`, `-2383`; `testdata/captures/recurrence-seeds-2026-10-11.json`), so the sign alone does not explain the crash; the rule stays until a capture does |
 | KI-37 | `History.Items` decodes a whole page at once: one history slot whose envelope has a wrong-typed `t` or `e` fails the page, and every later sync fails on it | SDK `items.go` (`json.Unmarshal` into `[]map[string]Item`); found with KI-29, not observed in an account | SDK: decode slot by slot; skip only envelopes that cannot carry entity data, record them (`ItemSkipped`), keep failing on the rest |
@@ -590,7 +590,7 @@ workaround can be deleted.
   the old `DATA_DIR`); whether Things Cloud deletes the old history or keeps it readable.
 
 ### KI-29 · One malformed history item stops every sync
-- **Status:** fixed for tombstones: the server builds against the SDK fork commit
+- **Status:** fixed for tombstones ([#32](https://github.com/pachamaker/things-cloud-mcp/pull/32)): the server builds against the SDK fork commit
   [`4d63f48`](https://github.com/pachamaker/things-cloud-sdk/commit/4d63f48f49dc598c606ba3df60db16df182157a0)
   (branch `fork-integration`, ADR-0001), which carries the fork branch
   [`fix/tombstone-read-target`](https://github.com/pachamaker/things-cloud-sdk/tree/fix/tombstone-read-target)
