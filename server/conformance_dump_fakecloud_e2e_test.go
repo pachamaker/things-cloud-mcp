@@ -72,7 +72,7 @@ func TestSandboxConformanceDumpOffline(t *testing.T) {
 			mirror = append(mirror, *task.Mirror)
 		}
 	}
-	views, err := serverViews(mirror, snap.Today)
+	views, evening, err := serverViews(mirror, snap.Today)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestSandboxConformanceDumpOffline(t *testing.T) {
 			typ = "project"
 		}
 		snap.Expected.Tasks = append(snap.Expected.Tasks, expectedTask{
-			UUID: task.UUID, Type: typ, TitleHash: task.TitleHash, Views: views[task.UUID], App: *task.Wire,
+			UUID: task.UUID, Type: typ, TitleHash: task.TitleHash, Views: views[task.UUID], Evening: evening[task.UUID], App: *task.Wire,
 		})
 	}
 	writeConformanceJSON(t, filepath.Join(dir, conformanceExpectedFile), snap.Expected)

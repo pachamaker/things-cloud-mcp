@@ -241,15 +241,27 @@ func mirrorDay(t *time.Time) *string {
 // fieldsOfMirror puts the mirror's view of a task beside history's.
 func fieldsOfMirror(t *things.Task) taskFields {
 	return taskFields{
-		Type:      intPtr(int(t.Type)),
-		Status:    intPtr(int(t.Status)),
-		Trashed:   boolPtr(t.InTrash),
-		Start:     intPtr(int(t.Schedule)),
-		StartDate: mirrorDay(t.ScheduledDate),
-		Deadline:  mirrorDay(t.DeadlineDate),
-		Project:   firstOf(t.ParentTaskIDs),
-		Heading:   firstOf(t.ActionGroupIDs),
+		Type:               intPtr(int(t.Type)),
+		Status:             intPtr(int(t.Status)),
+		Trashed:            boolPtr(t.InTrash),
+		Start:              intPtr(int(t.Schedule)),
+		StartDate:          mirrorDay(t.ScheduledDate),
+		TodayRef:           mirrorDay(t.TodayIndexReferenceDate),
+		Deadline:           mirrorDay(t.DeadlineDate),
+		DeadlineSuppressed: mirrorDay(t.DeadlineSuppressionDate),
+		Bucket:             intPtr(t.StartBucket),
+		Project:            firstOf(t.ParentTaskIDs),
+		Heading:            firstOf(t.ActionGroupIDs),
 	}
+}
+
+// historyAsMirror is history as the SDK mirror can hold it: a task whose
+// history never set sb, or set it to null, is in Today's main section (0).
+func historyAsMirror(w taskFields) taskFields {
+	if w.Bucket == nil {
+		w.Bucket = intPtr(0)
+	}
+	return w
 }
 
 // buildConformanceInput merges the SDK mirror (to-dos, projects, headings)
@@ -468,26 +480,29 @@ func conformanceSnapshotDirs(root string) ([]string, error) {
 
 // serverViews lists, per to-do, the views the server's list tools put it in on
 // day today: the read-model methods the MCP tools call, over the mirror as it
-// was dumped. Logbook is things_list_completed. The server has no This Evening
-// flag yet (KI-02).
-func serverViews(mirror []things.Task, today civil.Date) (map[string][]string, error) {
+// was dumped. Logbook is things_list_completed. evening holds the to-dos
+// things_list_today flags as This Evening.
+func serverViews(mirror []things.Task, today civil.Date) (map[string][]string, map[string]bool, error) {
 	r := readModel{mirror: listMirror(mirror)}
-	out := map[string][]string{}
+	out, evening := map[string][]string{}, map[string]bool{}
 	for _, v := range []struct {
 		view listView
 		name string
 	}{{viewInbox, cvInbox}, {viewToday, cvToday}, {viewAnytime, cvAnytime}, {viewSomeday, cvSomeday}, {viewUpcoming, cvUpcoming}} {
 		tasks, err := r.tasksInViewOn(v.view, listOpts{}, today)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for _, t := range tasks {
 			out[t.UUID] = append(out[t.UUID], v.name)
+			if v.view == viewToday && inEvening(t, today) {
+				evening[t.UUID] = true
+			}
 		}
 	}
 	done, err := r.CompletedTasksInRange(len(mirror)+1, nil, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for _, t := range done {
 		out[t.UUID] = append(out[t.UUID], cvLogbook)
@@ -495,7 +510,7 @@ func serverViews(mirror []things.Task, today civil.Date) (map[string][]string, e
 	for uuid := range out {
 		sort.Strings(out[uuid])
 	}
-	return out, nil
+	return out, evening, nil
 }
 
 // appViewsAsServer maps the app's views onto the server's list tools: there is
@@ -523,6 +538,7 @@ type conformanceCase struct {
 	Want        []string // the app's views, as the server's tools would list them
 	WantEvening bool
 	Got         []string // the server's views
+	GotEvening  bool     // things_list_today flags it as This Evening
 }
 
 func (c conformanceCase) mirror() *things.Task {
@@ -564,32 +580,6 @@ var conformanceKnownGaps = []knownGap{
 		},
 	},
 	{
-		KI: "KI-02", Name: "this-evening",
-		Why: "the SDK mirror does not keep sb, so nothing is flagged as This Evening",
-		adjust: func(c conformanceCase, want []string, evening bool) ([]string, bool, bool) {
-			w := c.wire()
-			if !evening || w == nil || w.Bucket == nil || *w.Bucket != 1 {
-				return want, evening, false
-			}
-			return want, false, true
-		},
-	},
-	{
-		KI: "KI-02", Name: "dismissed-deadline",
-		Why: "the SDK mirror does not keep dds, so a to-do whose overdue deadline was dismissed from Today is still listed there",
-		adjust: func(c conformanceCase, want []string, evening bool) ([]string, bool, bool) {
-			w, m := c.wire(), c.mirror()
-			if w == nil || w.DeadlineSuppressed == nil || m == nil || slices.Contains(want, cvToday) {
-				return want, evening, false
-			}
-			deadline := calendarDay(m.DeadlineDate)
-			if calendarDay(m.ScheduledDate) != nil || deadline == nil || civil.FromWireTime(*deadline).After(c.Today) {
-				return want, evening, false
-			}
-			return appViewsAsServer(sortedUnion(want, cvToday)), evening, true
-		},
-	},
-	{
 		KI: "KI-05", Name: "repeating-template",
 		Why: "the SDK mirror does not keep rr, so a repeating template is listed like a to-do of its own; the app lists it in no view",
 		adjust: func(c conformanceCase, want []string, evening bool) ([]string, bool, bool) {
@@ -611,12 +601,6 @@ var conformanceKnownGaps = []knownGap{
 			return slices.DeleteFunc(slices.Clone(want), func(v string) bool { return v == cvLogbook }), evening, true
 		},
 	},
-}
-
-func sortedUnion(views []string, v string) []string {
-	out := append(slices.Clone(views), v)
-	sort.Strings(out)
-	return slices.Compact(out)
 }
 
 // conformanceVerdict is the outcome of one case.
@@ -646,7 +630,7 @@ func fieldMap(f taskFields) map[string]json.RawMessage {
 }
 
 // mirrorKeys are the fields both the SDK mirror and history carry.
-var mirrorKeys = []string{"tp", "ss", "tr", "st", "sr", "dd", "pr", "agr"}
+var mirrorKeys = []string{"tp", "ss", "tr", "st", "sr", "tir", "dd", "dds", "sb", "pr", "agr"}
 
 // driftKeys are the fields that decide a view, compared between the app's
 // database and Things Cloud.
@@ -654,7 +638,7 @@ var driftKeys = []string{"tp", "ss", "tr", "st", "sr", "dd", "dds", "sb", "rr"}
 
 func judgeConformanceCase(c conformanceCase) conformanceVerdict {
 	var v conformanceVerdict
-	same := slices.Equal(c.Want, c.Got) && !c.WantEvening
+	same := slices.Equal(c.Want, c.Got) && c.WantEvening == c.GotEvening
 	m, w := c.mirror(), c.wire()
 
 	switch {
@@ -680,7 +664,7 @@ func judgeConformanceCase(c conformanceCase) conformanceVerdict {
 		v.Notes = append(v.Notes, "in history but not in the server's mirror")
 	}
 	if w != nil && m != nil {
-		for _, d := range fieldDifferences(fieldsOfMirror(m), *w, "mirror", "history", mirrorKeys) {
+		for _, d := range fieldDifferences(fieldsOfMirror(m), historyAsMirror(*w), "mirror", "history", mirrorKeys) {
 			v.Problems = append(v.Problems, "the SDK mirror disagrees with history on "+d)
 		}
 		if len(v.Problems) > 0 {
@@ -704,7 +688,7 @@ func judgeConformanceCase(c conformanceCase) conformanceVerdict {
 	}
 	if len(drift) > 0 {
 		v.Problems = append(v.Problems, fmt.Sprintf("the app shows %s, the server lists %s, and the app's database and Things Cloud disagree on %s: the snapshot caught an unsynced change; retake it",
-			describeViews(c.Want, c.WantEvening), describeViews(c.Got, false), strings.Join(drift, "; ")))
+			describeViews(c.Want, c.WantEvening), describeViews(c.Got, c.GotEvening), strings.Join(drift, "; ")))
 		return v
 	}
 
@@ -716,11 +700,11 @@ func judgeConformanceCase(c conformanceCase) conformanceVerdict {
 			applied = append(applied, g.label())
 		}
 	}
-	if slices.Equal(want, c.Got) && !evening {
+	if slices.Equal(want, c.Got) && evening == c.GotEvening {
 		v.Gaps = applied
 		return v
 	}
-	msg := fmt.Sprintf("the app shows %s, the server lists %s", describeViews(c.Want, c.WantEvening), describeViews(c.Got, false))
+	msg := fmt.Sprintf("the app shows %s, the server lists %s", describeViews(c.Want, c.WantEvening), describeViews(c.Got, c.GotEvening))
 	if len(applied) > 0 {
 		msg += fmt.Sprintf(" (not explained by the known gaps %s)", strings.Join(applied, ", "))
 	}
@@ -760,7 +744,7 @@ func conformanceCases(snap conformanceSnapshot) ([]conformanceCase, error) {
 			mirror = append(mirror, *in.Mirror)
 		}
 	}
-	got, err := serverViews(mirror, snap.Today)
+	got, evening, err := serverViews(mirror, snap.Today)
 	if err != nil {
 		return nil, err
 	}
@@ -771,7 +755,7 @@ func conformanceCases(snap conformanceSnapshot) ([]conformanceCase, error) {
 		seen[app.UUID] = true
 		cases = append(cases, conformanceCase{
 			UUID: app.UUID, App: app, Input: inputs[app.UUID], Today: snap.Today,
-			Want: appViewsAsServer(app.Views), WantEvening: app.Evening, Got: got[app.UUID],
+			Want: appViewsAsServer(app.Views), WantEvening: app.Evening, Got: got[app.UUID], GotEvening: evening[app.UUID],
 		})
 	}
 	for _, uuid := range sortedKeys(inputs) {
@@ -781,7 +765,7 @@ func conformanceCases(snap conformanceSnapshot) ([]conformanceCase, error) {
 		if len(got[uuid]) == 0 {
 			continue
 		}
-		cases = append(cases, conformanceCase{UUID: uuid, Input: inputs[uuid], Today: snap.Today, Got: got[uuid]})
+		cases = append(cases, conformanceCase{UUID: uuid, Input: inputs[uuid], Today: snap.Today, Got: got[uuid], GotEvening: evening[uuid]})
 	}
 	sort.Slice(cases, func(i, j int) bool { return cases[i].UUID < cases[j].UUID })
 	return cases, nil
