@@ -12,7 +12,7 @@ import (
 )
 
 // Recurrence writes are forbidden (KI-01). The server globals `history` and
-// `syncer` stay nil in this test binary, so any request that slipped past the
+// `mirrorDB` stay nil in this test binary, so any request that slipped past the
 // guard and reached historyWrite() would panic instead of returning an error.
 
 var ki01RepeatValues = []string{

@@ -38,7 +38,7 @@ type readModel struct {
 }
 
 func readState() readModel {
-	return readModel{mirror: syncer.State()}
+	return readModel{mirror: mirrorState()}
 }
 
 // neverYear starts the years of Things' "never" sentinel: it stores 4001-01-01

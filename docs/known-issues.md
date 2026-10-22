@@ -125,7 +125,8 @@ workaround can be deleted.
   - SDK v0.6.0 never stores `rr` or `rt` (SDK `sync/store.go`; spike report §4 B4), so the server
     cannot even tell a template from an instance after the fact. Fixed in
     [arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40);
-    until it is released, `go.mod` replaces the SDK with the fork commit `f41fcbb`.
+    until it is released, `go.mod` replaces the SDK with the combined fork commit `4d63f48`
+    (it also carries #41 and the KI-29 tombstone fix).
   - Things 3.23 (Aug 2026) overhauled repeating to-dos (early completion, exceptions,
     rule updates) and moved to `Task7` (KI-25), so the encoder targets an obsolete model.
   - Elsewhere, completing a recurring task through the cloud protocol destroyed it
@@ -592,7 +593,97 @@ workaround can be deleted.
 | ID | Issue | Evidence | Fix direction |
 |---|---|---|---|
 | KI-27 | `429 AbusePrevention` on reads: every tool call syncs, bursts of calls trip it | [wbopan#32](https://github.com/wbopan/things-cloud-mcp/issues/32) | Coalesce/throttle syncs (freshness window), backoff on 429 — done for syncs in `server/syncgate.go` (PR #4); writes are not gated. The sandbox harness retries GETs after a 429 (phase 0): consecutive CI steps hit it on the first run (KI-34) |
-| KI-28 | History key change or `404 AccountIssue` after an account reset leaves a stale cursor | [wbopan#27](https://github.com/wbopan/things-cloud-mcp/issues/27), [#35](https://github.com/wbopan/things-cloud-mcp/issues/35) | Detect key change / 404, rebuild the mirror |
-| KI-29 | One malformed historical tombstone can block processing | [arthursoares#37](https://github.com/arthursoares/things-cloud-sdk/issues/37) | Quarantine bad items with a log entry instead of aborting or skipping silently |
+| KI-28 | ~~History key change or `404 AccountIssue` after an account reset leaves a stale cursor~~ — fixed: the server checks the account's history and rebuilds the mirror (details below) | [wbopan#27](https://github.com/wbopan/things-cloud-mcp/issues/27), [#35](https://github.com/wbopan/things-cloud-mcp/issues/35) | Done in `server/mirror.go`, `server/syncgate.go` |
+| KI-29 | ~~One malformed historical tombstone can block processing~~ — fixed: tombstones need only `dloid`, target-less ones are skipped and logged (details below) | [arthursoares#37](https://github.com/arthursoares/things-cloud-sdk/issues/37) | Done ([#32](https://github.com/pachamaker/things-cloud-mcp/pull/32)): SDK fork commit `4d63f48` ([arthursoares#42](https://github.com/arthursoares/things-cloud-sdk/pull/42)), log in `server/syncgate.go` |
 | KI-30 | Client identity is a Things 3.22-era build (`ThingsMac/32209501`; 3.23 is `32300536`) | SDK `client.go` (`DefaultClientInfo`, `ThingsUserAgent`) | Hypothesis: the cloud may adapt responses to the client version. Decide deliberately (see `legal-and-risk.md`); do not change blindly |
 | KI-31 | Negative `ix` crashed Things on Mac and iOS at launch in another implementation | [wbopan#16](https://github.com/wbopan/things-cloud-mcp/issues/16) | Never write negative indexes; verify what the official client sends for new items. The official client itself writes negative `ix` and `ti` (`-867`, `-2383`; `testdata/captures/recurrence-seeds-2026-10-11.json`), so the sign alone does not explain the crash; the rule stays until a capture does |
+| KI-37 | `History.Items` decodes a whole page at once: one history slot whose envelope has a wrong-typed `t` or `e` fails the page, and every later sync fails on it | SDK `items.go` (`json.Unmarshal` into `[]map[string]Item`); found with KI-29, not observed in an account | SDK: decode slot by slot; skip only envelopes that cannot carry entity data, record them (`ItemSkipped`), keep failing on the rest |
+| KI-38 | The SDK sync engine does not apply legacy `Tombstone` items (they become `UnknownChange`) and does not map legacy identifiers, unlike its `state/memory` store, so deletions from pre-migration histories may stay visible in the mirror | SDK `sync/process.go` `processItem`, `state/memory/memory.go` | SDK: handle `Tombstone` and legacy identifiers in `sync` as `state/memory` does; check an old account's history first |
+
+### KI-28 · A reset account leaves the mirror on a dead history
+- **Status:** fixed ([#30](https://github.com/pachamaker/things-cloud-mcp/pull/30), `server/mirror.go`, `server/syncgate.go`) · **Evidence:**
+  confirmed in SDK v0.6.0 code; the reports come from another implementation
+  ([wbopan#27](https://github.com/wbopan/things-cloud-mcp/issues/27),
+  [#35](https://github.com/wbopan/things-cloud-mcp/issues/35)); not reproduced on a real
+  reset account
+- **Symptom:** after the owner resets Things Cloud (or re-creates the account from a Mac),
+  every read fails with `404 AccountIssue` at an old index, or, if the old history stays
+  readable, the server keeps serving the old tasks with no error. Writes go to whatever key
+  the writer took at startup.
+- **Root cause (SDK v0.6.0):** once `sync_state` holds a history key, `Syncer.Sync` uses it
+  forever and never asks the account again (`sync/sync.go:94-99`); its "history changed,
+  start fresh" branch can never run (`sync.go:118-121`); a stored cursor at or beyond the
+  history head returns no changes silently (`sync.go:132-134`). A 404 surfaces as
+  `*things.HTTPError` without the `things-response: AccountIssue` header.
+- **Fix:** the mirror belongs to one history. A history check verifies the account (its
+  current history key) and reads that history's head, then compares both with the key and
+  cursor the SDK stored in `sync_state` (the SDK has no getter; the server reads the row
+  through a separate read-only connection, as the SDK's replay backup does). The mirror is
+  stale when the key changed or the stored cursor is ahead of the head. Checks run at
+  startup, on reads every 15 min, after a 404 on the mirrored history (at most once a
+  minute) and before a write when the last check is older than a minute, so a write never
+  lands in a history a reset left behind. A failed check never fails a good read.
+- **Rebuild:** the sync gate starts it in the background; meanwhile every tool and REST
+  call gets `the local Things mirror is being rebuilt …; try again in a minute`. The mirror
+  file (with `-wal`/`-shm`) moves to `things-upstream.db.before-rebuild` next to it,
+  replacing the previous copy; a fresh mirror is synced from index 0, and the writer moves to
+  the new key. A failed rebuild leaves the error (redacted, KI-35) with the time of the next
+  attempt; the retry resumes the half-built mirror instead of replacing the backup. Rebuilds
+  back off from 1 min, doubling to 1 h, and the backoff resets once a check finds the mirror
+  on the account's history, so a mirror that stays stale cannot loop on full resyncs. At
+  startup the same runs before the server listens.
+- **Tests:** `server/syncgate_history_test.go` (gate: check intervals, rebuild in the
+  background, backoff, no loop) and `server/mirror_test.go` (an `httptest` Things Cloud with
+  real SDK mirrors: key change at startup and while running, a frozen old history, a cursor
+  ahead of the head, a write after a reset, a failed and resumed rebuild, no history key, no
+  key in tool errors or the log).
+- **Not verified:** a real account reset (sandbox account: reset it, then run the server on
+  the old `DATA_DIR`); whether Things Cloud deletes the old history or keeps it readable.
+
+### KI-29 · One malformed history item stops every sync
+- **Status:** fixed for tombstones ([#32](https://github.com/pachamaker/things-cloud-mcp/pull/32)): the server builds against the SDK fork commit
+  [`4d63f48`](https://github.com/pachamaker/things-cloud-sdk/commit/4d63f48f49dc598c606ba3df60db16df182157a0)
+  (branch `fork-integration`, ADR-0001), which carries the fork branch
+  [`fix/tombstone-read-target`](https://github.com/pachamaker/things-cloud-sdk/tree/fix/tombstone-read-target)
+  (`f3c99ad`, proposed upstream as
+  [arthursoares#42](https://github.com/arthursoares/things-cloud-sdk/pull/42)), and logs
+  every item the SDK skips. Other malformed items stay fail-closed (below); whole-page
+  decode is KI-37 · **Evidence:** confirmed in code, SDK tests and
+  `server/syncgate_skipped_test.go`; the reported tombstone shapes come from
+  [arthursoares#37](https://github.com/arthursoares/things-cloud-sdk/issues/37)
+- **Where a malformed item stops the sync (SDK v0.6.0):**
+  1. `items.go` `History.Items` decodes the whole page: a wrong-typed `t` or `e` fails it (KI-37).
+  2. `sync/process.go` `ValidateTaskReadKinds`: an unknown `Task*` kind fails the batch —
+     intended, it must stay loud (KI-25).
+  3. `sync/process.go` `processItems`: any `processItem` error rolls back the batch together
+     with its cursor, so every later sync fails on the same item and all tools fail with
+     `pre-read sync failed: processing item at server index N: …`. Item errors: task payload
+     that is not an object or has wrong types, a note delta that does not apply (fails closed
+     since arthursoares#35), wrong types in area, tag or checklist payloads, and any
+     `Tombstone2` whose payload does not decode as a whole — including a non-numeric `dld`,
+     a field the mirror never stores. An empty-object tombstone (the actual item in #37)
+     decodes and does not block reads.
+- **Why the server cannot quarantine:** the SDK saves the cursor in the batch's own
+  transaction; the server sees only the error. Advancing the cursor from outside would drop
+  every other item of that page.
+- **Fix (SDK):** `processTombstone` decodes only `dloid` and applies the deletion whatever
+  `dld` holds. A tombstone with no usable target (not an object; `dloid` missing, null,
+  empty or not a string) deletes nothing, so it is skipped as the new `ItemSkipped` change:
+  logged in `change_log`, returned by `Sync`, cursor advanced. Task, area, tag and checklist
+  payloads that do not decode still stop the sync, so no entity data is skipped.
+- **Fix (server):** `go.mod` replaces the SDK with the combined fork commit.
+  `logSkippedItems` (`server/syncgate.go`) logs every `sync.ItemSkipped` the SDK returns,
+  from the startup sync and from every gated sync, as
+  `[SYNC] skipped history item <index> (<kind> <item UUID>): <reason>`: no payload, no
+  history key (KI-35).
+- **Tests:** `TestMirror_KI29_SkippedTombstoneIsLoggedAndTheSyncGoesOn`
+  (`server/syncgate_skipped_test.go`): an `httptest` Things Cloud whose history holds a
+  `Tombstone2` with a non-numeric `dld` and one without `dloid`, present at startup or
+  arriving while the server runs. The sync succeeds, the deletion applies, and the log
+  shows exactly one skip, without payload or history key. On SDK v0.6.0 both cases fail
+  with `processing item at server index 2: unmarshaling tombstone payload`.
+- **Remaining:** drop the `replace` once an upstream release carries arthursoares#42.
+  KI-37 (page decode) and KI-38 (legacy `Tombstone`) stay open. The task-item cases stay
+  fail-closed by design; the error already names the history index.
+- **Writes:** the server writes `Task6`, which skips the SDK's Task7 write preflight, so the
+  write half of arthursoares#37 does not affect it.

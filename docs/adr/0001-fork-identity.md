@@ -6,6 +6,14 @@ Accepted (2026-10-11): option B. Spike verdict "conditional GO" — see
 `15e5b6b`), including the phase 2 safety adapters (PR #4) and the phase 3 view
 classifier (ADR-0005). Upstream PRs from the spike report §6 are still open items.
 
+Amended (2026-10-13): for v2.0.0 the owner approved building against the fork
+`pachamaker/things-cloud-sdk` through a `go.mod` `replace`, while every fix is also
+proposed upstream as its own PR. All fork changes reach the server through one combined
+commit (fork branch `fork-integration`: v0.6.0 plus arthursoares/things-cloud-sdk#40,
+#41 and #42), not a `replace` per PR: a new fix is merged into that branch and the
+`replace` moves to its head. The `replace` goes once an upstream release carries every
+fix.
+
 ## Context
 - Lineage: `nicolai86/things-cloud-sdk` (MIT, 2017, Raphael Randschau; dormant since
   2022) → `arthursoares/things-cloud-sdk` (SDK + sync engine + CLI, **actively
