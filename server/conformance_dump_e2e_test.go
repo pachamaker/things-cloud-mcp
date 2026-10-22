@@ -85,6 +85,16 @@ func writeConformanceInput(t *testing.T, dir, keyFile string) {
 	}
 }
 
+// mirrorCursor is the history index the server's mirror has synced up to.
+func mirrorCursor(t *testing.T) int {
+	t.Helper()
+	id, err := mirrorDB.stored()
+	if err != nil {
+		t.Fatalf("read the mirror's cursor: %v", err)
+	}
+	return id.cursor
+}
+
 // dumpConformanceInput reads the server's mirror and the raw history of the
 // account at one history head, after checking that it is the account and the
 // day the export was taken on.
@@ -97,7 +107,7 @@ func dumpConformanceInput(t *testing.T, h *sandboxHarness, exp conformanceExpect
 		t.Fatalf("the server's day is %s, the export's %s: the snapshot straddles midnight; take it again", h.today, exp.Today)
 	}
 
-	head := syncer.LastSyncedIndex()
+	head := mirrorCursor(t)
 	items, skipped, err := h.observer.itemsSince(0)
 	if err != nil {
 		t.Fatalf("read history: %v", err)
@@ -105,10 +115,10 @@ func dumpConformanceInput(t *testing.T, h *sandboxHarness, exp conformanceExpect
 	if skipped > 0 {
 		t.Logf("%d history items with a non-object payload skipped", skipped)
 	}
-	if _, err := syncer.Sync(); err != nil {
+	if _, err := mirrorDB.Sync(); err != nil {
 		t.Fatalf("sync the mirror: %s", h.red.redact(err.Error()))
 	}
-	if moved := syncer.LastSyncedIndex(); moved != head {
+	if moved := mirrorCursor(t); moved != head {
 		t.Fatalf("history moved from %d to %d during the dump: a Things app synced; keep them idle and take the snapshot again", head, moved)
 	}
 	live := foldHistory(items)
@@ -116,7 +126,7 @@ func dumpConformanceInput(t *testing.T, h *sandboxHarness, exp conformanceExpect
 		t.Fatalf("the export's marker area %s is not this account's %q area: the Mac's Things app and the sandbox credentials are on different accounts", exp.MarkerArea, sandboxMarkerArea)
 	}
 
-	state := syncer.State()
+	state := mirrorState()
 	all := sync.QueryOpts{IncludeCompleted: true, IncludeTrashed: true}
 	var mirror []*things.Task
 	for _, list := range []func(sync.QueryOpts) ([]*things.Task, error){state.AllTasks, state.AllProjects, state.AllHeadings} {

@@ -86,12 +86,15 @@ in §7.
 This module (`github.com/pachamaker/things-cloud-mcp`) contains only the server. The
 protocol client and the sync engine are the
 [`arthursoares/things-cloud-sdk`](https://github.com/arthursoares/things-cloud-sdk)
-dependency, pinned in `go.mod` (v0.6.0). Differences from the embedded copy this repo
-used to carry: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4.
+dependency, pinned in `go.mod` (v0.6.0) and replaced by one commit of the fork
+`pachamaker/things-cloud-sdk` that carries the fixes proposed upstream (`rr`/`rt`,
+`sb`/`dds`/`tir`, tombstones without a target; ADR-0001). Differences from the embedded
+copy this repo used to carry: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4.
 
 | Path | Role | Notes |
 |---|---|---|
-| `server/main.go` | Process wiring, router, REST handlers, graceful shutdown | Globals `client`, `syncer`, `history`; cache at `$DATA_DIR/things-upstream.db` |
+| `server/main.go` | Process wiring, router, REST handlers, graceful shutdown | Globals `client`, `mirrorDB`, `mirror`, `history`; cache at `$DATA_DIR/things-upstream.db` |
+| `server/mirror.go` | Owns the mirror file and its Syncer; history check (account key + head vs the stored key + cursor) and rebuild | KI-28; one backup `things-upstream.db.before-rebuild` |
 | `server/auth.go` | OAuth resource server: config, JWKS cache, RFC 9068 token checks, RFC 9728 metadata, per-tool scopes | Every data route goes through a `gate` (KI-07) |
 | `server/mcp.go` | MCP tool registry and read handlers, output formatting | `mark3labs/mcp-go` v0.44, Streamable HTTP, stateless |
 | `server/write.go` | All write commands, wire payload builders, ID generator, `historyWrite` | One item per commit; global `historyMu`; `repeat` always rejected (KI-01) |
@@ -99,11 +102,11 @@ used to carry: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4.
 | `server/views.go` | View classifier (Inbox/Today/Anytime/Someday/Upcoming, This Evening) over `State.AllTasks` | Compares civil dates against the owner's day; reads `dds` and `sb`, not `tir` (KI-02) |
 | `server/today.go` | `THINGS_TIMEZONE` parsing, `ownerToday()` | Global `ownerZone`, set once in `main` |
 | `domain/civil` | Civil date, clock, owner's "today", wire encoding of day values, zone loading (ADR-0003) | Pure; embeds `time/tzdata` |
-| `server/syncgate.go` | Serialises and coalesces `Syncer.Sync()`, backs off on 429 | The SDK `Syncer` has no lock |
+| `server/syncgate.go` | Serialises and coalesces `Syncer.Sync()`, backs off on 429, runs history checks and background rebuilds with backoff, logs the history items the SDK skips | The SDK `Syncer` has no lock (KI-27, KI-28); skipped items: KI-29 |
 | `server/json_body.go` | Bounded JSON body decoding for REST | |
 | `server/redact.go` | Hides the URL of a failed Things Cloud request where SDK errors enter the server (sync gate, `historyWrite`, startup) | The URL carries the history key, a bearer capability (KI-35) |
 | SDK `thingscloud` | HTTP client, histories, items, wire types (`Task6`/`Task7`), Base58 codec, notes, account | `History.Write` refuses non-canonical IDs |
-| SDK `sync` | `Syncer`: incremental pull, per-batch cursor, cache replay with backup, SQLite store, `State` queries | `rr`/`rt` and `sb`/`dds`/`tir` only in the fork `go.mod` replaces it with (arthursoares/things-cloud-sdk#40, #41) |
+| SDK `sync` | `Syncer`: incremental pull, per-batch cursor, cache replay with backup, SQLite store, `State` queries | The fork stores `rr`, `rt`, `sb`, `dds`, `tir` (`TaskReplayVersion` 5: an older cache is replayed once on first start) and skips tombstones without a target as `ItemSkipped` |
 | `tests/*.sh` | Black-box scripts against a deployed server | Hit a real account; must target a sandbox |
 
 ## 5. Runtime flows (current)
@@ -136,6 +139,13 @@ sequenceDiagram
 
 A burst of reads costs one round trip to Things Cloud. Sync failures surface as
 tool errors (since 2026-03-05) instead of stale data.
+
+The gate also keeps the mirror on the account's current history (KI-28): every 15 min on
+reads, after a 404 on the mirrored history and before writes (at most a minute old) it
+verifies the account's history key, reads that history's head and compares both with the
+key and cursor stored in the mirror. A stale mirror is set aside as
+`things-upstream.db.before-rebuild` and rebuilt from index 0 in the background; calls fail
+fast with a "being rebuilt" error until it is done, and rebuilds back off up to an hour.
 
 ### 5.2 Write
 

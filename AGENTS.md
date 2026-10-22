@@ -52,7 +52,10 @@ feature unimplemented.
 8. **Do not copy or patch SDK code in this repo.** The SDK is the
    `github.com/arthursoares/things-cloud-sdk` dependency, pinned in `go.mod`; generic
    fixes go upstream as PRs, or through a `replace` soft fork (ADR-0001). Upgrades go
-   through a PR with the full test suite.
+   through a PR with the full test suite. Until an upstream release carries the fork's
+   fixes, `go.mod` has exactly one `replace`: the head of the fork branch
+   `pachamaker/things-cloud-sdk` `fork-integration`. A new SDK fix is merged into that
+   branch and the `replace` moves to its new head, never to a commit of another fork branch.
 9. **Do not edit `.env` files, deployment secrets, or anything under `/migrations`**
    without an explicit instruction.
 
@@ -178,7 +181,7 @@ Configuration (environment variables):
 | `PORT` | no | Listen port, default `8080` |
 | `ENABLE_WRITES` | no | `true` registers the write tools and REST write endpoints. Unset or `false`: read-only, the write tools are not even listed (ADR-0004). Any other value stops the server at startup |
 | `ENABLE_REST_API` | no | `true` serves `/api/*` behind the same tokens as `/mcp`; off by default (ADR-0002) |
-| `DATA_DIR` | no | Directory of the SQLite cache `things-upstream.db`, default `/data` (created with mode 0700). The cache is disposable: delete the file to force a full resync |
+| `DATA_DIR` | no | Directory of the SQLite cache `things-upstream.db`, default `/data` (created with mode 0700). The cache is disposable: delete the file to force a full resync. A rebuild after an account reset leaves the old mirror as `things-upstream.db.before-rebuild` (KI-28) |
 | `THINGS_TIMEZONE` | no (set it) | Owner's IANA zone, e.g. `Europe/Moscow`: decides "today" for views, `when`, deadlines and `completed_*` dates (ADR-0003). Unset: the UTC day, with a startup warning. An unknown name or `Local` stops the server at startup. Zone data is built in |
 
 ¹ Either the three OAuth settings or `INSECURE_NO_AUTH_LOCAL_ONLY=true`; without either the
@@ -208,7 +211,8 @@ or push tags and never publish images.
 | `server/views.go` | View classifier (Inbox/Today/Anytime/Someday/Upcoming, This Evening), ADR-0005 | live |
 | `server/today.go` | `THINGS_TIMEZONE`, `ownerToday()` (ADR-0003) | live |
 | `domain/civil` | Civil date, clock, wire encoding of day values, zone loading (ADR-0003) | live |
-| `server/syncgate.go` | Serialises and coalesces syncs, 429 backoff | live |
+| `server/syncgate.go` | Serialises and coalesces syncs, 429 backoff, history checks and background mirror rebuilds (KI-28) | live |
+| `server/mirror.go` | Mirror file and Syncer, history check against the account, rebuild with one backup (KI-28) | live |
 | `server/sandbox_*_test.go` | Sandbox e2e harness (tag `e2e`) and its pure rules (untagged, unit-tested) | sandbox only |
 | `testdata/captures/` | Sanitized payloads the official Things apps wrote (protocol §8 evidence), checked by `server/recurrence_capture_test.go` | evidence |
 | `server/conformance_*test.go` | Conformance suite over `testdata/conformance/` (untagged) and the snapshot dump (tag `e2e`), ADR-0005 | live |
@@ -243,10 +247,13 @@ or keep it as a deliberate soft fork (ADR-0001), before merging.
   409) → post-write sync.
 - **Source of truth** is the Things Cloud history; SQLite (`$DATA_DIR/things-upstream.db`)
   is a disposable cache. The SDK replays it from scratch after reader fixes, keeping a
-  backup next to it.
+  backup next to it. The mirror belongs to one history: when the account's history key
+  changes (account reset) or the stored cursor is ahead of the head, the server sets it
+  aside as `things-upstream.db.before-rebuild` and rebuilds it (`server/mirror.go`, KI-28).
 - **Concurrency:** the sync gate serialises syncs (the SDK `Syncer` has no lock);
-  `historyMu` serialises writes. Package globals (`client`, `syncer`, `history`) are a
-  known smell (KI-17).
+  `historyMu` serialises writes. Package globals (`client`, `mirrorDB`, `mirror`,
+  `history`) are a known smell (KI-17); read the mirror through `mirrorState()`, never
+  keep a Syncer, since a rebuild replaces it.
 
 Details and target architecture: `docs/architecture.md`.
 

@@ -32,4 +32,4 @@ require (
 	modernc.org/sqlite v1.45.0 // indirect
 )
 
-replace github.com/arthursoares/things-cloud-sdk => github.com/pachamaker/things-cloud-sdk v0.6.1-0.20261012101159-9d70eb87497f
+replace github.com/arthursoares/things-cloud-sdk => github.com/pachamaker/things-cloud-sdk v0.6.1-0.20261013155214-4d63f48f49dc
