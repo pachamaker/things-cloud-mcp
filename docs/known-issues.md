@@ -42,6 +42,29 @@ workaround can be deleted.
 | [#8](https://github.com/pachamaker/things-cloud-mcp/pull/8) Go 1.26.9 toolchain, `govulncheck` in CI | 2026-10-10 (`fe8c3e2`) | KI-32 fixed; also brings #7 (KI-15) to `main` |
 | [#9](https://github.com/pachamaker/things-cloud-mcp/pull/9) Sandbox e2e harness and workflow | 2026-10-10 (`c1cca5e`) | KI-34 harness and `e2e.yml` |
 | [#10](https://github.com/pachamaker/things-cloud-mcp/pull/10) Hide the history key in transport errors | 2026-10-10 (`4eb6c4a`) | KI-35 fixed |
+| [#12](https://github.com/pachamaker/things-cloud-mcp/pull/12) Docs: statuses after #5–#10 and the first e2e run | 2026-10-10 (`f788681`) | KI-15, KI-32, KI-35 marked fixed; KI-34 first CI run (main suite green, seed checks hit `429`, KI-27) |
+| [#13](https://github.com/pachamaker/things-cloud-mcp/pull/13) Phase 0: safety before deploy | 2026-10-10 (`db23c5d`) | KI-08 (debug endpoints removed), KI-09, KI-10 (write preconditions), KI-11 (`things_smoke_test` removed), KI-16 phase 0, KI-33; read-only unless `ENABLE_WRITES=true` (ADR-0004) |
+| [#14](https://github.com/pachamaker/things-cloud-mcp/pull/14) Fail skipped e2e runs in CI | 2026-10-10 (`a9bd5d3`) | KI-34: `THINGS_E2E_REQUIRE_RUN` turns a skipped sandbox run into a failure |
+| [#15](https://github.com/pachamaker/things-cloud-mcp/pull/15) OAuth 2.1 for `/mcp` and `/api` | 2026-10-11 (`cab5b69`) | KI-07 fixed in code (resource server, ADR-0002); REST off by default, `API_KEY` removed |
+| [#16](https://github.com/pachamaker/things-cloud-mcp/pull/16) Agent rules: English commits and PRs, open the PR once checks pass | 2026-10-11 (`499091a`) | `AGENTS.md` §10, ADR-0007 |
+| [#17](https://github.com/pachamaker/things-cloud-mcp/pull/17) "Today" in the owner's timezone | 2026-10-11 (`b8838d0`) | KI-03 fixed when `THINGS_TIMEZONE` is set; `domain/civil` (ADR-0003) |
+| [#18](https://github.com/pachamaker/things-cloud-mcp/pull/18) Sandbox harness follows `THINGS_TIMEZONE` | 2026-10-11, into `KI-03-owner-timezone`; on `main` with #19 | KI-34 |
+| [#19](https://github.com/pachamaker/things-cloud-mcp/pull/19) Re-land #18 on `main` | 2026-10-11 (`d4f20fc`) | KI-34: the harness takes "today" and its midnight window from `THINGS_TIMEZONE` |
+| [#20](https://github.com/pachamaker/things-cloud-mcp/pull/20) Distroless release image and GHCR workflow | 2026-10-11 (`b4d59d5`) | KI-16: `v*` tags publish a linux/amd64 + linux/arm64 image; `things-server healthcheck` |
+| [#21](https://github.com/pachamaker/things-cloud-mcp/pull/21) Clear the 4001 sentinel on read, list to-dos under headings | 2026-10-11 (`a53bb30`) | KI-04 and KI-13 fixed in the read model |
+| [#22](https://github.com/pachamaker/things-cloud-mcp/pull/22) Sandbox evidence for KI-13 | 2026-10-11 (`f94d387`) | KI-13 evidence confirmed |
+| [#23](https://github.com/pachamaker/things-cloud-mcp/pull/23) Track the upstream `rr`/`rt` PR | 2026-10-11 (`e7dc8de`) | KI-05, KI-10 point at arthursoares#40 |
+| [#24](https://github.com/pachamaker/things-cloud-mcp/pull/24) Explain seed tag mismatches | 2026-10-11 (`7fc9609`) | KI-34: seed checks name the cause of a tag mismatch; "Fixing seeds" table in `docs/testing/sandbox-e2e.md` |
+| [#25](https://github.com/pachamaker/things-cloud-mcp/pull/25) Hide repeating templates and refuse writes to repeating items | 2026-10-22, into `KI-29-sdk-fork-skipped-tombstones`; on `main` with #34 | see #34 |
+| [#26](https://github.com/pachamaker/things-cloud-mcp/pull/26) Capture the Things apps' writes for repeating to-dos | 2026-10-12 (`a97d16a`) | KI-01: first protocol §8 capture in `testdata/captures/`, protocol §5.3 rewritten from it; writing `rr` stays ⛔ |
+| [#27](https://github.com/pachamaker/things-cloud-mcp/pull/27) Capture completing repeating instances | 2026-10-12 (`93d6cd8`) | KI-01: second capture (completing an instance, an app-generated instance) |
+| [#28](https://github.com/pachamaker/things-cloud-mcp/pull/28) Release plan: Phase 1 before `v2.0.0`, Phase 3 in `v2.1.0` | 2026-10-22 (`805d9af`) | Roadmap releases |
+| [#29](https://github.com/pachamaker/things-cloud-mcp/pull/29) Conformance harness for view classification | 2026-10-13 (`2c3a7f2`) | KI-02: things.py exporter, snapshot dump and `TestConformance_Snapshots` (ADR-0005); no snapshot committed yet |
+| [#30](https://github.com/pachamaker/things-cloud-mcp/pull/30) Rebuild the mirror after an account reset | 2026-10-22 (`2a46817`) | KI-28 fixed (`server/mirror.go`); KI-29 located; new KI-37, KI-38 |
+| [#31](https://github.com/pachamaker/things-cloud-mcp/pull/31) Dismissed deadlines and This Evening | 2026-10-22 (`e6000e6`) | KI-02: a dismissed deadline (`dds`) keeps a to-do out of Today; `evening: true` in `things_list_today` |
+| [#32](https://github.com/pachamaker/things-cloud-mcp/pull/32) One combined SDK fork commit, log skipped tombstones | 2026-10-22 (`078ccae`) | KI-29 fixed for tombstones; `go.mod` replaces the SDK with `4d63f48` (arthursoares#40, #41, #42) |
+| [#33](https://github.com/pachamaker/things-cloud-mcp/pull/33) Go 1.26.10 | 2026-10-22 (`ad5df1f`) | KI-32: GO-2026-6809 fixed |
+| [#34](https://github.com/pachamaker/things-cloud-mcp/pull/34) Re-land #25 on `main` | 2026-10-22 (`545572e`) | KI-05: repeating templates hidden from every list; KI-01/KI-10: every write to a repeating template or instance refused; output marks `repeating` |
 
 ---
 
@@ -95,7 +118,7 @@ workaround can be deleted.
 
 ### KI-01 · Recurrence (`repeat`) writes can corrupt Things clients
 - **Status:** mitigated — every `repeat` value, incl. `none`, is rejected (PR #2,
-  `7aa1009`); on branch `recurrence-sdk-fork-KI-05-KI-10` the mirror stores `rr`/`rt`
+  `7aa1009`); since [#34](https://github.com/pachamaker/things-cloud-mcp/pull/34) the mirror stores `rr`/`rt`
   (SDK fork, see below) and every write to a repeating template or instance is refused ·
   **Evidence:** confirmed (incident 2026-08-18, earlier crash 2026-02-16)
 - **Symptom:** after creating/editing a task with `repeat`, Things on macOS and iOS
@@ -140,7 +163,7 @@ workaround can be deleted.
   a repetition still need one (`repeat-disabled.md`). Persist `rr`/`rt`
   read-only first; refuse complete/move/schedule/edit on both templates and instances,
   as upstream does.
-- **Refusal (branch `recurrence-sdk-fork-KI-05-KI-10`):** `server/preconditions.go`
+- **Refusal ([#34](https://github.com/pachamaker/things-cloud-mcp/pull/34)):** `server/preconditions.go`
   refuses complete, reopen, edit, the moves, trash and untrash of a repeating template or
   instance (to-do or project), and checklist writes on their items, with an invalid-input
   error naming the template; a template cannot be the `project` or `parent_task` of a new
@@ -229,9 +252,9 @@ workaround can be deleted.
   refused · **Evidence:** confirmed (before the fix `server/write.go:650-852` validated
   only the Base58 shape)
 - **Remaining:** SDK v0.6.0 does not store `rr`/`rt`, so repeating templates and
-  instances are recognised only with the SDK fork of branch
-  `recurrence-sdk-fork-KI-05-KI-10` ([arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40)
-  until released; refusals under KI-01). Checklist writes find the item
+  instances are recognised only with the SDK fork ([#34](https://github.com/pachamaker/things-cloud-mcp/pull/34), until
+  [arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40)
+  is released; refusals under KI-01). Checklist writes find the item
   by scanning every to-do's checklist (the SDK has no lookup by item UUID).
 - **Symptom:** a hallucinated or mistyped UUID produces a modify-item for an unknown
   object in the cloud history. Clients receive a partial entity with no creation
@@ -289,15 +312,14 @@ workaround can be deleted.
 ### KI-02 · View classification does not match Things
 - **Status:** in-progress — PR #1 (`f79b05e`) implements the things.py rules; the
   classifier compares civil dates in the owner's timezone (KI-03); templates are hidden
-  on branch `recurrence-sdk-fork-KI-05-KI-10` (KI-05); dismissed deadlines and This
-  Evening are done on branch `KI-02-evening-dds` (below). Remaining: projects in Today,
+  ([#34](https://github.com/pachamaker/things-cloud-mcp/pull/34), KI-05); dismissed deadlines and This Evening are done ([#31](https://github.com/pachamaker/things-cloud-mcp/pull/31), below). Remaining: projects in Today,
   the move to `domain/view` (ADR-0005 decision 1), snapshots. Since the upstream SDK
   migration the rules live in `server/views.go` over SDK `State.AllTasks` (SDK `TasksIn*`
   are not used, spike report §4 B3) · **Evidence:** confirmed in code; exact Things rules
   `likely` (to be verified with the conformance harness, ADR-0005)
-- **Fix (dismissed deadlines, This Evening):** the SDK fork `9d70eb8`
-  ([arthursoares/things-cloud-sdk#41](https://github.com/arthursoares/things-cloud-sdk/pull/41))
-  mirrors `sb`, `dds` and `tir`. A deadline on or before today puts a to-do without a
+- **Fix (dismissed deadlines, This Evening):** the SDK fork commit `4d63f48` mirrors `sb`,
+  `dds` and `tir` (from `9d70eb8`, proposed upstream as
+  [arthursoares/things-cloud-sdk#41](https://github.com/arthursoares/things-cloud-sdk/pull/41)). A deadline on or before today puts a to-do without a
   start date in Today only while `dds` is null (§5.1; things.py `deadline_suppressed=False`).
   This Evening is Today ∩ `sb = 1`: `things_list_today` marks those to-dos
   `evening: true` and lists them after the main section, each section by today index;
@@ -398,7 +420,7 @@ workaround can be deleted.
 ### KI-05 · Lists contain non-actionable items; `status` is unreliable
 - **Status:** partially fixed — canceled items excluded from open views (PR #1) and,
   since the SDK migration, from every open list in `server/readmodel.go`; repeating
-  templates hidden on branch `recurrence-sdk-fork-KI-05-KI-10`; the empty-status case
+  templates hidden ([#34](https://github.com/pachamaker/things-cloud-mcp/pull/34)); the empty-status case
   remains · **Evidence:** confirmed
 - **Symptom:** list tools return items with `status: "canceled"` or an empty status, and
   occasionally repeating templates.
@@ -413,7 +435,7 @@ workaround can be deleted.
   SDK mirror and adds `Task.IsRepeatingTemplate()` / `IsRepeatingInstance()`. The sandbox
   seed checks confirm the gap on real data with v0.6.0: both repeating seed templates are
   listed in Someday.
-- **Templates (branch `recurrence-sdk-fork-KI-05-KI-10`, on the SDK fork until #40 is
+- **Templates ([#34](https://github.com/pachamaker/things-cloud-mcp/pull/34), on the SDK fork until arthursoares#40 is
   released):** `openList` in `server/readmodel.go` drops every repeating template from
   the views, `things_list_all_tasks` (and so `things_search_tasks`), projects, project and
   area listings and the REST lists, closed items included or not. `things_get_task` and
