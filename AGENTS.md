@@ -92,10 +92,10 @@ docker run --rm --network none things-cloud-mcp:v2.0.0   # offline smoke: exits 
 If the default Go proxy is unreachable (e.g. a corporate proxy), prefix commands with
 `GOPROXY=https://proxy.golang.org,direct`.
 
-`go.mod` keeps `go 1.25.0` as the minimum and pins `toolchain go1.26.9` (KI-32): a local
-`go` older than that downloads and uses Go 1.26.9 (`GOTOOLCHAIN=auto`), a newer one
-builds with itself. CI and the Docker builder (`golang:1.26.9-alpine`, pinned by digest)
-use 1.26.9; bump the `toolchain` line and the `Dockerfile` tag and digest together.
+`go.mod` keeps `go 1.25.0` as the minimum and pins `toolchain go1.26.10` (KI-32): a local
+`go` older than that downloads and uses Go 1.26.10 (`GOTOOLCHAIN=auto`), a newer one
+builds with itself. CI and the Docker builder (`golang:1.26.10-alpine`, pinned by digest)
+use 1.26.10; bump the `toolchain` line and the `Dockerfile` tag and digest together.
 
 Run the server locally **against the sandbox account only**:
 
@@ -142,6 +142,19 @@ Agents run the sandbox tests against an account only when the owner asks for tha
 the credentials are the owner's, and so is the day's run. The compile check and the
 offline self-test are always fine.
 
+Conformance snapshots (ADR-0005, KI-02, `docs/testing/conformance.md`): on a Mac whose
+Things app is signed in to the sandbox, `scripts/conformance/snapshot.sh <label>` exports
+the app's views from its database read-only with things.py (`expected.json`), dumps the
+server's mirror of the same account (`input.json`, `TestSandboxConformanceDump`) and
+compares them; the snapshot lands in `testdata/conformance/`. `TestConformance_Snapshots`
+replays every committed snapshot in `go test ./...`. Taking a snapshot reads the owner's
+Things database and the sandbox account: agents do it only when the owner asks. The
+exporter's own tests need no Things and no network beyond installing things.py:
+
+```bash
+~/.venvs/things-conformance/bin/python -m unittest discover -s scripts/conformance -v
+```
+
 Black-box scripts in `tests/` call a running server and **create real items** in the
 account it is connected to. The writing ones (`test-mcp.sh`, `test-smoke.sh`,
 `test-api.sh`) first check for the sandbox marker area `MCP E2E SANDBOX`
@@ -174,7 +187,7 @@ server refuses to start. Tokens need the scope `things.read` for any request and
 refuses to start while it is set (ADR-0002).
 
 Baseline: CI (`.github/workflows/ci.yml`) runs `go mod tidy -diff`, build, vet,
-`go test -race ./...` and `govulncheck` on Go 1.26.9 for every pull request and push to
+`go test -race ./...` and `govulncheck` on Go 1.26.10 for every pull request and push to
 `main`; all pass. `staticcheck -tags 'e2e fakecloud'` is gated too (KI-33). Do not add
 failures.
 
@@ -198,6 +211,9 @@ or push tags and never publish images.
 | `server/syncgate.go` | Serialises and coalesces syncs, 429 backoff | live |
 | `server/sandbox_*_test.go` | Sandbox e2e harness (tag `e2e`) and its pure rules (untagged, unit-tested) | sandbox only |
 | `testdata/captures/` | Sanitized payloads the official Things apps wrote (protocol §8 evidence), checked by `server/recurrence_capture_test.go` | evidence |
+| `server/conformance_*test.go` | Conformance suite over `testdata/conformance/` (untagged) and the snapshot dump (tag `e2e`), ADR-0005 | live |
+| `scripts/conformance/` | Dev-only exporter of the Things app's views (things.py) and the snapshot script | dev only |
+| `testdata/conformance/` | Snapshots: the Things app's views and the server's mirror at one moment, titles hashed | evidence |
 | `tests/` | Shell e2e scripts against a running server (superseded by the Go harness) | sandbox only |
 | `.github/workflows/ci.yml` | PR and `main` checks: tidy, build, vet, race tests, `govulncheck`; no secrets, no network to Things | live |
 | `.github/workflows/release.yml` | On `v*` tags: the CI checks, then the multi-arch image to GHCR; only job with `packages: write` | live |

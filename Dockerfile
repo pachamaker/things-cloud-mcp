@@ -4,7 +4,7 @@
 #
 # The builder runs on the build host and cross-compiles, so multi-arch builds
 # need no emulation: the runtime stage only copies files.
-FROM --platform=$BUILDPLATFORM golang:1.26.9-alpine@sha256:3082400e369fa24d5fc60bca20edab3f6d604e0c5a690ec66b295eff4dd87ade AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine@sha256:5cb67f19c5e7994dcb80c074f7cfca8aeeada45bbdca035f73df269cefdcce61 AS builder
 
 WORKDIR /src
 COPY go.mod go.sum ./

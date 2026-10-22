@@ -6,6 +6,8 @@ import (
 
 	things "github.com/arthursoares/things-cloud-sdk"
 	"github.com/arthursoares/things-cloud-sdk/sync"
+
+	"github.com/pachamaker/things-cloud-mcp/domain/civil"
 )
 
 // listOpts adds pagination to the SDK query options; the SDK's QueryOpts has
@@ -140,11 +142,17 @@ func (r readModel) AllTagsWithOpts(opts listOpts) ([]*things.Tag, error) {
 // TasksIn* queries, which drop overdue and arrived-but-unconfirmed items from
 // every list (spike report §4 B3). "Today" is the owner's day (ADR-0003).
 func (r readModel) tasksInView(view listView, opts listOpts) ([]*things.Task, error) {
+	return r.tasksInViewOn(view, opts, ownerToday())
+}
+
+// tasksInViewOn classifies as of the given day; the conformance harness
+// replays snapshots on the day they were taken (ADR-0005).
+func (r readModel) tasksInViewOn(view listView, opts listOpts, today civil.Date) ([]*things.Task, error) {
 	tasks, err := withoutSentinels(r.mirror.AllTasks(opts.QueryOpts))
 	if err != nil {
 		return nil, err
 	}
-	tasks = tasksInView(tasks, view, ownerToday())
+	tasks = tasksInView(tasks, view, today)
 	return openList(tasks, nil, opts)
 }
 

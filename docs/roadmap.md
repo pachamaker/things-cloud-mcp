@@ -54,7 +54,7 @@ change is checked automatically.
 |---|---|---|
 | ~~Adopt upstream SDK per spike result, or port its fixes~~ (done, migration PR) | ADR-0001 | M |
 | ~~Move workflows to `.github/workflows/`, drop Fly.io deploy and nested duplicate, Go version from `go.mod`, add `-race`~~ (done, `ci.yml`); ~~add `govulncheck`~~ (done with KI-32); ~~add `staticcheck` once KI-33 is fixed~~ (done, phase 0) | KI-15, ADR-0007 | S |
-| ~~Build and test on a supported Go release (Go 1.25 is out of support; 9 reachable stdlib vulnerabilities)~~ (done: `toolchain go1.26.9`, `golang:1.26.9-alpine`, `govulncheck` job) | KI-32 | S |
+| ~~Build and test on a supported Go release (Go 1.25 is out of support; 9 reachable stdlib vulnerabilities)~~ (done: `toolchain go1.26.10`, `golang:1.26.10-alpine`, `govulncheck` job) | KI-32 | S |
 | ~~Reject `repeat` on all surfaces; remove it from tool schemas~~ (done, PR #2) | KI-01, ADR-0004 | S |
 | ~~Remove debug endpoints (`delete-history`, `nuke-account`, `confirm-account`) from the server~~ (done, phase 0: all of `/api/debug/*` and `DEBUG`) | KI-08 | S |
 | ~~Redact `Authorization`/passwords in debug dumps + test~~ (done for the server: no SDK dumps, no debug mode; the SDK's own dump on a rejected commit needs an upstream PR) | KI-09 | S |
@@ -80,7 +80,7 @@ workarounds.
 | Persist `rr`, `rt`, `sb`, `dds`, `tir` in the mirror: upstream SDK PR with a `TaskReplayVersion` bump, or a `replace` soft fork (spike report §4 B4). `rr`/`rt`: [arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40) (issue [#39](https://github.com/arthursoares/things-cloud-sdk/issues/39)), awaiting review; `sb`, `dds`, `tir` not proposed yet | KI-01, KI-02, ADR-0001 | M |
 | Move the classifier from `server/views.go` to `domain/view`; extend it once B4 fields exist (evening, `dds`, templates, projects in Today) | KI-02, KI-05, ADR-0005 | M |
 | ~~Resolve project membership through headings~~ (done for `things_list_project_tasks`, with `heading_id`/`heading_title`) | KI-13 | S |
-| Conformance harness + first snapshots (incl. post-midnight and "Mac closed for a day") | ADR-0005 | M |
+| Conformance harness (built: `docs/testing/conformance.md`) + first snapshots (incl. post-midnight and "Mac closed for a day") | ADR-0005 | M |
 | ~~Freshness-bounded, coalesced sync on read; backoff on 429~~ (done: `server/syncgate.go`, PR #4) | architecture §7, KI-27 | S |
 | Rebuild mirror on history-key change / 404 AccountIssue; quarantine malformed items | KI-28, KI-29 | S |
 
