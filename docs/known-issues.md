@@ -234,15 +234,24 @@ workaround can be deleted.
 - **Fix direction:** move to an admin CLI / CI job against the sandbox account.
 
 ### KI-32 · The server is built with Go 1.25, which no longer gets security fixes
-- **Status:** fixed (PR #8, `fe8c3e2`): `go.mod` keeps `go 1.25.0` as
-  the minimum and adds `toolchain go1.26.9`, which `setup-go` installs in CI and a local
-  `go` older than 1.26.9 switches to (`GOTOOLCHAIN=auto`); the `Dockerfile` builder is
-  `golang:1.26.9-alpine`; the CI job `govulncheck` runs govulncheck v1.8.0 (which itself
+- **Status:** fixed (PR #8, `fe8c3e2`; patch bump to Go 1.26.10 on 2026-10-22, see
+  below): `go.mod` keeps `go 1.25.0` as
+  the minimum and pins `toolchain go1.26.10`, which `setup-go` installs in CI and a local
+  `go` older than 1.26.10 switches to (`GOTOOLCHAIN=auto`); the `Dockerfile` builder is
+  `golang:1.26.10-alpine`; the CI job `govulncheck` runs govulncheck v1.8.0 (which itself
   needs Go ≥ 1.26) and fails on reachable vulnerabilities (checked: exit 3 on go1.25.14). GO-2026-4514 stays: `buger/jsonparser` v1.1.2 is not a one-line fix
   but bundles parser rewrites (integer parsing, key lookup, `null` handling) that
   `mcp-go` v0.44.0 is not tested with, `Delete` is not reachable, and `mcp-go` v1.x
   (ADR-0002) no longer depends on `invopop/jsonschema` or `jsonparser` ·
-  **Evidence:** confirmed (`govulncheck` v1.8.0, 2026-10-11)
+  **Evidence:** confirmed (`govulncheck` v1.8.0, 2026-10-11 and 2026-10-22)
+- **2026-10-22, GO-2026-6809:** a new standard-library advisory ("Distrust compromised
+  intermediate certificates in crypto/x509"), found in `crypto/x509@go1.26.9` and fixed
+  in go1.26.10, failed the `govulncheck` job on every PR: `serveWithGracefulShutdown`
+  (`server/main.go`) calls `http.Server.ListenAndServe`, which reaches
+  `x509.Certificate.Verify`. The fix is the patch bump: `toolchain go1.26.10` and the
+  `golang:1.26.10-alpine` builder (index digest from Docker Hub). With Go 1.26.10 the scan
+  reports no reachable vulnerability; GO-2026-4514 is still the only one imported but not
+  called. The next Go patch advisory is fixed the same way.
 - **Symptom:** with the newest Go 1.25 patch (1.25.14) `govulncheck ./...` reports 9
   standard-library vulnerabilities the server's code reaches (`net/http` HTTP/1 and
   HTTP/2 server and client, `net/textproto`, `crypto/tls`; GO-2026-6603 … GO-2026-6617),
