@@ -59,7 +59,7 @@ change is checked automatically.
 | ~~Remove debug endpoints (`delete-history`, `nuke-account`, `confirm-account`) from the server~~ (done, phase 0: all of `/api/debug/*` and `DEBUG`) | KI-08 | S |
 | ~~Redact `Authorization`/passwords in debug dumps + test~~ (done for the server: no SDK dumps, no debug mode; the SDK's own dump on a rejected commit needs an upstream PR) | KI-09 | S |
 | ~~Remove `things_smoke_test` from MCP; keep as sandbox-only CLI~~ (done, phase 0; the sandbox e2e harness replaces it) | KI-11 | S |
-| ~~Write preconditions: target exists, right type, not trashed~~ (done, phase 0); not template (needs `rr`/`rt` in the mirror) | KI-10, ADR-0004 | M |
+| ~~Write preconditions: target exists, right type, not trashed~~ (done, phase 0); not a repeating template or instance (branch `recurrence-sdk-fork-KI-05-KI-10`, on the SDK fork until #40 is released) | KI-10, ADR-0004 | M |
 | ~~`ENABLE_WRITES` switch (write tools not registered when off; default off for new installs)~~ (done, phase 0) | ADR-0004, `legal-and-risk.md` | S |
 | ~~Sandbox Things account + `.env.sandbox` convention; mark `tests/*.sh` sandbox-only~~ (done: account and `things-sandbox` environment by the owner, `.env.sandbox` ignored, `THINGS_SANDBOX_ENV_FILE` for the harness; writing scripts check the marker area, phase 0) | ADR-0007 | S |
 | Sandbox e2e harness: every MCP tool, account guard, pre-send write firewall, 409 test, wire check by an independent client, cleanup, seed list (`docs/testing/sandbox-e2e.md`); first run by the owner, then at most daily via `.github/workflows/e2e.yml` | KI-34, ADR-0007 | M — first run 2026-10-11: main suite green; seed checks and leftover cleanup hit 429 (KI-27); GET retry after 429 added in phase 0, next run pending |
@@ -131,8 +131,10 @@ Each item requires a capture fixture and a sandbox round trip (ADR-0004).
 - This Evening (`sb`), reminders (`ato`), reordering (`ix`, `ti`).
 - Logbook views and weekly review helpers.
 - Delete tags/areas via tombstones.
-- Recurrence: read-side first (show "repeats weekly" on templates; virtual instances in
-  Upcoming), then — only with a new ADR — create repeating to-dos.
+- Recurrence: read-side first (show "repeats weekly" on templates; next occurrences in
+  Upcoming dated by the template's `tir`, which needs arthursoares/things-cloud-sdk#41,
+  KI-36, planned for v2.1.0 — v2.0.0 keeps templates hidden in every list), then — only
+  with a new ADR — create repeating to-dos.
 
 ## Out of scope
 

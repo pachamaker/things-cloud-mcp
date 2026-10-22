@@ -34,6 +34,9 @@ type taskOutput struct {
 	HeadingTitle string   `json:"heading_title,omitempty"`
 	AreaID       string   `json:"area_id,omitempty"`
 	Tags         []string `json:"tags,omitempty"`
+	// Repeating is "template" for the hidden template of a repeating to-do or
+	// project and "instance" for a to-do or project it generated (KI-05).
+	Repeating string `json:"repeating,omitempty"`
 }
 
 type areaOutput struct {
@@ -97,6 +100,12 @@ func formatTask(t *things.Task) taskOutput {
 	}
 	if len(t.AreaIDs) > 0 {
 		o.AreaID = t.AreaIDs[0]
+	}
+	switch {
+	case t.IsRepeatingTemplate():
+		o.Repeating = "template"
+	case t.IsRepeatingInstance():
+		o.Repeating = "instance"
 	}
 	return o
 }

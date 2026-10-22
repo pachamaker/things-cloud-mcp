@@ -95,7 +95,8 @@ workaround can be deleted.
 
 ### KI-01 · Recurrence (`repeat`) writes can corrupt Things clients
 - **Status:** mitigated — every `repeat` value, incl. `none`, is rejected (PR #2,
-  `7aa1009`); storing `rr`/`rt` and refusing writes to templates/instances still open ·
+  `7aa1009`); on branch `recurrence-sdk-fork-KI-05-KI-10` the mirror stores `rr`/`rt`
+  (SDK fork, see below) and every write to a repeating template or instance is refused ·
   **Evidence:** confirmed (incident 2026-08-18, earlier crash 2026-02-16)
 - **Symptom:** after creating/editing a task with `repeat`, Things on macOS and iOS
   misbehaves irreversibly.
@@ -121,8 +122,11 @@ workaround can be deleted.
     Sunday, as Go's `time.Weekday`; one sample); for "after completion" the app sends
     `ia: 0` and `of: []`, the encoder a start date and a day. Monthly/yearly `dy`
     (written 0-based by the encoder) is still uncaptured.
-  - The mirror never stores `rr` or `rt` (SDK `sync/store.go`; spike report §4 B4), so the server
-    cannot even tell a template from an instance after the fact.
+  - SDK v0.6.0 never stores `rr` or `rt` (SDK `sync/store.go`; spike report §4 B4), so the server
+    cannot even tell a template from an instance after the fact. Fixed in
+    [arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40);
+    until it is released, `go.mod` replaces the SDK with the combined fork commit `4d63f48`
+    (it also carries #41 and the KI-29 tombstone fix).
   - Things 3.23 (Aug 2026) overhauled repeating to-dos (early completion, exceptions,
     rule updates) and moved to `Task7` (KI-25), so the encoder targets an obsolete model.
   - Elsewhere, completing a recurring task through the cloud protocol destroyed it
@@ -136,6 +140,16 @@ workaround can be deleted.
   a repetition still need one (`repeat-disabled.md`). Persist `rr`/`rt`
   read-only first; refuse complete/move/schedule/edit on both templates and instances,
   as upstream does.
+- **Refusal (branch `recurrence-sdk-fork-KI-05-KI-10`):** `server/preconditions.go`
+  refuses complete, reopen, edit, the moves, trash and untrash of a repeating template or
+  instance (to-do or project), and checklist writes on their items, with an invalid-input
+  error naming the template; a template cannot be the `project` or `parent_task` of a new
+  link (KI-10). Nothing is sent. Instances are refused too: completing one in an
+  after-completion series also changes the template (`acrd`, `tir`), which `completeTask`
+  does not write, and edits, moves and trash of instances are not captured (AGENTS.md
+  rule 2). Tests: `TestPreconditions_KI01_RepeatingTargetsRefused`,
+  `TestWrites_KI01_RepeatingSendsNothing`; the sandbox seed checks call the write tools on
+  the seed templates and an instance and expect the refusal.
 
 ### KI-07 · `/mcp` has no authentication
 - **Status:** fixed in code (`server/auth.go`) — not yet verified end to end with Pocket ID,
@@ -214,9 +228,10 @@ workaround can be deleted.
   (REST 400). Side effect: `project: "none"` used to write `pr=["none"]` and is now
   refused · **Evidence:** confirmed (before the fix `server/write.go:650-852` validated
   only the Base58 shape)
-- **Remaining:** repeating templates and instances cannot be recognised: the SDK
-  mirror does not store `rr`/`rt` (spike report §4 B4; upstream fix proposed in
-  [arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40)). Checklist writes find the item
+- **Remaining:** SDK v0.6.0 does not store `rr`/`rt`, so repeating templates and
+  instances are recognised only with the SDK fork of branch
+  `recurrence-sdk-fork-KI-05-KI-10` ([arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40)
+  until released; refusals under KI-01). Checklist writes find the item
   by scanning every to-do's checklist (the SDK has no lookup by item UUID).
 - **Symptom:** a hallucinated or mistyped UUID produces a modify-item for an unknown
   object in the cloud history. Clients receive a partial entity with no creation
@@ -274,7 +289,8 @@ workaround can be deleted.
 ### KI-02 · View classification does not match Things
 - **Status:** in-progress — PR #1 (`f79b05e`) implements the things.py rules in SQL on
   `main`; the classifier compares civil dates in the owner's timezone (KI-03);
-  remaining: `dds`, This Evening, projects in Today, template hiding, conformance harness. Since the upstream SDK migration the rules live
+  remaining: `dds`, This Evening, projects in Today, conformance harness (templates are
+  hidden on branch `recurrence-sdk-fork-KI-05-KI-10`, KI-05). Since the upstream SDK migration the rules live
   in `server/views.go` over SDK `State.AllTasks` (SDK `TasksIn*` are not used, spike
   report §4 B3); `tir` is not mirrored, so a to-do placed in Today only through `tir` is
   listed in Anytime, and a deferred one with a future `tir` and no start date in Someday ·
@@ -360,8 +376,9 @@ workaround can be deleted.
 
 ### KI-05 · Lists contain non-actionable items; `status` is unreliable
 - **Status:** partially fixed — canceled items excluded from open views (PR #1) and,
-  since the SDK migration, from every open list in `server/readmodel.go`; templates and
-  the empty-status case remain · **Evidence:** confirmed
+  since the SDK migration, from every open list in `server/readmodel.go`; repeating
+  templates hidden on branch `recurrence-sdk-fork-KI-05-KI-10`; the empty-status case
+  remains · **Evidence:** confirmed
 - **Symptom:** list tools return items with `status: "canceled"` or an empty status, and
   occasionally repeating templates.
 - **Root cause (embedded SDK):** every list query filtered `status != 3` only (`sync/state.go`), so
@@ -372,9 +389,43 @@ workaround can be deleted.
   canceled items appear only in Logbook queries; unknown statuses become an explicit
   `"unknown"` and are logged.
 - **Upstream:** [arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40) (issue [#39](https://github.com/arthursoares/things-cloud-sdk/issues/39)) stores `rr`/`rt` in the
-  SDK mirror and adds `Task.IsRepeatingTemplate()` / `IsRepeatingInstance()`. Once it is
-  released, bump the SDK and drop templates from open lists here. The sandbox seed checks
-  confirm the gap on real data: both repeating seed templates are listed in Someday.
+  SDK mirror and adds `Task.IsRepeatingTemplate()` / `IsRepeatingInstance()`. The sandbox
+  seed checks confirm the gap on real data with v0.6.0: both repeating seed templates are
+  listed in Someday.
+- **Templates (branch `recurrence-sdk-fork-KI-05-KI-10`, on the SDK fork until #40 is
+  released):** `openList` in `server/readmodel.go` drops every repeating template from
+  the views, `things_list_all_tasks` (and so `things_search_tasks`), projects, project and
+  area listings and the REST lists, closed items included or not. `things_get_task` and
+  `things_list_completed` are unchanged. Task output gains `repeating: "template"` or
+  `"instance"`. Tests: `TestReadModel_KI05_HidesRepeatingTemplates`,
+  `TestFormatTask_KI05_RepeatingMarker`; the sandbox seed checks now fail when a template is
+  listed or an open instance is not. Not handled: to-dos inside a repeating project's template (no evidence how
+  Things stores them); the next occurrence the Things app shows in Upcoming (KI-36).
+
+### KI-36 · Upcoming lacks the next occurrence of repeating to-dos
+- **Status:** open, planned for v2.1.0 (owner decision 2026-10-12: v2.0.0 keeps
+  templates hidden in every list, Upcoming included) · **Evidence:** confirmed (Things app on the sandbox, 2026-10-11:
+  Upcoming lists "18 Oct ⟳ SEED repeat weekly" and "Waiting ⟳ SEED repeat monthly after
+  completion"; capture `testdata/captures/recurrence-completion-2026-10-11.json`: the
+  template's `tir` is moved to the next occurrence)
+- **Symptom:** Things shows each repeating template in Upcoming, and in the Upcoming
+  section of its area or project, as its next occurrence: a date for a fixed schedule,
+  "Waiting" for an after-completion series whose current instance is still open.
+  `things_list_upcoming` lists neither, because the server hides templates from every
+  list (KI-05); before that they were wrongly listed in Someday.
+- **Root cause:** templates are hidden on purpose: listed as ordinary to-dos they invite
+  writes that break the series (KI-01). The app keeps the next occurrence in the
+  template's `tir` (protocol notes §5.3, captures): the weekly seed's template was
+  created with `tir` 2026-10-18 and moved to 2026-10-25 when the 18 October occurrence
+  was completed early; the after-completion template has `tir: null` while its instance
+  is open ("Waiting") and got 2026-11-11 when that instance was completed. A computation
+  from `rr` alone gives 18 October after the early completion. The SDK mirror does not
+  store `tir` (spike report §4 B4); arthursoares/things-cloud-sdk#41 proposes it.
+- **Fix direction (v2.1.0):** list templates in Upcoming only, read-only (`repeating:
+  "template"`), dated by the template's `tir`, or as waiting when `tir` is null; needs
+  `tir` in the mirror ([arthursoares/things-cloud-sdk#41](https://github.com/arthursoares/things-cloud-sdk/pull/41)).
+  Owner decision 2026-10-12: `tir`, not a computation from `rr`. Writes stay refused
+  (KI-01).
 
 ### KI-13 · Tasks under headings are missing from project listings
 - **Status:** fixed ([#21](https://github.com/pachamaker/things-cloud-mcp/pull/21), `a53bb30`) · **Evidence:** confirmed on

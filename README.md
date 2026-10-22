@@ -53,7 +53,7 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 - **Browse your views** — Today, Inbox, Anytime, Someday, Upcoming, All Tasks, by Project, by Area, Completed (with date filters)
 - **Look things up** — get any task, area, or tag; search by title or note content
 - **Create** — tasks (with notes, dates, deadlines, project, tags), projects, areas, tags, headings, and checklist items
-- **Edit** — title, notes, dates, deadlines, project, area, and tags (recurrence is not supported, see below)
+- **Edit** — title, notes, dates, deadlines, project, area, and tags (recurrence is not supported and repeating to-dos are read-only, see below)
 - **Organise** — move tasks between Today, Anytime, Someday, and Inbox
 - **Complete & restore** — complete or reopen tasks and checklist items; trash and untrash
 
@@ -143,6 +143,14 @@ the tool schemas, and any `repeat` value sent to `things_create_task`, `things_e
 before anything is written. Recurrence writes have corrupted Things on macOS and iOS
 (incident 2026-08-18, KI-01). Set up or remove recurrence in the Things app. Background:
 [`docs/known-issues/repeat-disabled.md`](docs/known-issues/repeat-disabled.md).
+
+Repeating to-dos and projects are read-only. Things keeps the rule on a hidden template
+and lists the items it generates. The server's lists never include templates (KI-05), so
+`things_list_upcoming` lacks the next occurrence the Things app shows there ("18 Oct",
+"Waiting"; KI-36). Task output marks `repeating: "template"` (reachable through
+`things_get_task`) or `repeating: "instance"`. Completing, reopening, editing, moving, trashing or restoring
+either, or changing its checklist, is refused before anything is written (KI-01); do it
+in the Things app.
 
 </details>
 

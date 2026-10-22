@@ -92,21 +92,22 @@ func paginate[T any](items []T, opts listOpts) []T {
 	return items
 }
 
-// openList drops canceled items unless closed ones were asked for: the SDK's
-// IncludeCompleted gate only excludes completed (status 3), Things hides both
-// from open lists (KI-05).
+// openList drops repeating templates and, unless closed items were asked for,
+// canceled ones (KI-05). Things keeps a repeat rule on a hidden template and
+// lists the instances it generates as to-dos; it shows the template itself only
+// as its next occurrence in Upcoming, which no list here has yet (KI-36). The
+// SDK's IncludeCompleted gate only excludes completed (status 3); Things hides
+// canceled ones from open lists too.
 func openList(tasks []*things.Task, err error, opts listOpts) ([]*things.Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	if opts.IncludeCompleted {
-		return paginate(tasks, opts), nil
-	}
 	open := tasks[:0:0]
 	for _, t := range tasks {
-		if !isClosed(t) {
-			open = append(open, t)
+		if t.IsRepeatingTemplate() || (!opts.IncludeCompleted && isClosed(t)) {
+			continue
 		}
+		open = append(open, t)
 	}
 	return paginate(open, opts), nil
 }

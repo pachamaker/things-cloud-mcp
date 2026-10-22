@@ -227,7 +227,11 @@ or push tags and never publish images.
 The module is `github.com/pachamaker/things-cloud-mcp`. The SDK packages are imported
 as `github.com/arthursoares/things-cloud-sdk` (`things`/`thingscloud`) and
 `github.com/arthursoares/things-cloud-sdk/sync`. What the SDK version differs in from
-the old embedded copy: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4.
+the old embedded copy: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4. Until
+[arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40)
+is released, `go.mod` replaces the SDK with the fork `github.com/pachamaker/things-cloud-sdk`
+at `f41fcbb`, which stores `rr`/`rt` (`Task.Repeater`, `RecurrenceIDs`); point it back at
+an upstream release, or keep it as a deliberate soft fork (ADR-0001), before merging.
 
 ## 6. Architecture in one minute
 
@@ -275,8 +279,10 @@ Never write `st=2` with today's date.
 All write tools exist only when the server runs with `ENABLE_WRITES=true` (ADR-0004),
 and only a token with the `things.write` scope sees and calls them (KI-07).
 Every write first checks its target and references against a freshly synced mirror
-(`server/preconditions.go`, KI-10) and sends nothing when a check fails. Repeating
-templates are not recognised yet (the SDK does not store `rr`/`rt`).
+(`server/preconditions.go`, KI-10) and sends nothing when a check fails. A repeating
+template or instance is never changed: every write to one, or to its checklist, is
+refused (KI-01), and no list shows templates (KI-05). This needs the SDK to store
+`rr`/`rt` (see §5).
 
 | Capability | Tool(s) | Status |
 |---|---|---|
