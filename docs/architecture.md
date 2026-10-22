@@ -99,7 +99,7 @@ copy this repo used to carry: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4.
 | `server/mcp.go` | MCP tool registry and read handlers, output formatting | `mark3labs/mcp-go` v0.44, Streamable HTTP, stateless |
 | `server/write.go` | All write commands, wire payload builders, ID generator, `historyWrite` | One item per commit; global `historyMu`; `repeat` always rejected (KI-01) |
 | `server/readmodel.go` | Read model over SDK `State`: pagination, open-list filtering (canceled excluded), completed range | Loads full lists, then pages in Go (KI-18) |
-| `server/views.go` | View classifier (Inbox/Today/Anytime/Someday/Upcoming) over `State.AllTasks` | Compares civil dates against the owner's day; the mirror stores `sb`/`dds`/`tir` (SDK fork), the classifier does not use them yet (KI-02) |
+| `server/views.go` | View classifier (Inbox/Today/Anytime/Someday/Upcoming, This Evening) over `State.AllTasks` | Compares civil dates against the owner's day; reads `dds` and `sb`, not `tir` (KI-02) |
 | `server/today.go` | `THINGS_TIMEZONE` parsing, `ownerToday()` | Global `ownerZone`, set once in `main` |
 | `domain/civil` | Civil date, clock, owner's "today", wire encoding of day values, zone loading (ADR-0003) | Pure; embeds `time/tzdata` |
 | `server/syncgate.go` | Serialises and coalesces `Syncer.Sync()`, backs off on 429, runs history checks and background rebuilds with backoff, logs the history items the SDK skips | The SDK `Syncer` has no lock (KI-27, KI-28); skipped items: KI-29 |

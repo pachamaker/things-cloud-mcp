@@ -41,7 +41,7 @@ damage data; fix them before relying on the server again.
 | Item | Refs | Status |
 |---|---|---|
 | Merge `main` (PRs #1–#3, these docs) into `spike-upstream-sdk`; keep PR #2 behaviour; prefer the PR #4 ID adapter over PR #3's local `base58.go` | ADR-0001 | ✅ |
-| View classifier over upstream `State.AllTasks` carrying PR #1's rules (upstream `TasksIn*` lose two KI-02 cases) | ADR-0005, spike report §4 B3 | ✅ `server/views.go`; two `tir`-only cases differ (KI-02) |
+| View classifier over upstream `State.AllTasks` carrying PR #1's rules (upstream `TasksIn*` lose two KI-02 cases) | ADR-0005, spike report §4 B3 | ✅ `server/views.go`; whether `tir` alone places a to-do is an open question (KI-02) |
 | Update docs that still describe the embedded SDK (spike report §8 item 4) | AGENTS.md, architecture.md, KI entries | ✅ (CI workflow stays with KI-15) |
 | PR `spike-upstream-sdk` → `main`; sandbox-account smoke test from an empty `DATA_DIR` | AGENTS.md rule 1 | ✅ PR #6 merged; Docker image builds (linux/arm64); sandbox run: see the KI-34 row in Phase 0 |
 
@@ -78,7 +78,7 @@ workarounds.
 | ~~`THINGS_TIMEZONE`, `domain/civil` (Date, Clock), migrate all date logic~~ (done on `KI-03-owner-timezone`, the sandbox harness follows the zone on `KI-34-harness-owner-timezone`; `today` in list output remains, ADR-0003 notes) | KI-03, ADR-0003 | M |
 | ~~Normalise year ≥ 4000 sentinels to null at ingestion~~ (done where the server reads the mirror, `server/readmodel.go`) | KI-04 | S |
 | ~~Persist `rr`, `rt`, `sb`, `dds`, `tir` in the mirror~~ (done through the SDK fork: `go.mod` replaces the SDK with the combined fork commit `4d63f48`, which carries [arthursoares/things-cloud-sdk#40](https://github.com/arthursoares/things-cloud-sdk/pull/40) (`rr`/`rt`, issue [#39](https://github.com/arthursoares/things-cloud-sdk/issues/39)) and [#41](https://github.com/arthursoares/things-cloud-sdk/pull/41) (`sb`/`dds`/`tir`), both awaiting review; drop the `replace` once an upstream release carries them. The server uses `rr`/`rt` with PR #25 and `sb`/`dds`/`tir` with the classifier row below) | KI-01, KI-02, ADR-0001 | M |
-| Move the classifier from `server/views.go` to `domain/view`; extend it once B4 fields exist (evening, `dds`, templates, projects in Today) | KI-02, KI-05, ADR-0005 | M |
+| Move the classifier from `server/views.go` to `domain/view`; extend it once B4 fields exist: ~~evening, `dds`~~ (done on `KI-02-evening-dds`), templates (hidden on `recurrence-sdk-fork-KI-05-KI-10`), projects in Today | KI-02, KI-05, ADR-0005 | M |
 | ~~Resolve project membership through headings~~ (done for `things_list_project_tasks`, with `heading_id`/`heading_title`) | KI-13 | S |
 | Conformance harness (built: `docs/testing/conformance.md`) + first snapshots (incl. post-midnight and "Mac closed for a day") | ADR-0005 | M |
 | ~~Freshness-bounded, coalesced sync on read; backoff on 429~~ (done: `server/syncgate.go`, PR #4) | architecture §7, KI-27 | S |

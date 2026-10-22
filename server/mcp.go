@@ -37,6 +37,9 @@ type taskOutput struct {
 	// Repeating is "template" for the hidden template of a repeating to-do or
 	// project and "instance" for a to-do or project it generated (KI-05).
 	Repeating string `json:"repeating,omitempty"`
+	// Evening marks a to-do of things_list_today in its This Evening section
+	// (KI-02); other lists leave it out.
+	Evening bool `json:"evening,omitempty"`
 }
 
 type areaOutput struct {
@@ -134,6 +137,17 @@ func tasksResult(tasks []*things.Task) *mcp.CallToolResult {
 	outputs := make([]taskOutput, len(tasks))
 	for i, t := range tasks {
 		outputs[i] = formatTask(t)
+	}
+	return jsonToolResultWithIndent(outputs, true)
+}
+
+// todayTasksResult flags the to-dos Today lists under This Evening, on the
+// same day the list was classified for.
+func todayTasksResult(tasks []*things.Task, today civil.Date) *mcp.CallToolResult {
+	outputs := make([]taskOutput, len(tasks))
+	for i, t := range tasks {
+		outputs[i] = formatTask(t)
+		outputs[i].Evening = inEvening(t, today)
 	}
 	return jsonToolResultWithIndent(outputs, true)
 }
@@ -242,11 +256,12 @@ func mcpListToday(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResu
 	if syncErr := syncForMCPReadResult(); syncErr != nil {
 		return syncErr, nil
 	}
-	tasks, err := readState().TasksInToday(opts)
+	today := ownerToday()
+	tasks, err := readState().tasksInViewOn(viewToday, opts, today)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return tasksResult(tasks), nil
+	return todayTasksResult(tasks, today), nil
 }
 
 func mcpListAnytime(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -799,7 +814,7 @@ func newMCPHandler(writes bool) http.Handler {
 	// --- Read tools ---
 
 	s.AddTool(mcp.NewTool("things_list_today",
-		mcp.WithDescription("List to-dos in the Things Today view: to-dos with a start date today or earlier (including overdue ones and scheduled ones whose date has arrived), to-dos placed in Today, and to-dos without a start date whose deadline is today or earlier (Inbox included). "+todayNote()+" Projects scheduled for today are not listed, and overdue deadlines dismissed in the Things app still appear."),
+		mcp.WithDescription("List to-dos in the Things Today view: to-dos with a start date today or earlier (including overdue ones and scheduled ones whose date has arrived), to-dos placed in Today, and to-dos without a start date whose deadline is today or earlier (Inbox included). "+todayNote()+" A deadline no longer pulls a to-do in once the user dismissed it from Today in the Things app. To-dos in the This Evening section come last and carry \"evening\": true. Projects scheduled for today are not listed."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximum number of tasks to return"),

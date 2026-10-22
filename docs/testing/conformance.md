@@ -37,8 +37,9 @@ Phase 1: the suite passes on at least three snapshots taken at different times o
    account holds the export's marker area (same UUID: the same account as the Mac), then
    records every to-do, project and heading twice: as the SDK mirror holds it (`mirror`,
    the SDK's `things.Task` with title and note cleared) and as history stores it (`wire`,
-   all history items folded per key, which also carries `tir`, `sb`, `dds`, `rr`, `rt`
-   that the SDK mirror does not keep yet). If history moves while it reads, it stops.
+   all history items folded per key, including `tir`, `sb`, `dds`, `rr`, `rt`, which the
+   SDK mirror keeps only since the fork `9d70eb8`). If history moves while it reads, it
+   stops.
 3. **The comparison** (`TestConformance_Snapshots`). The mirror goes through the same
    read-model methods the list tools call (`readModel.tasksInViewOn` for the five views,
    `CompletedTasksInRange` for Logbook) on the snapshot's day. The app's views are mapped
@@ -53,7 +54,7 @@ Each to-do and project gets one verdict:
 | known gap | the difference is fully explained by entries of `conformanceKnownGaps` | pass, logged as `KNOWN GAP KI-NN name` with the UUIDs |
 | mismatch | the app shows it in views the server does not list it in, or the reverse | failing subtest `TestConformance_Snapshots/<snapshot>/<uuid>` |
 | drift | views differ and the app's database and Things Cloud disagree on a field that decides a view (`st`, `sr`, `dd`, `dds`, `sb`, `ss`, `tr`, `tp`, `rr`) or on the title: the snapshot caught a change one side had not synced | failing subtest: retake the snapshot |
-| read gap | the SDK mirror disagrees with history on `tp`, `ss`, `tr`, `st`, `sr`, `dd`, `pr` or `agr`, or history has an object the mirror lacks | failing subtest: an SDK read bug, open a KI |
+| read gap | the SDK mirror disagrees with history on `tp`, `ss`, `tr`, `st`, `sr`, `tir`, `dd`, `dds`, `sb`, `pr` or `agr` (a null or missing `sb` in history counts as 0), or history has an object the mirror lacks | failing subtest: an SDK read bug, open a KI; or a snapshot dumped with an SDK older than the fork `9d70eb8`, which kept no `tir`/`dds`/`sb`: retake it |
 | unsynced | the app has an object Things Cloud does not, or the server lists one the app lacks | failing subtest: retake the snapshot |
 
 Drift that changes no view is logged as a note. Known gaps, each with its KI:
@@ -61,13 +62,11 @@ Drift that changes no view is logged as a note. Known gaps, each with its KI:
 | Gap | KI | Why the server differs |
 |---|---|---|
 | `projects-not-listed` | KI-02 | the list tools classify to-dos only; the app lists projects in Today, Anytime, Someday, Upcoming and Logbook |
-| `this-evening` | KI-02 | the SDK mirror does not keep `sb`, so nothing is flagged as This Evening |
-| `dismissed-deadline` | KI-02 | the SDK mirror does not keep `dds`, so a to-do whose overdue deadline was dismissed from Today is still listed there |
 | `repeating-template` | KI-05 | the SDK mirror does not keep `rr`, so a repeating template is listed like a to-do; the app lists it in no view |
 | `canceled-not-in-logbook` | KI-05 | `things_list_completed` lists completed to-dos only |
 
-A gap applies only to items that have its cause (for example `this-evening` only when
-history has `sb = 1`), and only when correcting for it makes the views equal; otherwise
+A gap applies only to items that have its cause (for example `canceled-not-in-logbook`
+only to canceled to-dos), and only when correcting for it makes the views equal; otherwise
 the item fails and the message names the gaps that did not explain it. A gap that
 explains nothing in any snapshot is logged, so it can be deleted once its KI is fixed.
 
@@ -185,11 +184,11 @@ with a note in the KI.
 
 - **A gap is fixed** (say the classifier learns `dds`): delete its entry from
   `conformanceKnownGaps`; the suite then demands agreement on every snapshot.
-- **This Evening**: once the server flags it, set it in `serverViews` and compare.
-- **The SDK keeps a new field** (`rr`, `sb`, `dds`, `tir`): `mirror` is the SDK's own
-  `things.Task` as JSON, so the field decodes in new snapshots by itself, but older
-  snapshots lack it. Fill it from the `wire` block where `conformanceCases` builds the
-  mirror for the replay, so older snapshots replay what the newer SDK would have read.
+- **The SDK keeps a new field**: `mirror` is the SDK's own `things.Task` as JSON, so the
+  field decodes in new snapshots by itself, but older snapshots lack it. Fill it from the
+  `wire` block where `conformanceCases` builds the mirror for the replay, so older
+  snapshots replay what the newer SDK would have read. `rr`, `rt`, `sb`, `dds` and `tir`
+  arrived before any snapshot was committed, so none needs filling.
   A renamed SDK field fails the strict decoder: migrate the snapshots.
 - **The file format changes**: bump `format` on both sides and migrate the snapshots in
   the same change.

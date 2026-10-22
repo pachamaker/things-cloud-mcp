@@ -64,7 +64,7 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `things_list_today` | Today view: start date today or earlier (overdue and scheduled-date-arrived to-dos), placed in Today, or no start date with a deadline today or earlier; "today" is the day in `THINGS_TIMEZONE` (UTC if unset) | `limit`, `offset` |
+| `things_list_today` | Today view: start date today or earlier (overdue and scheduled-date-arrived to-dos), placed in Today, or no start date with a deadline today or earlier that was not dismissed from Today; This Evening to-dos come last with `"evening": true`; "today" is the day in `THINGS_TIMEZONE` (UTC if unset) | `limit`, `offset` |
 | `things_list_inbox` | Tasks in the inbox | `limit`, `offset` |
 | `things_list_anytime` | Tasks in Anytime | `limit`, `offset` |
 | `things_list_someday` | Tasks in Someday (deferred, no start date) | `limit`, `offset` |
