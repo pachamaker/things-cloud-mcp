@@ -42,6 +42,29 @@ workaround can be deleted.
 | [#8](https://github.com/pachamaker/things-cloud-mcp/pull/8) Go 1.26.9 toolchain, `govulncheck` in CI | 2026-10-10 (`fe8c3e2`) | KI-32 fixed; also brings #7 (KI-15) to `main` |
 | [#9](https://github.com/pachamaker/things-cloud-mcp/pull/9) Sandbox e2e harness and workflow | 2026-10-10 (`c1cca5e`) | KI-34 harness and `e2e.yml` |
 | [#10](https://github.com/pachamaker/things-cloud-mcp/pull/10) Hide the history key in transport errors | 2026-10-10 (`4eb6c4a`) | KI-35 fixed |
+| [#12](https://github.com/pachamaker/things-cloud-mcp/pull/12) Docs: statuses after #5–#10 and the first e2e run | 2026-10-10 (`f788681`) | KI-15, KI-32, KI-35 marked fixed; KI-34 first CI run (main suite green, seed checks hit `429`, KI-27) |
+| [#13](https://github.com/pachamaker/things-cloud-mcp/pull/13) Phase 0: safety before deploy | 2026-10-10 (`db23c5d`) | KI-08 (debug endpoints removed), KI-09, KI-10 (write preconditions), KI-11 (`things_smoke_test` removed), KI-16 phase 0, KI-33; read-only unless `ENABLE_WRITES=true` (ADR-0004) |
+| [#14](https://github.com/pachamaker/things-cloud-mcp/pull/14) Fail skipped e2e runs in CI | 2026-10-10 (`a9bd5d3`) | KI-34: `THINGS_E2E_REQUIRE_RUN` turns a skipped sandbox run into a failure |
+| [#15](https://github.com/pachamaker/things-cloud-mcp/pull/15) OAuth 2.1 for `/mcp` and `/api` | 2026-10-11 (`cab5b69`) | KI-07 fixed in code (resource server, ADR-0002); REST off by default, `API_KEY` removed |
+| [#16](https://github.com/pachamaker/things-cloud-mcp/pull/16) Agent rules: English commits and PRs, open the PR once checks pass | 2026-10-11 (`499091a`) | `AGENTS.md` §10, ADR-0007 |
+| [#17](https://github.com/pachamaker/things-cloud-mcp/pull/17) "Today" in the owner's timezone | 2026-10-11 (`b8838d0`) | KI-03 fixed when `THINGS_TIMEZONE` is set; `domain/civil` (ADR-0003) |
+| [#18](https://github.com/pachamaker/things-cloud-mcp/pull/18) Sandbox harness follows `THINGS_TIMEZONE` | 2026-10-11, into `KI-03-owner-timezone`; on `main` with #19 | KI-34 |
+| [#19](https://github.com/pachamaker/things-cloud-mcp/pull/19) Re-land #18 on `main` | 2026-10-11 (`d4f20fc`) | KI-34: the harness takes "today" and its midnight window from `THINGS_TIMEZONE` |
+| [#20](https://github.com/pachamaker/things-cloud-mcp/pull/20) Distroless release image and GHCR workflow | 2026-10-11 (`b4d59d5`) | KI-16: `v*` tags publish a linux/amd64 + linux/arm64 image; `things-server healthcheck` |
+| [#21](https://github.com/pachamaker/things-cloud-mcp/pull/21) Clear the 4001 sentinel on read, list to-dos under headings | 2026-10-11 (`a53bb30`) | KI-04 and KI-13 fixed in the read model |
+| [#22](https://github.com/pachamaker/things-cloud-mcp/pull/22) Sandbox evidence for KI-13 | 2026-10-11 (`f94d387`) | KI-13 evidence confirmed |
+| [#23](https://github.com/pachamaker/things-cloud-mcp/pull/23) Track the upstream `rr`/`rt` PR | 2026-10-11 (`e7dc8de`) | KI-05, KI-10 point at arthursoares#40 |
+| [#24](https://github.com/pachamaker/things-cloud-mcp/pull/24) Explain seed tag mismatches | 2026-10-11 (`7fc9609`) | KI-34: seed checks name the cause of a tag mismatch; "Fixing seeds" table in `docs/testing/sandbox-e2e.md` |
+| [#25](https://github.com/pachamaker/things-cloud-mcp/pull/25) Hide repeating templates and refuse writes to repeating items | 2026-10-22, into `KI-29-sdk-fork-skipped-tombstones`; on `main` with #34 | see #34 |
+| [#26](https://github.com/pachamaker/things-cloud-mcp/pull/26) Capture the Things apps' writes for repeating to-dos | 2026-10-12 (`a97d16a`) | KI-01: first protocol §8 capture in `testdata/captures/`, protocol §5.3 rewritten from it; writing `rr` stays ⛔ |
+| [#27](https://github.com/pachamaker/things-cloud-mcp/pull/27) Capture completing repeating instances | 2026-10-12 (`93d6cd8`) | KI-01: second capture (completing an instance, an app-generated instance) |
+| [#28](https://github.com/pachamaker/things-cloud-mcp/pull/28) Release plan: Phase 1 before `v2.0.0`, Phase 3 in `v2.1.0` | 2026-10-22 (`805d9af`) | Roadmap releases |
+| [#29](https://github.com/pachamaker/things-cloud-mcp/pull/29) Conformance harness for view classification | 2026-10-13 (`2c3a7f2`) | KI-02: things.py exporter, snapshot dump and `TestConformance_Snapshots` (ADR-0005); no snapshot committed yet |
+| [#30](https://github.com/pachamaker/things-cloud-mcp/pull/30) Rebuild the mirror after an account reset | 2026-10-22 (`2a46817`) | KI-28 fixed (`server/mirror.go`); KI-29 located; new KI-37, KI-38 |
+| [#31](https://github.com/pachamaker/things-cloud-mcp/pull/31) Dismissed deadlines and This Evening | 2026-10-22 (`e6000e6`) | KI-02: a dismissed deadline (`dds`) keeps a to-do out of Today; `evening: true` in `things_list_today` |
+| [#32](https://github.com/pachamaker/things-cloud-mcp/pull/32) One combined SDK fork commit, log skipped tombstones | 2026-10-22 (`078ccae`) | KI-29 fixed for tombstones; `go.mod` replaces the SDK with `4d63f48` (arthursoares#40, #41, #42) |
+| [#33](https://github.com/pachamaker/things-cloud-mcp/pull/33) Go 1.26.10 | 2026-10-22 (`ad5df1f`) | KI-32: GO-2026-6809 fixed |
+| [#34](https://github.com/pachamaker/things-cloud-mcp/pull/34) Re-land #25 on `main` | 2026-10-22 (`545572e`) | KI-05: repeating templates hidden from every list; KI-01/KI-10: every write to a repeating template or instance refused; output marks `repeating` |
 
 ---
 
