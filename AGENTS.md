@@ -52,7 +52,10 @@ feature unimplemented.
 8. **Do not copy or patch SDK code in this repo.** The SDK is the
    `github.com/arthursoares/things-cloud-sdk` dependency, pinned in `go.mod`; generic
    fixes go upstream as PRs, or through a `replace` soft fork (ADR-0001). Upgrades go
-   through a PR with the full test suite.
+   through a PR with the full test suite. Until an upstream release carries the fork's
+   fixes, `go.mod` has exactly one `replace`: the head of the fork branch
+   `pachamaker/things-cloud-sdk` `fork-integration`. A new SDK fix is merged into that
+   branch and the `replace` moves to its new head, never to a commit of another fork branch.
 9. **Do not edit `.env` files, deployment secrets, or anything under `/migrations`**
    without an explicit instruction.
 

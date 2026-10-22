@@ -127,6 +127,7 @@ func (g *syncGate) syncInner(arrived time.Time, window time.Duration) ([]sync.Ch
 
 	g.lastStart = start
 	changes, err := g.inner.Sync()
+	logSkippedItems(changes)
 	err = redactRequestURL(err)
 	if !isRateLimited(err) {
 		g.backoff = 0
@@ -233,6 +234,18 @@ func (g *syncGate) waitRebuild() {
 	g.mu.Unlock()
 	if done != nil {
 		<-done
+	}
+}
+
+// logSkippedItems logs the history items the SDK skipped instead of failing
+// the sync, such as a tombstone that names no deletion target (KI-29). A line
+// carries the history index, kind, item UUID and the SDK's reason, never the
+// payload or the history key (KI-35).
+func logSkippedItems(changes []sync.Change) {
+	for _, c := range changes {
+		if skip, ok := c.(sync.ItemSkipped); ok {
+			log.Printf("[SYNC] skipped history item %d (%s %s): %s", skip.ServerIndex(), skip.EntityType(), skip.EntityUUID(), skip.Reason)
+		}
 	}
 }
 

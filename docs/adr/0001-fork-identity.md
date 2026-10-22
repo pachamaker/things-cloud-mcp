@@ -9,6 +9,14 @@ For `v2.0.0` (2026-10-12) the owner chose the soft-fork fallback of decision 2 i
 mirror-field PRs upstream are not released in time: `replace` to `pachamaker/things-cloud-sdk`
 pinned to a commit or tag, back to upstream once released (`docs/roadmap.md`, Releases).
 
+Amended (2026-10-13): for v2.0.0 the owner approved building against the fork
+`pachamaker/things-cloud-sdk` through a `go.mod` `replace`, while every fix is also
+proposed upstream as its own PR. All fork changes reach the server through one combined
+commit (fork branch `fork-integration`: v0.6.0 plus arthursoares/things-cloud-sdk#40,
+#41 and #42), not a `replace` per PR: a new fix is merged into that branch and the
+`replace` moves to its head. The `replace` goes once an upstream release carries every
+fix.
+
 ## Context
 - Lineage: `nicolai86/things-cloud-sdk` (MIT, 2017, Raphael Randschau; dormant since
   2022) → `arthursoares/things-cloud-sdk` (SDK + sync engine + CLI, **actively
