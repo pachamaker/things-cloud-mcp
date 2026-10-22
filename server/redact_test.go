@@ -66,7 +66,7 @@ func (c cloudStub) RoundTrip(req *http.Request) (*http.Response, error) {
 func useCloudStub(t *testing.T, stub cloudStub) *bytes.Buffer {
 	t.Helper()
 	prevTransport := http.DefaultTransport
-	prevClient, prevSyncer, prevMirror, prevHistory := client, syncer, mirror, history
+	prevClient, prevMirrorDB, prevMirror, prevHistory := client, mirrorDB, mirror, history
 	prevWriteMirror := writeMirror
 	prevLog := log.Writer()
 	var logs bytes.Buffer
@@ -77,7 +77,7 @@ func useCloudStub(t *testing.T, stub cloudStub) *bytes.Buffer {
 	log.SetOutput(&logs)
 	t.Cleanup(func() {
 		http.DefaultTransport = prevTransport
-		client, syncer, mirror, history = prevClient, prevSyncer, prevMirror, prevHistory
+		client, mirrorDB, mirror, history = prevClient, prevMirrorDB, prevMirror, prevHistory
 		writeMirror = prevWriteMirror
 		log.SetOutput(prevLog)
 	})

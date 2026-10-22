@@ -44,7 +44,7 @@ Error responses observed (here and in other implementations):
 |---|---|---|
 | 409 `OutdatedAncestor` | Commit's `ancestor-index` is behind the head; nothing was written | Re-read head, re-validate, retry (bounded) |
 | 429 `AbusePrevention` | Too many requests, including plain reads | Back off; coalesce syncs |
-| 404 `AccountIssue` / 404 without `Authorization` | Stale history key after account reset, or missing auth header on account endpoints | Rebuild mirror / add header |
+| 404 `AccountIssue` / 404 without `Authorization` | Stale history key after account reset, or missing auth header on account endpoints | Verify the account's history key and rebuild the mirror when it changed (`server/mirror.go`, KI-28) / add header. The SDK returns a plain `*HTTPError{404}` and drops the `things-response` header |
 | 500 | `start-index` beyond head | Check head first |
 
 The shell integration tests wait 1 s between calls to avoid 429; the sandbox e2e harness
