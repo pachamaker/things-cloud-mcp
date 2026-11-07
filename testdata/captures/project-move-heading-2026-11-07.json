@@ -1,0 +1,28 @@
+{
+  "source": "Things Cloud sandbox history, native macOS project move",
+  "captured_on": "2026-11-07",
+  "history_head": 2179,
+  "items": [
+    {
+      "index": 2178,
+      "slot_items": 1,
+      "uuid": "3TreHD6iT6YWEWLjYADHNg",
+      "t": 1,
+      "e": "Task7",
+      "field_names": [
+        "agr",
+        "ix",
+        "md",
+        "pr"
+      ],
+      "p": {
+        "pr": [
+          "Kw9Hcsd6sTzGjCFuGVGJ1v"
+        ],
+        "agr": []
+      }
+    }
+  ],
+  "scope": "Projection of one native update onto the fields that represent project and heading membership",
+  "mac_version": "3.24.1 (QA client version recorded in the test matrix)"
+}

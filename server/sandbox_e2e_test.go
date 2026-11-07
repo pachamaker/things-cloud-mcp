@@ -144,7 +144,15 @@ func TestSandboxE2E(t *testing.T) {
 		if got := edit(map[string]any{"tags": id["tag"]}); !slices.Equal(got.Tags, []string{id["tag"]}) {
 			t.Errorf("tags = %v, want [%s]", got.Tags, id["tag"])
 		}
-		if got := edit(map[string]any{"project": id["project"]}); got.ProjectID != id["project"] {
+		edit(map[string]any{"when": upcoming})
+		got := edit(map[string]any{"project": id["project"]})
+		if got.ScheduledFor != upcoming {
+			t.Errorf("project-only edit changed start date: got %q, want %q", got.ScheduledFor, upcoming)
+		}
+		inbox := h.create(t, "things_create_task", map[string]any{"title": title("inbox to project")})
+		h.act(t, "things_edit_task", map[string]any{"uuid": inbox, "project": id["project"]}, "updated")
+		h.assertOnlyIn(t, inbox, "anytime")
+		if got.ProjectID != id["project"] {
 			t.Errorf("project_id = %q, want %q", got.ProjectID, id["project"])
 		}
 		if !containsTask(h.listTasks(t, "things_list_project_tasks", map[string]any{"project_uuid": id["project"]}), e) {
