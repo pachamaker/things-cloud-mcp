@@ -307,12 +307,12 @@ results below cover the smaller set of critical bidirectional scenarios.
 | DOC-039 | scheduling | Independent deadline | ✅ |
 | DOC-040 | scheduling | Clear deadline | ✅ |
 | DOC-041 | scheduling | Deadline overview | ✅ |
-| DOC-042 | lists | Active overlap | **FAIL** — Things showed a Today task in Anytime after expanding the list, while the REST Anytime result excluded the same UUID (SYNC-001). |
+| DOC-042 | lists | Active overlap | **FAIL** — On Nov 7, a QA task marked Today was visible in native Anytime, but REST Today included its UUID and REST Anytime omitted it (SYNC-001). |
 | DOC-043 | lists | Deferred exclusion | ✅ |
 | DOC-044 | lists | Future project hiding | ✅ |
 | DOC-045 | lists | Inbox processing | ✅ |
 | DOC-046 | lists | Daily grouping | ✅ |
-| DOC-047 | lists | Upcoming drag scheduling | **PARTIAL** — Neither attempted drop moved the task into the target day in Upcoming. |
+| DOC-047 | lists | Upcoming drag scheduling | **PARTIAL** — On Nov 7, two drag attempts from Nov 11 to Nov 12 left the task under Nov 11 in Upcoming. The VPS mirror still held Nov 11 for the same UUID. A successful drop and its sync remain unverified. |
 | DOC-048 | lists | Logged history | ✅ |
 | DOC-049 | natural dates | Relative start | ✅ |
 | DOC-050 | natural dates | Combined reminder | ✅ |
@@ -346,11 +346,11 @@ results below cover the smaller set of critical bidirectional scenarios.
 | DOC-078 | templates | Task duplication | ✅ |
 | DOC-079 | templates | Dates do not shift | ✅ |
 | DOC-080 | repeat | Periodic repeat | ✅ |
-| DOC-081 | repeat | After completion repeat | **PARTIAL** — Upcoming showed the next occurrence preview. The next occurrence had not materialized in the mirror when checked. |
+| DOC-081 | repeat | After completion repeat | **PARTIAL** — On Nov 7, Upcoming showed the Nov 8 preview. The VPS mirror held the template and the completed occurrence. Verification of a new instance UUID is pending the Nov 8 due date. |
 | DOC-082 | repeat | Selected weekdays | ✅ |
 | DOC-083 | repeat | Repeat project | ✅ |
 | DOC-084 | repeat | Template edits propagate | ✅ |
-| DOC-085 | repeat | Pause and resume | **PARTIAL** — The paused state was visible before the due boundary. Behavior after the boundary and the subsequent resume were not verified. |
+| DOC-085 | repeat | Pause and resume | **PARTIAL** — On Nov 7, the rule still showed Paused and the VPS mirror had no new occurrence. Suppression across the Nov 8 due date and generation after Resume remain unverified. |
 | DOC-086 | repeat | Stop repeating | ✅ |
 | DOC-087 | repeat | Deadline lead time | ✅ |
 | DOC-088 | search | Immediate title search | ✅ |
@@ -396,8 +396,8 @@ results below cover the smaller set of critical bidirectional scenarios.
 | REG-001 | recurrence | Early completion | ✅ |
 | REG-002 | recurrence | Rescheduling choices | ✅ |
 | REG-004 | recurrence | Relative-repeat rescheduling | ✅ |
-| REG-005 | recurrence | Early project generation | **FAIL** — Editing a child from the Upcoming preview changed the template child. Things offered no early generation prompt and no project instance appeared. |
-| REG-007 | recurrence | Batch rule controls | **PARTIAL** — Pause and Resume were verified. Stop and the unaffected third-template check remained open. |
+| REG-005 | recurrence | Early project generation | **FAIL** — On Nov 7, editing a child from the Nov 10 Upcoming preview again changed the existing template child. No prompt was observed, and the VPS mirror showed the renamed child under the same template UUID with no new project instance. |
+| REG-007 | recurrence | Batch rule controls | **PARTIAL** — On Nov 7, batch Pause and Resume changed both selected rules in Things. The unselected control remained Paused. Batch Stop and its VPS effect remain unverified. |
 | REG-008 | layout | Expanded-item layout | ✅ |
 | REG-009 | checklist | Empty checklist editing | ✅ |
 | REG-010 | checklist | Whitespace paste | **FAIL** — Pasting one nonblank line with surrounding line breaks created three empty checklist rows. It reproduced after restarting Things 3.24.1 (APP-001). |
