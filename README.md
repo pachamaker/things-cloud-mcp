@@ -252,6 +252,29 @@ before their first write unless the account has the area `MCP E2E SANDBOX`:
 ./tests/test-api.sh            # All REST endpoints (needs ENABLE_REST_API=true; ACCESS_TOKEN=… against an OAuth server)
 ```
 
+### macOS sandbox results (2026-11-07)
+
+On a dedicated Things Cloud sandbox account, the following scenarios passed in both
+directions between Things on Mac and the MCP server:
+
+| Scenario | Result |
+| --- | --- |
+| Create and edit a to-do | Pass |
+| Move a to-do between projects, including from under a heading | Pass with the fixes in [PR #36](https://github.com/pachamaker/things-cloud-mcp/pull/36) |
+| Complete and reopen a to-do | Pass |
+| Move a to-do to Trash and restore it | Pass |
+
+For each scenario, we compared the task UUID, affected fields, and a control task across
+MCP responses, the VPS mirror, and Things on Mac. After the tested restarts, Things opened
+and the checked tasks still appeared once. Moving a scheduled task without specifying
+`when` preserved its start date. Moving a task out from under a heading cleared the old
+heading, and a separate check confirmed that the task's tag and three checklist items
+survived the move and restart.
+
+Search excluded trashed tasks. A direct lookup by UUID could still return `open`
+without a Trash flag. The run covered macOS on a sandbox account. iOS, recurring-task
+writes, and production use remain outside this run's coverage.
+
 ## Local development
 
 ```bash
