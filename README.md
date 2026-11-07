@@ -252,6 +252,176 @@ before their first write unless the account has the area `MCP E2E SANDBOX`:
 ./tests/test-api.sh            # All REST endpoints (needs ENABLE_REST_API=true; ACCESS_TOKEN=… against an OAuth server)
 ```
 
+### macOS Things app test matrix
+
+The broader Things app test matrix tracks **154 cases**. Recorded results are
+**121 passed, 4 failed, 10 partial, 1 blocked, and 18 not run**. A partial result
+means only part of the expected behavior was verified. The matrix includes
+app-only checks and checks that also observe sync. The separate MCP sandbox
+results below cover the smaller set of critical bidirectional scenarios.
+
+<details>
+<summary>All 154 Things app test cases and recorded results</summary>
+
+| ID | Area | Scenario | Result |
+| --- | --- | --- | --- |
+| DOC-001 | structure | Organize ongoing work | PASS |
+| DOC-002 | structure | Project handles multiple steps | PASS |
+| DOC-003 | checklists | Break down one task | PASS |
+| DOC-004 | checklists | Check step independently | PASS |
+| DOC-005 | checklists | Project progress feedback | PASS |
+| DOC-006 | creation | Keyboard creation | PASS |
+| DOC-007 | creation | Insert after selection | PASS |
+| DOC-008 | creation | Keyboard project creation | PASS |
+| DOC-009 | creation | Keyboard checklist creation | PASS |
+| DOC-010 | creation | Completion command | PASS |
+| DOC-011 | creation | Cancellation command | PASS |
+| DOC-012 | creation | Log completed item | PASS |
+| DOC-013 | creation | Keyboard reorder | PASS |
+| DOC-014 | clipboard | Paste task batch | PASS |
+| DOC-015 | clipboard | Paste multiline title | PASS |
+| DOC-016 | clipboard | Paste checklist batch | PASS |
+| DOC-017 | clipboard | Normalize pasted bullets | PASS |
+| DOC-018 | clipboard | Bound clipboard batch | PASS |
+| DOC-019 | clipboard | Finder link capture | PARTIAL |
+| DOC-020 | notes | Task notes persistence | PASS |
+| DOC-021 | notes | Project notes persistence | PASS |
+| DOC-022 | notes | Notes bullet indentation | PASS |
+| DOC-023 | notes | Find within note | PASS |
+| DOC-024 | notes | Replace within note | PASS |
+| DOC-025 | notes | Titles stay plain | PASS |
+| DOC-026 | markdown | Inline emphasis | PASS |
+| DOC-027 | markdown | Attention formatting | PASS |
+| DOC-028 | markdown | Heading levels | PASS |
+| DOC-029 | markdown | Quotation and divider | PASS |
+| DOC-030 | markdown | Code punctuation | PASS |
+| DOC-031 | markdown | Markdown task statuses | PASS |
+| DOC-032 | markdown | Markdown reversibility | PASS |
+| DOC-033 | markdown | Visible link syntax | PASS |
+| DOC-034 | scheduling | Today assignment | PASS |
+| DOC-035 | scheduling | Evening assignment | PASS |
+| DOC-036 | scheduling | Future assignment | PASS |
+| DOC-037 | scheduling | Deferred assignment | PASS |
+| DOC-038 | scheduling | Clear schedule | PASS |
+| DOC-039 | scheduling | Independent deadline | PASS |
+| DOC-040 | scheduling | Clear deadline | PASS |
+| DOC-041 | scheduling | Deadline overview | PASS |
+| DOC-042 | lists | Active overlap | FAIL |
+| DOC-043 | lists | Deferred exclusion | PASS |
+| DOC-044 | lists | Future project hiding | PASS |
+| DOC-045 | lists | Inbox processing | PASS |
+| DOC-046 | lists | Daily grouping | PASS |
+| DOC-047 | lists | Upcoming drag scheduling | PARTIAL |
+| DOC-048 | lists | Logged history | PASS |
+| DOC-049 | natural dates | Relative start | PASS |
+| DOC-050 | natural dates | Combined reminder | PASS |
+| DOC-051 | natural dates | Relative deadline | PASS |
+| DOC-052 | natural dates | Ordinal date | PASS |
+| DOC-053 | notifications | Reminder delivery | PARTIAL |
+| DOC-054 | notifications | Reminder snooze | NOT RUN |
+| DOC-055 | notifications | Deadline limitation | PASS |
+| DOC-056 | tags | Create and apply tag | PASS |
+| DOC-057 | tags | Inherited tag filter | PASS |
+| DOC-058 | tags | Conjunctive filter | PARTIAL |
+| DOC-059 | tags | Global tag search | PASS |
+| DOC-060 | tags | Remove assignment | PASS |
+| DOC-061 | tags | Nested tags | PASS |
+| DOC-062 | tags | Tag ordering | NOT RUN |
+| DOC-063 | tags | Tag shortcut toggle | PASS |
+| DOC-064 | headings | Heading scope | PASS |
+| DOC-065 | headings | Group selection | PASS |
+| DOC-066 | headings | Heading move | PASS |
+| DOC-067 | headings | Heading duplicate | PASS |
+| DOC-068 | headings | Heading promotion | PASS |
+| DOC-069 | headings | Heading archive | PASS |
+| DOC-070 | moving | Batch filing | PASS |
+| DOC-071 | moving | Heading destination search | PASS |
+| DOC-072 | moving | Create destination while moving | PASS |
+| DOC-073 | moving | Remove parent | PASS |
+| DOC-074 | moving | Area movement | PASS |
+| DOC-075 | moving | Checklist reorder | PASS |
+| DOC-076 | conversion | Checklist promotion | PASS |
+| DOC-077 | templates | Project duplication | PASS |
+| DOC-078 | templates | Task duplication | PASS |
+| DOC-079 | templates | Dates do not shift | PASS |
+| DOC-080 | repeat | Periodic repeat | PASS |
+| DOC-081 | repeat | After completion repeat | PARTIAL |
+| DOC-082 | repeat | Selected weekdays | PASS |
+| DOC-083 | repeat | Repeat project | PASS |
+| DOC-084 | repeat | Template edits propagate | PASS |
+| DOC-085 | repeat | Pause and resume | PARTIAL |
+| DOC-086 | repeat | Stop repeating | PASS |
+| DOC-087 | repeat | Deadline lead time | PASS |
+| DOC-088 | search | Immediate title search | PASS |
+| DOC-089 | search | Extended content search | PASS |
+| DOC-090 | search | Checklist search | PASS |
+| DOC-091 | search | Logged search | PASS |
+| DOC-092 | search | Special project views | PASS |
+| DOC-093 | trash | Delete and recover | PASS |
+| DOC-094 | trash | Delete undo | PASS |
+| DOC-095 | windows | Separate list windows | PASS |
+| DOC-096 | windows | Cross-window move | PASS |
+| DOC-097 | windows | Parent window | PARTIAL |
+| DOC-098 | quick entry | Global capture | NOT RUN |
+| DOC-099 | quick entry | Discard capture | PASS |
+| DOC-100 | quick entry | Save capture keyboard | PASS |
+| DOC-101 | quick entry | Autofill source | NOT RUN |
+| DOC-102 | calendar | Local event display | FAIL |
+| DOC-103 | calendar | Calendar selection | PASS |
+| DOC-104 | calendar | Calendar local scope | NOT RUN |
+| DOC-105 | widgets | Widget list and tag | NOT RUN |
+| DOC-106 | widgets | Widget completion | NOT RUN |
+| DOC-107 | widgets | Widget capture destination | NOT RUN |
+| DOC-108 | shortcuts | Shortcut creation | PASS |
+| DOC-109 | shortcuts | Shortcut query | PASS |
+| DOC-110 | shortcuts | Shortcut edit | PASS |
+| DOC-111 | url scheme | URL creation | PASS |
+| DOC-112 | url scheme | URL project creation | PASS |
+| DOC-113 | url scheme | URL authenticated edit | NOT RUN |
+| DOC-114 | url scheme | URL navigation | PASS |
+| DOC-115 | applescript | Script creation | PASS |
+| DOC-116 | applescript | Script deadline | PASS |
+| DOC-117 | applescript | Script status | PASS |
+| DOC-118 | share | Plain text export | PASS |
+| DOC-119 | share | List share limitation | PASS |
+| DOC-120 | mail | Email capture | NOT RUN |
+| DOC-121 | mail | Email constraints | NOT RUN |
+| DOC-122 | siri | Voice creation | NOT RUN |
+| DOC-123 | siri | Voice schedule | NOT RUN |
+| DOC-124 | spotlight | Spotlight creation | NOT RUN |
+| DOC-125 | metadata | Creation timestamp | PASS |
+| DOC-126 | cloud | Cross-device propagation | NOT RUN |
+| DOC-127 | cloud | Offline availability | BLOCKED |
+| REG-001 | recurrence | Early completion | PASS |
+| REG-002 | recurrence | Rescheduling choices | PASS |
+| REG-004 | recurrence | Relative-repeat rescheduling | PASS |
+| REG-005 | recurrence | Early project generation | FAIL |
+| REG-007 | recurrence | Batch rule controls | PARTIAL |
+| REG-008 | layout | Expanded-item layout | PASS |
+| REG-009 | checklist | Empty checklist editing | PASS |
+| REG-010 | checklist | Whitespace paste | FAIL |
+| REG-011 | checklist | Checklist additive selection | PASS |
+| REG-012 | tags | Tag suggestion order | NOT RUN |
+| REG-013 | deadline | Deadline color | PASS |
+| REG-014 | search | Search status styling | PASS |
+| REG-015 | search | Search highlight reset | PASS |
+| REG-016 | checklist | Checklist cut/delete | PASS |
+| REG-018 | quick-entry | Capture checklist deletion | PASS |
+| DOC-128 | lifecycle | Reopen completed task | PASS |
+| DOC-129 | lifecycle | Reopen canceled task | PASS |
+| DOC-130 | lifecycle | Reopen project | PASS |
+| DOC-131 | lifecycle | Rename project | PASS |
+| DOC-132 | lifecycle | Rename area | PASS |
+| DOC-133 | lifecycle | Delete project tree | PASS |
+| DOC-134 | lifecycle | Delete area tree | NOT RUN |
+| DOC-135 | lifecycle | Rename tag | PASS |
+| DOC-136 | lifecycle | Delete tag | NOT RUN |
+| DOC-137 | lifecycle | Project sidebar order | PARTIAL |
+| DOC-138 | lifecycle | Area sidebar order | PARTIAL |
+| DOC-139 | lifecycle | Checklist reopen | PASS |
+
+</details>
+
 ### macOS sandbox results (2026-11-07)
 
 On a dedicated Things Cloud sandbox account, the following scenarios passed in both
