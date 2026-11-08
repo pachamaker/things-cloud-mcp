@@ -9,6 +9,21 @@ the Fly.io guide in [`../installation.md`](../installation.md).
 > with v2.0.1 and Pocket ID v2.19.2. Claude and mobile flows are outside that check.
 > Do the first connection against a sandbox Things account and check §6.3.
 
+## Cloudflare is optional
+
+**DNS → Caddy → Things Cloud MCP + Pocket ID**
+
+- Point `mcp.example.com` and `auth.example.com` to the VPS public IPv4 with
+  DNS A records at any provider.
+- Use a Linux VPS with Docker Engine and the Compose plugin. Allow incoming TCP
+  ports 80 and 443 so Caddy can obtain public TLS certificates and serve HTTPS.
+- Use a Things Cloud account and an MCP client that supports remote OAuth.
+  Start with a separate test account.
+- Allow the VPS to reach Things Cloud and the public Pocket ID hostname over HTTPS.
+
+Caddy routes the MCP hostname to Things Cloud MCP and the auth hostname to Pocket ID.
+Both services stay on the internal Docker network.
+
 ## 1. Topology
 
 ```mermaid

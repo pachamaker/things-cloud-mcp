@@ -32,20 +32,35 @@ The server syncs your Things Cloud data into a local SQLite database and exposes
 MCP reads refresh the local mirror from Things Cloud, subject to sync throttling. Supported writes go through Things Cloud and appear in Things after the app syncs.
 The server performs an initial sync at startup and now exits if it cannot establish a clean local snapshot.
 
+### Architecture
+
+```mermaid
+flowchart LR
+    Assistant["MCP client"]
+    Browser["Owner's browser"]
+    Things["Things app"]
+    Cloud["Things Cloud"]
+
+    subgraph VPS["VPS · Docker Compose"]
+        Caddy["Caddy · HTTPS"]
+        MCP["Things Cloud MCP"]
+        Identity["Pocket ID · OAuth and passkeys"]
+        Mirror[("SQLite task mirror")]
+    end
+
+    Assistant -->|"HTTPS · MCP with OAuth token"| Caddy
+    Assistant -->|"OAuth discovery and token exchange"| Caddy
+    Browser -->|"Passkey sign-in"| Caddy
+    Caddy -->|"mcp.example.com"| MCP
+    Caddy -->|"auth.example.com"| Identity
+    MCP -.->|"Fetch OAuth metadata and public keys via HTTPS"| Caddy
+    MCP <-->|"Sync and optional writes"| Cloud
+    MCP <-->|"Read and update mirror"| Mirror
+    Things <-->|"Native sync"| Cloud
 ```
-┌──────────────┐     ┌──────────────────┐     ┌──────────────┐
-│  Things App  │────▶│  Things Cloud    │◀────│  API Server  │
-│  (Mac/iOS)   │     │  (Cultured Code) │     │  (Fly.io)    │
-└──────────────┘     └──────────────────┘     └──────┬───────┘
-                                                     │
-                                              ┌──────┴───────┐
-                                              │              │
-                                         /api/*         /mcp
-                                        REST API    MCP Endpoint
-                                              │              │
-                                         curl/apps    Claude.ai
-                                                     Connector
-```
+
+DNS points both hostnames to the VPS. Caddy routes HTTPS traffic by hostname.
+Only Caddy publishes ports in this setup. See the [VPS deployment guide](docs/deployment/vps.md).
 
 ## MCP tools (35)
 
