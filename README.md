@@ -255,7 +255,7 @@ before their first write unless the account has the area `MCP E2E SANDBOX`:
 ### macOS Things app test matrix
 
 The broader Things app test matrix tracks **154 cases**. Recorded results are
-**123 passed, 4 failed, 8 partial, 1 blocked, and 18 not run**. A partial result
+**123 passed, 5 failed, 8 partial, 1 blocked, and 17 not run**. A partial result
 means only part of the expected behavior was verified. ✅ marks a passed case.
 The four failed cases below have no confirmed fix commit in the test record. The matrix includes
 app-only checks and checks that also observe sync. The separate MCP sandbox
@@ -414,7 +414,7 @@ results below cover the smaller set of critical bidirectional scenarios.
 | DOC-131 | lifecycle | Rename project | ✅ |
 | DOC-132 | lifecycle | Rename area | ✅ |
 | DOC-133 | lifecycle | Delete project tree | ✅ |
-| DOC-134 | lifecycle | Delete area tree | **NOT RUN** — The disposable area tree deletion scenario was not executed. The run log gives no reason. |
+| DOC-134 | lifecycle | Delete area tree | **FAIL** — Area deletion reached the VPS and the project entered Trash. Its child kept the parent UUID and still appeared in REST Anytime, MCP Anytime, and MCP search. [Fix commit](https://github.com/pachamaker/things-cloud-mcp/commit/4cd34e36bd433ff7d28ebd43bcbe24ddd29b8117) passed local regression tests. A VPS retest is pending. |
 | DOC-135 | lifecycle | Rename tag | ✅ |
 | DOC-136 | lifecycle | Delete tag | **NOT RUN** — The disposable tag deletion scenario was not executed. The run log gives no reason. |
 | DOC-137 | lifecycle | Project sidebar order | **PARTIAL** — The sidebar drag changed neither the visible order nor the server indices. A successful move was not established. |
