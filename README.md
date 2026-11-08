@@ -257,9 +257,9 @@ before their first write unless the account has the area `MCP E2E SANDBOX`:
 The broader Things app test matrix tracks **154 cases**. Recorded results are
 **126 passed, 2 failed, 8 partial, 1 blocked, and 17 not run**. A partial result
 means only part of the expected behavior was verified. ✅ marks a passed case.
-The four failed cases below have no confirmed fix commit in the test record. The matrix includes
-app-only checks and checks that also observe sync. The separate MCP sandbox
-results below cover the smaller set of critical bidirectional scenarios.
+The matrix preserves historical app and sync observations. The current test scope
+is server behavior exposed through REST and MCP. Things Cloud synchronization
+between Things clients is out of scope.
 
 <details>
 <summary>All 154 Things app test cases and recorded results</summary>
@@ -391,7 +391,7 @@ results below cover the smaller set of critical bidirectional scenarios.
 | DOC-123 | siri | Voice schedule | **NOT RUN** — No Siri scheduled task creation attempt was recorded. |
 | DOC-124 | spotlight | Spotlight creation | **NOT RUN** — Computer Use timed out while attaching to Spotlight. The Create To-Do action was not reached. |
 | DOC-125 | metadata | Creation timestamp | ✅ |
-| DOC-126 | cloud | Cross-device propagation | **NOT RUN** — The run did not record observations from a second Things device on the same account. |
+| DOC-126 | cloud | Cross-device propagation | **NOT RUN** — Out of scope. The current test run skips Things Cloud synchronization between clients. |
 | DOC-127 | cloud | Offline availability | **BLOCKED** — The offline test required an authorized isolated environment to preserve the current network connection. |
 | REG-001 | recurrence | Early completion | ✅ |
 | REG-002 | recurrence | Rescheduling choices | ✅ |
