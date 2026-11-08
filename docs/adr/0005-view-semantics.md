@@ -80,8 +80,8 @@ Decision 4, the conformance harness, is built (`docs/testing/conformance.md`); d
 4. **Titles** are HMAC-SHA256 under a one-off key that is never committed, so hashes
    match across the two files but not against guessed titles.
 5. **The app's views are mapped to the server's conventions** before comparing: the
-   app's Anytime includes Today's started to-dos, `things_list_anytime` does not; there
-   is no Trash tool; Logbook is `things_list_completed`.
+   server and app both include started Today to-dos in Anytime (DOC-042). There
+   is no Trash tool and Logbook is `things_list_completed`.
 6. **Known gaps** are explicit entries (`conformanceKnownGaps`, each with a KI) that
    explain a difference only for items that have the gap's cause and only when
    correcting for it makes the views equal: projects not listed (KI-02), repeating

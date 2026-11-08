@@ -827,7 +827,7 @@ func newMCPHandler(writes bool) http.Handler {
 	), mcpListToday)
 
 	s.AddTool(mcp.NewTool("things_list_anytime",
-		mcp.WithDescription("List started to-dos in the Things Anytime view, excluding those shown in Today. "+todayNote()),
+		mcp.WithDescription("List started to-dos in the Things Anytime view, including started to-dos also shown in Today. "+todayNote()),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximum number of tasks to return"),

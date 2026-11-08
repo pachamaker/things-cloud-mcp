@@ -86,7 +86,7 @@ func TestSandboxE2E(t *testing.T) {
 			}
 			uuid := h.create(t, "things_create_task", args)
 			id["placement "+tc.label] = uuid
-			h.assertOnlyIn(t, uuid, tc.view)
+			h.assertPlacementViews(t, uuid, tc.view)
 			if got := h.getTask(t, uuid).ScheduledFor; got != tc.scheduled {
 				t.Errorf("placement %s: scheduled_for = %q, want %q", tc.label, got, tc.scheduled)
 			}
@@ -107,7 +107,7 @@ func TestSandboxE2E(t *testing.T) {
 			{"things_move_to_inbox", map[string]any{"uuid": moved}, "moved_to_inbox", "inbox"},
 		} {
 			h.act(t, step.tool, step.args, step.status)
-			h.assertOnlyIn(t, moved, step.view)
+			h.assertPlacementViews(t, moved, step.view)
 		}
 	})
 
@@ -180,7 +180,7 @@ func TestSandboxE2E(t *testing.T) {
 		if got := h.getTask(t, c); got.Status != "open" || got.CompletedAt != "" {
 			t.Errorf("after uncomplete: %s", publicTask(got))
 		}
-		h.assertOnlyIn(t, c, "anytime")
+		h.assertPlacementViews(t, c, "anytime")
 
 		h.act(t, "things_trash_task", map[string]any{"uuid": c}, "trashed")
 		if views := h.viewsOf(t, c); len(views) != 0 {
@@ -191,7 +191,7 @@ func TestSandboxE2E(t *testing.T) {
 		}
 
 		h.act(t, "things_untrash_task", map[string]any{"uuid": c}, "restored")
-		h.assertOnlyIn(t, c, "anytime")
+		h.assertPlacementViews(t, c, "anytime")
 		if !containsTask(h.listTasks(t, "things_list_all_tasks", nil), c) {
 			t.Error("things_list_all_tasks does not list the restored task")
 		}
@@ -369,8 +369,8 @@ func TestSandboxE2E(t *testing.T) {
 					in = append(in, v.name)
 				}
 			}
-			if len(in) != 1 || in[0] != viewName(want) {
-				t.Errorf("%s: observer classifies it as %v, want %s", key, in, viewName(want))
+			if wantViews := expectedPlacementViews(viewName(want)); !slices.Equal(in, wantViews) {
+				t.Errorf("%s: observer classifies it as %v, want %v", key, in, wantViews)
 			}
 		}
 	})

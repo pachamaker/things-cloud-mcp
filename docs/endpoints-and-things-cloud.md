@@ -101,7 +101,7 @@ The new dedicated queries are still based on the same underlying task fields:
 Active lists exclude tasks under trashed projects or headings even if Things Cloud
 only sets the trash flag on the ancestor (DOC-134).
 
-- **Anytime**: `schedule = 1` and not classified into Today
+- **Anytime**: `schedule = 1` including started tasks also in Today
 - **Someday**: `schedule = 2` and not future-dated
 - **Upcoming**: `schedule = 2` with a future `scheduled_date` or `today_index_ref`
 

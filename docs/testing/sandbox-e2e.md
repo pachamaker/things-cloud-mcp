@@ -271,7 +271,7 @@ ignores. Check `git ls-files .github` before committing.
 | Section | Checks |
 |---|---|
 | setup | create tag, area (with the tag), project (anytime, deadline, area), heading, to-do (today, deadline, project, tag), subtask; read them back with `things_get_task`/`_area`/`_tag` |
-| placement | create a to-do per placement (inbox, today, anytime, someday, upcoming date) and check it is listed in exactly that view; move one to-do through today → anytime → someday → upcoming (`when` = date) → inbox, checking after each step |
+| placement | create a to-do per placement (inbox, today, anytime, someday, upcoming date) and check its view membership (started Today tasks also appear in Anytime); move one to-do through today → anytime → someday → upcoming (`when` = date) → inbox, checking after each step |
 | edit | title, note, clear note, deadline, clear deadline, area (+ `things_list_area_tasks`), clear area, tags, project (+ `things_list_project_tasks`) |
 | lifecycle | complete (+ `things_list_completed`), uncomplete, trash, untrash, with list membership after each |
 | checklist | add, complete, reopen, delete |

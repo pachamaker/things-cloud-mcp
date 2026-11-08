@@ -194,7 +194,7 @@ conformance harness (ADR-0005):
 | Today | open, not trashed, `tp∈{0,1}`, and one of: (`st=1` and `sr ≠ null`) · (`st=2` and `sr ≤ today`) · (`sr = null` and `dd ≤ today` and `dds = null`) |
 | This Evening | Today ∩ `sb=1`; the app shows it as the last section of Today |
 | Upcoming | `st=2` and `sr > today` (plus future instances of repeating templates, generated client-side) |
-| Anytime | `st=1`, not in Today; excludes items whose project is deferred |
+| Anytime | `st=1`, including started items also in Today; the app excludes items whose project is deferred |
 | Someday | `st=2` and `sr = null` |
 | Logbook | `ss ∈ {2,3}`, not trashed |
 | Trash | `tr = true` |

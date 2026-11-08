@@ -164,7 +164,7 @@ func TestEncodeConformanceJSON(t *testing.T) {
 func TestAppViewsAsServer(t *testing.T) {
 	t.Parallel()
 	tests := []struct{ app, want []string }{
-		{[]string{"anytime", "today"}, []string{"today"}},
+		{[]string{"anytime", "today"}, []string{"anytime", "today"}},
 		{[]string{"anytime"}, []string{"anytime"}},
 		{[]string{"inbox", "today"}, []string{"inbox", "today"}},
 		{[]string{"trash"}, nil},
@@ -203,9 +203,9 @@ func TestServerViews(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string][]string{
-		"inbox": {"inbox"}, "inbox-due": {"inbox", "today"}, "today": {"today"}, "anytime": {"anytime"},
+		"inbox": {"inbox"}, "inbox-due": {"inbox", "today"}, "today": {"anytime", "today"}, "anytime": {"anytime"},
 		"arrived": {"today"}, "upcoming": {"upcoming"}, "someday": {"someday"}, "never": {"someday"}, "done": {"logbook"},
-		"evening": {"today"}, "evening-anytime": {"anytime"}, "dismissed": {"anytime"},
+		"evening": {"anytime", "today"}, "evening-anytime": {"anytime"}, "dismissed": {"anytime"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("serverViews = %v\nwant %v", got, want)
@@ -297,13 +297,13 @@ func TestJudgeConformanceCase(t *testing.T) {
 			name: "This Evening in the app only",
 			c: conformanceFixture(t, &expectedTask{Type: "to-do", Views: []string{"anytime", "today"}, Evening: true, App: fields(1, d("2026-10-12"), nil)},
 				todayToDo, ptr(fields(1, d("2026-10-12"), nil))),
-			problem: "the app shows [today] (This Evening), the server lists [today]",
+			problem: "the app shows [anytime today] (This Evening), the server lists [anytime today]",
 		},
 		{
 			name: "This Evening on the server only",
 			c: conformanceFixture(t, &expectedTask{Type: "to-do", Views: []string{"anytime", "today"}, App: evening},
 				eveningToDo, ptr(evening)),
-			problem: "the app shows [today], the server lists [today] (This Evening)",
+			problem: "the app shows [anytime today], the server lists [anytime today] (This Evening)",
 		},
 		{
 			name: "dismissed deadline",
