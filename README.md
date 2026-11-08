@@ -255,7 +255,7 @@ before their first write unless the account has the area `MCP E2E SANDBOX`:
 ### macOS Things app test matrix
 
 The broader Things app test matrix tracks **154 cases**. Recorded results are
-**124 passed, 4 failed, 8 partial, 1 blocked, and 17 not run**. A partial result
+**125 passed, 3 failed, 8 partial, 1 blocked, and 17 not run**. A partial result
 means only part of the expected behavior was verified. ✅ marks a passed case.
 The four failed cases below have no confirmed fix commit in the test record. The matrix includes
 app-only checks and checks that also observe sync. The separate MCP sandbox
@@ -307,7 +307,7 @@ results below cover the smaller set of critical bidirectional scenarios.
 | DOC-039 | scheduling | Independent deadline | ✅ |
 | DOC-040 | scheduling | Clear deadline | ✅ |
 | DOC-041 | scheduling | Deadline overview | ✅ |
-| DOC-042 | lists | Active overlap | **FAIL** — On Nov 7, a QA task marked Today was visible in native Anytime, but REST Today included its UUID and REST Anytime omitted it (SYNC-001). |
+| DOC-042 | lists | Active overlap | ✅ — The baseline omitted a started Today task from Anytime (SYNC-001). The patched build on an isolated VPS mirror returned the same UUID in Today and Anytime through both REST and MCP. An active Anytime control remained visible. [Fix commit](https://github.com/pachamaker/things-cloud-mcp/commit/5d4db6dde5b3dbc2426168c9d07e777ff37e6bfe). |
 | DOC-043 | lists | Deferred exclusion | ✅ |
 | DOC-044 | lists | Future project hiding | ✅ |
 | DOC-045 | lists | Inbox processing | ✅ |
