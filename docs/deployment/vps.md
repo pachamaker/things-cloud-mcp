@@ -1,7 +1,11 @@
-# Self-hosting on a VPS (Claude + ChatGPT, any device)
+# Self-hosting on a VPS for remote MCP clients
 
 Target deployment from [ADR-0002](../adr/0002-remote-deployment-and-auth.md). Replaces
 the Fly.io guide in [`../installation.md`](../installation.md).
+
+Connect any LLM client that supports custom remote MCP servers over Streamable HTTP
+and can authorize with your OAuth 2.1 provider. Support for local MCP over `stdio`
+alone is insufficient. ChatGPT and Claude are setup examples.
 
 > **Verified deployment.** The maintainer ran Things Cloud MCP v2.0.1 and Pocket ID
 > v2.19.2 in Docker Compose on a Linux VPS. Cloudflare proxied HTTPS to Nginx on the
@@ -37,8 +41,7 @@ Both services stay on the internal Docker network.
 ```mermaid
 flowchart LR
   subgraph Internet
-    claude[Claude cloud<br/>160.79.104.0/21]
-    openai[ChatGPT cloud<br/>chatgpt-connectors.json]
+    client[Remote MCP client]
     browser[Owner's browser<br/>OAuth login]
   end
   subgraph VPS["VPS · Docker Compose"]
@@ -49,8 +52,8 @@ flowchart LR
     vol2[(pocket-id-data)]
   end
   cloud[(Things Cloud)]
-  claude -->|https://mcp.example.com/mcp| caddy
-  openai --> caddy
+  client -->|https://mcp.example.com/mcp| caddy
+  client -->|OAuth discovery and token exchange| caddy
   browser -->|https://auth.example.com| caddy
   caddy --> app
   caddy --> pid
@@ -67,11 +70,11 @@ internal Docker network.
 | Item | Recommendation |
 |---|---|
 | VPS | 1 vCPU, 1 GB RAM, 10 GB disk; Ubuntu 24.04 LTS or Debian 13 |
-| Region | Close to Things Cloud (AWS) and the assistants' egress, e.g. Frankfurt/Amsterdam; avoid networks that filter traffic to AWS/Anthropic/OpenAI |
-| IPv4 | **Required.** Claude connectors are IPv4-only |
+| Region | Choose a VPS that can reach Things Cloud and is reachable by your MCP client |
+| IPv4 | The reference setup uses A records. Use IPv4 if your client requires it (for example, Claude custom connectors) |
 | Domain | Two names with A records: `mcp.example.com`, `auth.example.com` |
 | Software | Docker Engine, Compose plugin, OpenSSL |
-| Accounts | Things Cloud account (start with a **sandbox** account), Claude and/or ChatGPT |
+| Accounts | Things Cloud account (start with a **sandbox** account) and access to a compatible remote MCP client |
 
 ## 3. Host hardening (once)
 
@@ -155,7 +158,7 @@ OAUTH_ISSUER=https://auth.example.com
 # Fill in after creating your Pocket ID account in §5.
 OAUTH_ALLOWED_SUBJECT=
 # Optional: accept tokens only from these OAuth clients (comma-separated client ids).
-# OAUTH_ALLOWED_CLIENTS=<claude client id>,<chatgpt client id>
+# OAUTH_ALLOWED_CLIENTS=<client id 1>,<client id 2>
 # Optional: serve /api/* behind the same tokens.
 # ENABLE_REST_API=true
 # Owner's IANA zone: decides "today" (ADR-0003). Unset means the UTC day.
@@ -259,9 +262,10 @@ docker compose up -d caddy pocket-id
    - resource: `https://mcp.example.com/mcp`, exactly `MCP_PUBLIC_URL` (tokens carry it as
      `aud`; the resource cannot be changed later);
    - permissions: `things.read` and `things.write`.
-3. **Administration → OIDC Clients**, one per assistant. On each client's **Access** tab,
+3. **Administration → OIDC Clients**, one per MCP client. On each client's **Access** tab,
    add the API with user-delegated access and choose its permissions; restrict the
-   client to a user group that contains only you.
+   client to a user group that contains only you. Use the OAuth client type and exact
+   redirect URI required by your client. The examples below use PKCE.
    - **Claude:** a public client (PKCE) with callback
      `https://claude.ai/api/mcp/auth_callback`. Alternatively Claude's published identity
      (CIMD) works only with the API's **Allow all metadata document clients** switch, which
@@ -328,7 +332,13 @@ JWKS and the token endpoint must likewise be reachable by the client. Keep Pocke
 and initial setup routes protected. Before connecting, verify that unauthenticated MCP
 requests get a Bearer challenge (`401`), and that metadata returns `200`.
 
-## 6. Connect the assistants
+## 6. Connect an MCP client
+
+In your client, add `https://mcp.example.com/mcp` as a custom remote MCP server,
+select OAuth, and enter the client ID and secret if your client requires them. The
+client must obtain a token for that exact MCP URL as its OAuth resource, with the
+`things.read` scope for initial testing. Verify the connection with the read check
+in §6.3. The following examples show where to add the server in two clients.
 
 ### 6.1 Claude (web, desktop, then mobile)
 1. claude.ai → **Customize → Connectors → Add custom connector**.
@@ -362,12 +372,13 @@ returns `200`. The MCP metadata must return `200` with the exact `resource` and
 `WWW-Authenticate: Bearer` pointing to the MCP metadata.
 
 For an authenticated read check, create a uniquely named task in the sandbox account
-using Things and wait for it to sync. In ChatGPT web, select the plugin, sign in through
-Pocket ID, and check that the plugin exposes read tools with no write tools. Ask it
-to find the task by its exact title with `things_search_tasks`, then call
-`things_get_task` with the returned `uuid`. Expand the tool result and compare the
-title and status with Things. If you have the Things link, compare its ID as well.
-This tests the OAuth flow and a real read from the mirror.
+using Things and wait for it to sync. Connect your MCP client and sign in through
+Pocket ID. In ChatGPT web, select the installed plugin in a chat. Check that the
+connection exposes read tools with no write tools. Ask the assistant to find the task
+by its exact title with `things_search_tasks`, then call `things_get_task` with the
+returned `uuid`. Inspect the tool result and compare the title and status with Things.
+If you have the Things link, compare its ID as well. This tests the OAuth flow and a
+real read from the mirror.
 
 ## 7. Backups
 
