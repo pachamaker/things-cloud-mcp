@@ -746,10 +746,14 @@ func editTask(req EditTaskRequest) error {
 	if req.Area != "none" {
 		refs.Area = req.Area
 	}
+	var wasInInbox, hadHeading bool
 	if err := precheck(func(m mirrorLookup) error {
-		if _, err := requireActiveToDo(m, req.UUID); err != nil {
+		task, err := requireActiveToDo(m, req.UUID)
+		if err != nil {
 			return err
 		}
+		wasInInbox = task.Schedule == thingscloud.TaskScheduleInbox
+		hadHeading = len(task.ActionGroupIDs) > 0
 		return checkRefs(m, refs)
 	}); err != nil {
 		return err
@@ -788,7 +792,10 @@ func editTask(req EditTaskRequest) error {
 		u.project(req.ParentTask)
 	} else if req.Project != "" {
 		u.project(req.Project)
-		if req.When == "" {
+		if hadHeading {
+			u.fields["agr"] = []string{}
+		}
+		if req.When == "" && wasInInbox {
 			u.schedule(1, nil, nil)
 		}
 	}

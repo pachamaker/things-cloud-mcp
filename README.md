@@ -252,6 +252,200 @@ before their first write unless the account has the area `MCP E2E SANDBOX`:
 ./tests/test-api.sh            # All REST endpoints (needs ENABLE_REST_API=true; ACCESS_TOKEN=… against an OAuth server)
 ```
 
+### macOS Things app test matrix
+
+The broader Things app test matrix tracks **154 cases**. Recorded results are
+**126 passed, 2 failed, 8 partial, 1 blocked, and 17 not run**. A partial result
+means only part of the expected behavior was verified. ✅ marks a passed case.
+The matrix preserves historical app and sync observations. The current test scope
+is server behavior exposed through REST and MCP. Things Cloud synchronization
+between Things clients is out of scope.
+
+<details>
+<summary>All 154 Things app test cases and recorded results</summary>
+
+| ID | Area | Scenario | Result |
+| --- | --- | --- | --- |
+| DOC-001 | structure | Organize ongoing work | ✅ |
+| DOC-002 | structure | Project handles multiple steps | ✅ |
+| DOC-003 | checklists | Break down one task | ✅ |
+| DOC-004 | checklists | Check step independently | ✅ |
+| DOC-005 | checklists | Project progress feedback | ✅ |
+| DOC-006 | creation | Keyboard creation | ✅ |
+| DOC-007 | creation | Insert after selection | ✅ |
+| DOC-008 | creation | Keyboard project creation | ✅ |
+| DOC-009 | creation | Keyboard checklist creation | ✅ |
+| DOC-010 | creation | Completion command | ✅ |
+| DOC-011 | creation | Cancellation command | ✅ |
+| DOC-012 | creation | Log completed item | ✅ |
+| DOC-013 | creation | Keyboard reorder | ✅ |
+| DOC-014 | clipboard | Paste task batch | ✅ |
+| DOC-015 | clipboard | Paste multiline title | ✅ |
+| DOC-016 | clipboard | Paste checklist batch | ✅ |
+| DOC-017 | clipboard | Normalize pasted bullets | ✅ |
+| DOC-018 | clipboard | Bound clipboard batch | ✅ |
+| DOC-019 | clipboard | Finder link capture | **PARTIAL** — Finder drag did not insert a URL. The actual drop location could not be verified. |
+| DOC-020 | notes | Task notes persistence | ✅ |
+| DOC-021 | notes | Project notes persistence | ✅ |
+| DOC-022 | notes | Notes bullet indentation | ✅ |
+| DOC-023 | notes | Find within note | ✅ |
+| DOC-024 | notes | Replace within note | ✅ |
+| DOC-025 | notes | Titles stay plain | ✅ |
+| DOC-026 | markdown | Inline emphasis | ✅ |
+| DOC-027 | markdown | Attention formatting | ✅ |
+| DOC-028 | markdown | Heading levels | ✅ |
+| DOC-029 | markdown | Quotation and divider | ✅ |
+| DOC-030 | markdown | Code punctuation | ✅ |
+| DOC-031 | markdown | Markdown task statuses | ✅ |
+| DOC-032 | markdown | Markdown reversibility | ✅ |
+| DOC-033 | markdown | Visible link syntax | ✅ |
+| DOC-034 | scheduling | Today assignment | ✅ |
+| DOC-035 | scheduling | Evening assignment | ✅ |
+| DOC-036 | scheduling | Future assignment | ✅ |
+| DOC-037 | scheduling | Deferred assignment | ✅ |
+| DOC-038 | scheduling | Clear schedule | ✅ |
+| DOC-039 | scheduling | Independent deadline | ✅ |
+| DOC-040 | scheduling | Clear deadline | ✅ |
+| DOC-041 | scheduling | Deadline overview | ✅ |
+| DOC-042 | lists | Active overlap | ✅ — The baseline omitted a started Today task from Anytime (SYNC-001). The patched build on an isolated VPS mirror returned the same UUID in Today and Anytime through both REST and MCP. An active Anytime control remained visible. [Fix commit](https://github.com/pachamaker/things-cloud-mcp/commit/5d4db6dde5b3dbc2426168c9d07e777ff37e6bfe). |
+| DOC-043 | lists | Deferred exclusion | ✅ |
+| DOC-044 | lists | Future project hiding | ✅ |
+| DOC-045 | lists | Inbox processing | ✅ |
+| DOC-046 | lists | Daily grouping | ✅ |
+| DOC-047 | lists | Upcoming drag scheduling | **PARTIAL** — On Nov 7, two drag attempts from Nov 11 to Nov 12 left the task under Nov 11 in Upcoming. The VPS mirror still held Nov 11 for the same UUID. A successful drop and its sync remain unverified. |
+| DOC-048 | lists | Logged history | ✅ |
+| DOC-049 | natural dates | Relative start | ✅ |
+| DOC-050 | natural dates | Combined reminder | ✅ |
+| DOC-051 | natural dates | Relative deadline | ✅ |
+| DOC-052 | natural dates | Ordinal date | ✅ |
+| DOC-053 | notifications | Reminder delivery | **PARTIAL** — Things accepted the reminder and the mirror recorded it. Notification Center timed out before delivery could be verified. |
+| DOC-054 | notifications | Reminder snooze | **NOT RUN** — Snooze was not attempted because the reminder delivery could not be observed. |
+| DOC-055 | notifications | Deadline limitation | ✅ |
+| DOC-056 | tags | Create and apply tag | ✅ |
+| DOC-057 | tags | Inherited tag filter | ✅ |
+| DOC-058 | tags | Conjunctive filter | **PARTIAL** — Command-click acted as single selection in both attempts. Modifier delivery and app behavior could not be isolated. |
+| DOC-059 | tags | Global tag search | ✅ |
+| DOC-060 | tags | Remove assignment | ✅ |
+| DOC-061 | tags | Nested tags | ✅ |
+| DOC-062 | tags | Tag ordering | **NOT RUN** — The tag ordering scenario was not executed. The run log gives no reason. |
+| DOC-063 | tags | Tag shortcut toggle | ✅ |
+| DOC-064 | headings | Heading scope | ✅ |
+| DOC-065 | headings | Group selection | ✅ |
+| DOC-066 | headings | Heading move | ✅ |
+| DOC-067 | headings | Heading duplicate | ✅ |
+| DOC-068 | headings | Heading promotion | ✅ |
+| DOC-069 | headings | Heading archive | ✅ |
+| DOC-070 | moving | Batch filing | ✅ |
+| DOC-071 | moving | Heading destination search | ✅ |
+| DOC-072 | moving | Create destination while moving | ✅ |
+| DOC-073 | moving | Remove parent | ✅ |
+| DOC-074 | moving | Area movement | ✅ |
+| DOC-075 | moving | Checklist reorder | ✅ |
+| DOC-076 | conversion | Checklist promotion | ✅ |
+| DOC-077 | templates | Project duplication | ✅ |
+| DOC-078 | templates | Task duplication | ✅ |
+| DOC-079 | templates | Dates do not shift | ✅ |
+| DOC-080 | repeat | Periodic repeat | ✅ |
+| DOC-081 | repeat | After completion repeat | ✅ — After the Nov 7 completion, the Nov 8 instance had the same UUID, start date, and template link in the Things for Mac database and the VPS mirror. |
+| DOC-082 | repeat | Selected weekdays | ✅ |
+| DOC-083 | repeat | Repeat project | ✅ |
+| DOC-084 | repeat | Template edits propagate | ✅ |
+| DOC-085 | repeat | Pause and resume | ✅ — No instance appeared while paused on Nov 8. After Resume, Things for Mac generated a Nov 8 instance whose UUID, start date, and template link matched the VPS mirror. |
+| DOC-086 | repeat | Stop repeating | ✅ |
+| DOC-087 | repeat | Deadline lead time | ✅ |
+| DOC-088 | search | Immediate title search | ✅ |
+| DOC-089 | search | Extended content search | ✅ |
+| DOC-090 | search | Checklist search | ✅ |
+| DOC-091 | search | Logged search | ✅ |
+| DOC-092 | search | Special project views | ✅ |
+| DOC-093 | trash | Delete and recover | ✅ |
+| DOC-094 | trash | Delete undo | ✅ |
+| DOC-095 | windows | Separate list windows | ✅ |
+| DOC-096 | windows | Cross-window move | ✅ |
+| DOC-097 | windows | Parent window | **PARTIAL** — The project opened, but a separate window was not verified. Computer Use could not perform the documented Option-click. |
+| DOC-098 | quick entry | Global capture | **NOT RUN** — The global shortcut did not produce an observed Quick Entry window. Task creation was not reached. |
+| DOC-099 | quick entry | Discard capture | ✅ |
+| DOC-100 | quick entry | Save capture keyboard | ✅ |
+| DOC-101 | quick entry | Autofill source | **NOT RUN** — The Safari Autofill scenario was not executed. The run log gives no reason. |
+| DOC-102 | calendar | Local event display | **FAIL** — The test iCloud event was missing from Upcoming after reselecting the calendar and restarting Things. The cause was not established. |
+| DOC-103 | calendar | Calendar selection | ✅ |
+| DOC-104 | calendar | Calendar local scope | **NOT RUN** — The second Things client was not observed, so per-device calendar behavior could not be checked. |
+| DOC-105 | widgets | Widget list and tag | **NOT RUN** — Computer Use could not open the widget gallery or attach to Notification Center. |
+| DOC-106 | widgets | Widget completion | **NOT RUN** — Computer Use could not reach an interactive widget to complete a task. |
+| DOC-107 | widgets | Widget capture destination | **NOT RUN** — Computer Use could not reach the widget controls to test the capture destination. |
+| DOC-108 | shortcuts | Shortcut creation | ✅ |
+| DOC-109 | shortcuts | Shortcut query | ✅ |
+| DOC-110 | shortcuts | Shortcut edit | ✅ |
+| DOC-111 | url scheme | URL creation | ✅ |
+| DOC-112 | url scheme | URL project creation | ✅ |
+| DOC-113 | url scheme | URL authenticated edit | **NOT RUN** — The authenticated URL edit was not executed. The run log gives no reason. |
+| DOC-114 | url scheme | URL navigation | ✅ |
+| DOC-115 | applescript | Script creation | ✅ |
+| DOC-116 | applescript | Script deadline | ✅ |
+| DOC-117 | applescript | Script status | ✅ |
+| DOC-118 | share | Plain text export | ✅ |
+| DOC-119 | share | List share limitation | ✅ |
+| DOC-120 | mail | Email capture | **NOT RUN** — No Mail to Things capture attempt was recorded. |
+| DOC-121 | mail | Email constraints | **NOT RUN** — No Mail to Things attempt covering attachment and body limits was recorded. |
+| DOC-122 | siri | Voice creation | **NOT RUN** — No Siri task creation attempt was recorded. |
+| DOC-123 | siri | Voice schedule | **NOT RUN** — No Siri scheduled task creation attempt was recorded. |
+| DOC-124 | spotlight | Spotlight creation | **NOT RUN** — Computer Use timed out while attaching to Spotlight. The Create To-Do action was not reached. |
+| DOC-125 | metadata | Creation timestamp | ✅ |
+| DOC-126 | cloud | Cross-device propagation | **NOT RUN** — Out of scope. The current test run skips Things Cloud synchronization between clients. |
+| DOC-127 | cloud | Offline availability | **BLOCKED** — The offline test required an authorized isolated environment to preserve the current network connection. |
+| REG-001 | recurrence | Early completion | ✅ |
+| REG-002 | recurrence | Rescheduling choices | ✅ |
+| REG-004 | recurrence | Relative-repeat rescheduling | ✅ |
+| REG-005 | recurrence | Sync of an early project copy | ✅ — Create Next Copy in Things for Mac produced a distinct project UUID and two distinct child UUIDs. The VPS mirror matched the instance, template link, and both child links. The earlier edit-from-preview attempt changed a template child and generated no copy. |
+| REG-007 | recurrence | Batch rule controls | **PARTIAL** — On Nov 7, batch Pause and Resume changed both selected rules in Things. The unselected control remained Paused. Batch Stop and its VPS effect remain unverified. |
+| REG-008 | layout | Expanded-item layout | ✅ |
+| REG-009 | checklist | Empty checklist editing | ✅ |
+| REG-010 | checklist | Whitespace paste | **FAIL** — Pasting one nonblank line with surrounding line breaks created three empty checklist rows. It reproduced after restarting Things 3.24.1 (APP-001). |
+| REG-011 | checklist | Checklist additive selection | ✅ |
+| REG-012 | tags | Tag suggestion order | **NOT RUN** — The tag suggestion order scenario was not executed. The run log gives no reason. |
+| REG-013 | deadline | Deadline color | ✅ |
+| REG-014 | search | Search status styling | ✅ |
+| REG-015 | search | Search highlight reset | ✅ |
+| REG-016 | checklist | Checklist cut/delete | ✅ |
+| REG-018 | quick-entry | Capture checklist deletion | ✅ |
+| DOC-128 | lifecycle | Reopen completed task | ✅ |
+| DOC-129 | lifecycle | Reopen canceled task | ✅ |
+| DOC-130 | lifecycle | Reopen project | ✅ |
+| DOC-131 | lifecycle | Rename project | ✅ |
+| DOC-132 | lifecycle | Rename area | ✅ |
+| DOC-133 | lifecycle | Delete project tree | ✅ |
+| DOC-134 | lifecycle | Delete area tree | ✅ — Area deletion synced and the project entered Trash. The baseline still returned its child in REST Anytime, MCP Anytime, and MCP search. The patched build on an isolated VPS mirror excluded the same child UUID from all three, while an active control remained visible. [Fix commit](https://github.com/pachamaker/things-cloud-mcp/commit/4cd34e36bd433ff7d28ebd43bcbe24ddd29b8117). |
+| DOC-135 | lifecycle | Rename tag | ✅ |
+| DOC-136 | lifecycle | Delete tag | **NOT RUN** — The disposable tag deletion scenario was not executed. The run log gives no reason. |
+| DOC-137 | lifecycle | Project sidebar order | **PARTIAL** — The sidebar drag changed neither the visible order nor the server indices. A successful move was not established. |
+| DOC-138 | lifecycle | Area sidebar order | **PARTIAL** — The sidebar order could not be verified against the mirror because the baseline area indices tied. |
+| DOC-139 | lifecycle | Checklist reopen | ✅ |
+
+</details>
+
+### macOS sandbox results (2026-11-07)
+
+On a dedicated Things Cloud sandbox account, the following scenarios passed in both
+directions between Things on Mac and the MCP server:
+
+| Scenario | Result |
+| --- | --- |
+| Create and edit a to-do | ✅ |
+| Move a to-do between projects, including from under a heading | ✅ with the fixes in [commit `9c2dec7`](https://github.com/pachamaker/things-cloud-mcp/commit/9c2dec745f604b9be60e9256c3f7528bc536f11b) |
+| Complete and reopen a to-do | ✅ |
+| Move a to-do to Trash and restore it | ✅ |
+
+For each scenario, we compared the task UUID, affected fields, and a control task across
+MCP responses, the VPS mirror, and Things on Mac. After the tested restarts, Things opened
+and the checked tasks still appeared once. Moving a scheduled task without specifying
+`when` preserved its start date. Moving a task out from under a heading cleared the old
+heading, and a separate check confirmed that the task's tag and three checklist items
+survived the move and restart.
+
+Search excluded trashed tasks. A direct lookup by UUID could still return `open`
+without a Trash flag. The run covered macOS on a sandbox account. iOS, recurring-task
+writes, and production use remain outside this run's coverage.
+
 ## Local development
 
 ```bash
