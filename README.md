@@ -255,7 +255,7 @@ before their first write unless the account has the area `MCP E2E SANDBOX`:
 ### macOS Things app test matrix
 
 The broader Things app test matrix tracks **154 cases**. Recorded results are
-**121 passed, 4 failed, 10 partial, 1 blocked, and 18 not run**. A partial result
+**122 passed, 4 failed, 9 partial, 1 blocked, and 18 not run**. A partial result
 means only part of the expected behavior was verified. ✅ marks a passed case.
 The four failed cases below have no confirmed fix commit in the test record. The matrix includes
 app-only checks and checks that also observe sync. The separate MCP sandbox
@@ -346,11 +346,11 @@ results below cover the smaller set of critical bidirectional scenarios.
 | DOC-078 | templates | Task duplication | ✅ |
 | DOC-079 | templates | Dates do not shift | ✅ |
 | DOC-080 | repeat | Periodic repeat | ✅ |
-| DOC-081 | repeat | After completion repeat | **PARTIAL** — On Nov 7, Upcoming showed the Nov 8 preview. The VPS mirror held the template and the completed occurrence. Verification of a new instance UUID is pending the Nov 8 due date. |
+| DOC-081 | repeat | After completion repeat | ✅ — After the Nov 7 completion, the Nov 8 instance had the same UUID, start date, and template link in the Things for Mac database and the VPS mirror. |
 | DOC-082 | repeat | Selected weekdays | ✅ |
 | DOC-083 | repeat | Repeat project | ✅ |
 | DOC-084 | repeat | Template edits propagate | ✅ |
-| DOC-085 | repeat | Pause and resume | **PARTIAL** — On Nov 7, the rule still showed Paused and the VPS mirror had no new occurrence. Suppression across the Nov 8 due date and generation after Resume remain unverified. |
+| DOC-085 | repeat | Pause and resume | **PARTIAL** — After the Nov 8 due date, the rule was still paused in the Things for Mac database and neither it nor the VPS mirror contained a new occurrence. The Mac was locked during the UI check, so Resume and subsequent generation remain unverified. |
 | DOC-086 | repeat | Stop repeating | ✅ |
 | DOC-087 | repeat | Deadline lead time | ✅ |
 | DOC-088 | search | Immediate title search | ✅ |
