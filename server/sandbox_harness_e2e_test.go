@@ -18,6 +18,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -566,10 +567,18 @@ func viewName(v listView) string {
 	return fmt.Sprintf("view %d", v)
 }
 
-func (h *sandboxHarness) assertOnlyIn(t *testing.T, uuid, view string) {
+func expectedPlacementViews(view string) []string {
+	if view == "today" {
+		return []string{"today", "anytime"}
+	}
+	return []string{view}
+}
+
+func (h *sandboxHarness) assertPlacementViews(t *testing.T, uuid, view string) {
 	t.Helper()
-	if got := h.viewsOf(t, uuid); len(got) != 1 || got[0] != view {
-		t.Errorf("%s is listed in %v, want only %s", uuid, got, view)
+	want := expectedPlacementViews(view)
+	if got := h.viewsOf(t, uuid); !slices.Equal(got, want) {
+		t.Errorf("%s is listed in %v, want %v", uuid, got, want)
 	}
 }
 

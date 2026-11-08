@@ -514,13 +514,11 @@ func serverViews(mirror []things.Task, today civil.Date) (map[string][]string, m
 }
 
 // appViewsAsServer maps the app's views onto the server's list tools: there is
-// no Trash tool, and things_list_anytime leaves out what Today shows, while
-// the app's Anytime (and things.py's) includes it.
+// no Trash tool.
 func appViewsAsServer(views []string) []string {
-	today := slices.Contains(views, cvToday)
 	var out []string
 	for _, v := range views {
-		if v == cvTrash || (v == cvAnytime && today) {
+		if v == cvTrash {
 			continue
 		}
 		out = append(out, v)

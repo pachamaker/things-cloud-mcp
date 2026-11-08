@@ -55,7 +55,7 @@ func inEvening(t *things.Task, today civil.Date) bool {
 	return t.StartBucket == eveningBucket && inToday(t, today)
 }
 
-// inView reports view membership. Today and Anytime partition st=1; an Inbox or
+// inView reports view membership. Today can overlap Anytime; an Inbox or
 // Someday to-do pulled into Today by its deadline stays in its own list too,
 // as in Things.
 func inView(t *things.Task, view listView, today civil.Date) bool {
@@ -65,7 +65,7 @@ func inView(t *things.Task, view listView, today civil.Date) bool {
 	case viewToday:
 		return inToday(t, today)
 	case viewAnytime:
-		return t.Schedule == things.TaskScheduleAnytime && !inToday(t, today)
+		return t.Schedule == things.TaskScheduleAnytime
 	case viewSomeday:
 		return t.Schedule == things.TaskScheduleSomeday && t.ScheduledDate == nil
 	case viewUpcoming:

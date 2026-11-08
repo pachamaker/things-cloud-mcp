@@ -34,7 +34,7 @@ func viewsOf(task *things.Task, today civil.Date) []string {
 // TestViews_KI02_ClassificationMatrix pins view membership for every case of the
 // KI-02 table, on a fixed calendar day. The model is
 // docs/protocol/things-cloud.md §5.1 (things.py today/upcoming/someday).
-// Anytime stays the complement of Today within st=1. Dismissed deadlines, This
+// Started to-dos stay in Anytime when they appear in Today. Dismissed deadlines, This
 // Evening and tir have tests of their own below.
 func TestViews_KI02_ClassificationMatrix(t *testing.T) {
 	t.Parallel()
@@ -51,8 +51,8 @@ func TestViews_KI02_ClassificationMatrix(t *testing.T) {
 		want []string
 	}{
 		// st=1 with a start date
-		{"st1-start-today", things.Task{Schedule: things.TaskScheduleAnytime, ScheduledDate: &day}, []string{"today"}},
-		{"st1-start-yesterday", things.Task{Schedule: things.TaskScheduleAnytime, ScheduledDate: &yesterday}, []string{"today"}},
+		{"st1-start-today", things.Task{Schedule: things.TaskScheduleAnytime, ScheduledDate: &day}, []string{"anytime", "today"}},
+		{"st1-start-yesterday", things.Task{Schedule: things.TaskScheduleAnytime, ScheduledDate: &yesterday}, []string{"anytime", "today"}},
 		{"st1-no-dates", things.Task{Schedule: things.TaskScheduleAnytime}, []string{"anytime"}},
 
 		// st=2: start date arrived but not yet confirmed by a Things client
@@ -66,12 +66,12 @@ func TestViews_KI02_ClassificationMatrix(t *testing.T) {
 		{"st0-start-yesterday", things.Task{Schedule: things.TaskScheduleInbox, ScheduledDate: &yesterday}, []string{"inbox"}},
 
 		// Deadlines pull only items without a start date into Today
-		{"st1-deadline-today", things.Task{Schedule: things.TaskScheduleAnytime, DeadlineDate: &day}, []string{"today"}},
+		{"st1-deadline-today", things.Task{Schedule: things.TaskScheduleAnytime, DeadlineDate: &day}, []string{"anytime", "today"}},
 		{"st0-deadline-yesterday", things.Task{Schedule: things.TaskScheduleInbox, DeadlineDate: &yesterday}, []string{"inbox", "today"}},
 		{"st2-deadline-today", things.Task{Schedule: things.TaskScheduleSomeday, DeadlineDate: &day}, []string{"today", "someday"}},
 		{"st1-deadline-tomorrow", things.Task{Schedule: things.TaskScheduleAnytime, DeadlineDate: &tomorrow}, []string{"anytime"}},
 		{"st2-start-tomorrow-deadline-yesterday", things.Task{Schedule: things.TaskScheduleSomeday, ScheduledDate: &tomorrow, DeadlineDate: &yesterday}, []string{"upcoming"}},
-		{"st1-start-and-deadline-yesterday", things.Task{Schedule: things.TaskScheduleAnytime, ScheduledDate: &yesterday, DeadlineDate: &yesterday}, []string{"today"}},
+		{"st1-start-and-deadline-yesterday", things.Task{Schedule: things.TaskScheduleAnytime, ScheduledDate: &yesterday, DeadlineDate: &yesterday}, []string{"anytime", "today"}},
 		{"st1-deadline-never", things.Task{Schedule: things.TaskScheduleAnytime, DeadlineDate: &never}, []string{"anytime"}},
 	}
 
@@ -108,9 +108,9 @@ func TestViews_KI02_DismissedDeadline(t *testing.T) {
 		{"st1-deadline-today-dismissed", things.Task{Schedule: things.TaskScheduleAnytime, DeadlineDate: &day, DeadlineSuppressionDate: &dismissed}, []string{"anytime"}},
 		{"st0-deadline-yesterday-dismissed", things.Task{Schedule: things.TaskScheduleInbox, DeadlineDate: &yesterday, DeadlineSuppressionDate: &dismissed}, []string{"inbox"}},
 		{"st2-deadline-yesterday-dismissed", things.Task{Schedule: things.TaskScheduleSomeday, DeadlineDate: &yesterday, DeadlineSuppressionDate: &dismissed}, []string{"someday"}},
-		{"st1-start-today-deadline-dismissed", things.Task{Schedule: things.TaskScheduleAnytime, ScheduledDate: &day, DeadlineDate: &yesterday, DeadlineSuppressionDate: &dismissed}, []string{"today"}},
+		{"st1-start-today-deadline-dismissed", things.Task{Schedule: things.TaskScheduleAnytime, ScheduledDate: &day, DeadlineDate: &yesterday, DeadlineSuppressionDate: &dismissed}, []string{"anytime", "today"}},
 		{"st2-start-yesterday-deadline-dismissed", things.Task{Schedule: things.TaskScheduleSomeday, ScheduledDate: &yesterday, DeadlineDate: &yesterday, DeadlineSuppressionDate: &dismissed}, []string{"today"}},
-		{"st1-deadline-yesterday-not-dismissed", things.Task{Schedule: things.TaskScheduleAnytime, DeadlineDate: &yesterday}, []string{"today"}},
+		{"st1-deadline-yesterday-not-dismissed", things.Task{Schedule: things.TaskScheduleAnytime, DeadlineDate: &yesterday}, []string{"anytime", "today"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -139,11 +139,11 @@ func TestViews_KI02_ThisEvening(t *testing.T) {
 		views   []string
 		evening bool
 	}{
-		{"st1-start-today-evening", things.Task{Schedule: things.TaskScheduleAnytime, ScheduledDate: &day, StartBucket: 1}, []string{"today"}, true},
-		{"st1-start-today-main", things.Task{Schedule: things.TaskScheduleAnytime, ScheduledDate: &day}, []string{"today"}, false},
-		{"st1-start-yesterday-evening", things.Task{Schedule: things.TaskScheduleAnytime, ScheduledDate: &yesterday, StartBucket: 1}, []string{"today"}, true},
+		{"st1-start-today-evening", things.Task{Schedule: things.TaskScheduleAnytime, ScheduledDate: &day, StartBucket: 1}, []string{"anytime", "today"}, true},
+		{"st1-start-today-main", things.Task{Schedule: things.TaskScheduleAnytime, ScheduledDate: &day}, []string{"anytime", "today"}, false},
+		{"st1-start-yesterday-evening", things.Task{Schedule: things.TaskScheduleAnytime, ScheduledDate: &yesterday, StartBucket: 1}, []string{"anytime", "today"}, true},
 		{"st2-start-today-evening", things.Task{Schedule: things.TaskScheduleSomeday, ScheduledDate: &day, StartBucket: 1}, []string{"today"}, true},
-		{"st1-deadline-today-evening", things.Task{Schedule: things.TaskScheduleAnytime, DeadlineDate: &day, StartBucket: 1}, []string{"today"}, true},
+		{"st1-deadline-today-evening", things.Task{Schedule: things.TaskScheduleAnytime, DeadlineDate: &day, StartBucket: 1}, []string{"anytime", "today"}, true},
 		{"st1-no-dates-evening", things.Task{Schedule: things.TaskScheduleAnytime, StartBucket: 1}, []string{"anytime"}, false},
 		{"st2-start-tomorrow-evening", things.Task{Schedule: things.TaskScheduleSomeday, ScheduledDate: &tomorrow, StartBucket: 1}, []string{"upcoming"}, false},
 		{"st0-evening", things.Task{Schedule: things.TaskScheduleInbox, StartBucket: 1}, []string{"inbox"}, false},
@@ -183,7 +183,7 @@ func TestViews_KI02_TodayIndexReferenceDate(t *testing.T) {
 		{"st2-no-start-tir-tomorrow", things.Task{Schedule: things.TaskScheduleSomeday, TodayIndexReferenceDate: &tomorrow}, []string{"someday"}},
 		{"st2-no-start-tir-today", things.Task{Schedule: things.TaskScheduleSomeday, TodayIndexReferenceDate: &day}, []string{"someday"}},
 		{"st2-start-tomorrow-tir-today", things.Task{Schedule: things.TaskScheduleSomeday, ScheduledDate: &tomorrow, TodayIndexReferenceDate: &day}, []string{"upcoming"}},
-		{"st1-start-yesterday-tir-yesterday", things.Task{Schedule: things.TaskScheduleAnytime, ScheduledDate: &yesterday, TodayIndexReferenceDate: &yesterday}, []string{"today"}},
+		{"st1-start-yesterday-tir-yesterday", things.Task{Schedule: things.TaskScheduleAnytime, ScheduledDate: &yesterday, TodayIndexReferenceDate: &yesterday}, []string{"anytime", "today"}},
 		{"st0-no-start-tir-today", things.Task{Schedule: things.TaskScheduleInbox, TodayIndexReferenceDate: &day}, []string{"inbox"}},
 	}
 	for _, tc := range cases {

@@ -178,11 +178,11 @@ func TestViews_KI03_OwnerDay(t *testing.T) {
 		anytime        []string
 	}{
 		{"Moscow 00:30", moscowAfterMidnight, "Europe/Moscow",
-			[]string{"started-oct11", "deferred-oct11", "deadline-oct11", "started-oct10"}, nil, nil},
+			[]string{"started-oct11", "deferred-oct11", "deadline-oct11", "started-oct10"}, nil, []string{"started-oct11", "deadline-oct11", "started-oct10"}},
 		{"UTC day at the same instant", moscowAfterMidnight, "UTC",
-			[]string{"started-oct10"}, []string{"deferred-oct11"}, []string{"started-oct11", "deadline-oct11"}},
+			[]string{"started-oct10"}, []string{"deferred-oct11"}, []string{"started-oct11", "deadline-oct11", "started-oct10"}},
 		{"Los Angeles 20:00", laEvening, "America/Los_Angeles",
-			[]string{"started-oct10"}, []string{"deferred-oct11"}, []string{"started-oct11", "deadline-oct11"}},
+			[]string{"started-oct10"}, []string{"deferred-oct11"}, []string{"started-oct11", "deadline-oct11", "started-oct10"}},
 	}
 	uuids := func(ts []*things.Task) []string {
 		var out []string
