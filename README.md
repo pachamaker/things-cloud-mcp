@@ -255,7 +255,7 @@ before their first write unless the account has the area `MCP E2E SANDBOX`:
 ### macOS Things app test matrix
 
 The broader Things app test matrix tracks **154 cases**. Recorded results are
-**125 passed, 3 failed, 8 partial, 1 blocked, and 17 not run**. A partial result
+**126 passed, 2 failed, 8 partial, 1 blocked, and 17 not run**. A partial result
 means only part of the expected behavior was verified. ✅ marks a passed case.
 The four failed cases below have no confirmed fix commit in the test record. The matrix includes
 app-only checks and checks that also observe sync. The separate MCP sandbox
@@ -396,7 +396,7 @@ results below cover the smaller set of critical bidirectional scenarios.
 | REG-001 | recurrence | Early completion | ✅ |
 | REG-002 | recurrence | Rescheduling choices | ✅ |
 | REG-004 | recurrence | Relative-repeat rescheduling | ✅ |
-| REG-005 | recurrence | Early project generation | **FAIL** — On Nov 7, editing a child from the Nov 10 Upcoming preview again changed the existing template child. No prompt was observed, and the VPS mirror showed the renamed child under the same template UUID with no new project instance. |
+| REG-005 | recurrence | Sync of an early project copy | ✅ — Create Next Copy in Things for Mac produced a distinct project UUID and two distinct child UUIDs. The VPS mirror matched the instance, template link, and both child links. The earlier edit-from-preview attempt changed a template child and generated no copy. |
 | REG-007 | recurrence | Batch rule controls | **PARTIAL** — On Nov 7, batch Pause and Resume changed both selected rules in Things. The unselected control remained Paused. Batch Stop and its VPS effect remain unverified. |
 | REG-008 | layout | Expanded-item layout | ✅ |
 | REG-009 | checklist | Empty checklist editing | ✅ |
