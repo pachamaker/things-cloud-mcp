@@ -2,7 +2,7 @@
 
 Register entry: **KI-01** in `docs/known-issues.md`; decision: ADR-0004.
 
-**Status:** any `repeat` value is rejected with an error on `things_create_task` and
+**Status:** any non-empty `repeat` value is rejected with an error on `things_create_task` and
 `things_edit_task` (both MCP and REST), **including `repeat: "none"`**. Clearing a rule still
 writes `rr: null` onto an item that may be a repeating template or instance, which is itself a
 recurrence write. `repeat` is no longer part of the MCP tool schemas; the handlers still read it
@@ -125,14 +125,12 @@ re-add `repeat` to the tool schemas. Re-enabling also needs the mirror to store 
 the server can refuse edits to templates and instances (KI-01 fix direction); the SDK fork does,
 and the server refuses those edits since [#34](https://github.com/pachamaker/things-cloud-mcp/pull/34).
 
-## Read-path gap (separate, lower-risk, unrelated to the crash)
+## Historical read-path gap (resolved in the SDK fork)
 
-Independent of the write-path question above: this SDK's local sync cache currently drops the
+Independent of the write-path question above: the original SDK's local sync cache dropped the
 recurrence rule on read. `TaskActionItemPayload.Repeater` (`types.go:230`) is correctly parsed off
 the wire but never copied onto the domain `things.Task` struct in `applyTaskPayload`
 (`sync/process.go:356-479`), and the `sync` package's `tasks.recurrence_rule` column
-(`sync/schema.go:55`) is always written `NULL` (`sync/store.go:189`). This means a repeating task
-synced down from a real account (created natively in Things, or via `things_create_task` before this
-hotfix) loses its rule in this server's local cache — already flagged independently in
-`docs/2026-02-23-api-capabilities-review.md`. This is a safe, well-scoped fix that doesn't require a
-live account to build or test, and is unrelated to whether `repeat` is safe to re-enable for writes.
+(`sync/schema.go:55`) is always written `NULL` (`sync/store.go:189`). This older behavior was documented in `docs/2026-02-23-api-capabilities-review.md`.
+The pinned SDK fork now retains the rule and template link. The server uses them to label
+instances and block unsafe writes. Recurrence writes remain disabled.

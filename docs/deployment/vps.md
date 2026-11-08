@@ -5,9 +5,9 @@ the Fly.io guide in [`../installation.md`](../installation.md).
 
 > **Status.** `things-mcp` is an OAuth 2.1 resource server (KI-07): every data route needs
 > an access token for the owner, and the server does not start without the OAuth settings
-> below. The full sign-in through Pocket ID from Claude and ChatGPT has **not been verified
-> end to end yet** (roadmap Phase 2): do the first connection against a sandbox Things
-> account and check §6.3.
+> below. ChatGPT web sign-in, task lookup and ordinary task creation were verified
+> with v2.0.1 and Pocket ID v2.19.2. Claude and mobile flows are outside that check.
+> Do the first connection against a sandbox Things account and check §6.3.
 
 ## 1. Topology
 
@@ -234,9 +234,12 @@ RFC 8414 metadata). Menu names below are from v2.18.
      (CIMD) works only with the API's **Allow all metadata document clients** switch, which
      grants the API to every CIMD client; if you use it, set `OAUTH_ALLOWED_CLIENTS` to
      Claude's client id.
-   - **ChatGPT:** a confidential client with the exact callback URL shown in the plugin's
-     settings. Grant only `things.read` until you have checked that your plan allows
-     write tools.
+   - **ChatGPT:** a confidential client with PKCE enabled and **Requires Pushed
+     Authorization Requests** disabled. Use the exact callback shown in ChatGPT. With
+     Pocket ID v2.19.2, the verified callback was
+     `https://chatgpt.com/connector_platform_oauth_redirect`. Start with `things.read`.
+     After granting `things.write` and enabling writes on the server, reauthorize the
+     plugin to obtain a token with the new scope.
 4. Put your user id (the `sub` claim of your tokens) into `OAUTH_ALLOWED_SUBJECT`, and
    optionally the client ids into `OAUTH_ALLOWED_CLIENTS`; restart `things-mcp`.
 
@@ -245,6 +248,12 @@ algorithms only), header `typ` `at+jwt`, `iss` = `OAUTH_ISSUER`, `aud` containin
 `MCP_PUBLIC_URL`, not expired (one minute leeway), `sub` = `OAUTH_ALLOWED_SUBJECT`, and the
 scope `things.read`. Write tools also need `things.write` and `ENABLE_WRITES=true`: a
 read-only token does not even see them.
+
+If Cloudflare Access protects the hostnames, the MCP endpoint and its protected-resource
+metadata must reach the MCP server without a Cloudflare browser session. OAuth discovery,
+JWKS and the token endpoint must likewise be reachable by the client. Keep Pocket ID admin
+and initial setup routes protected. Before connecting, verify that unauthenticated MCP
+requests get a Bearer challenge (`401`), and that metadata returns `200`.
 
 ## 6. Connect the assistants
 
