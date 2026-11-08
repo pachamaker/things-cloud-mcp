@@ -19,8 +19,10 @@ Built on a reverse-engineered, unofficial SDK — there is no official API docum
 > **Authentication.** Every data route requires an OAuth 2.1 access token issued to you by
 > your own authorization server (Pocket ID, see [`docs/deployment/vps.md`](docs/deployment/vps.md));
 > without OAuth settings the server requires explicit local-only mode on `127.0.0.1`.
-> ChatGPT web sign-in, task lookup and ordinary task creation were verified on a personal
-> Things Cloud account with Pocket ID. Claude and mobile flows are outside that verification.
+> ChatGPT web sign-in, task lookup, and ordinary Inbox creation were verified with MCP
+> v2.0.1, Pocket ID v2.19.2, Nginx, and Cloudflare on a VPS. The
+> [deployment guide](docs/deployment/vps.md) distinguishes that setup from the Caddy
+> reference configuration.
 
 ## What it does
 
