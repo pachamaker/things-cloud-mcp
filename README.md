@@ -350,7 +350,7 @@ results below cover the smaller set of critical bidirectional scenarios.
 | DOC-082 | repeat | Selected weekdays | ✅ |
 | DOC-083 | repeat | Repeat project | ✅ |
 | DOC-084 | repeat | Template edits propagate | ✅ |
-| DOC-085 | repeat | Pause and resume | **PARTIAL** — After the Nov 8 due date, the rule was still paused in the Things for Mac database and neither it nor the VPS mirror contained a new occurrence. The Mac was locked during the UI check, so Resume and subsequent generation remain unverified. |
+| DOC-085 | repeat | Pause and resume | **PARTIAL** — No instance appeared while the rule was paused on Nov 8. Resume in Things for Mac cleared the pause and generated a Nov 8 instance linked to the same template. The instance UUID was still missing from the VPS mirror at the last sync check. |
 | DOC-086 | repeat | Stop repeating | ✅ |
 | DOC-087 | repeat | Deadline lead time | ✅ |
 | DOC-088 | search | Immediate title search | ✅ |
