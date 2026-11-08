@@ -151,7 +151,7 @@ func TestSandboxE2E(t *testing.T) {
 		}
 		inbox := h.create(t, "things_create_task", map[string]any{"title": title("inbox to project")})
 		h.act(t, "things_edit_task", map[string]any{"uuid": inbox, "project": id["project"]}, "updated")
-		h.assertOnlyIn(t, inbox, "anytime")
+		h.assertPlacementViews(t, inbox, "anytime")
 		if got.ProjectID != id["project"] {
 			t.Errorf("project_id = %q, want %q", got.ProjectID, id["project"])
 		}
