@@ -460,6 +460,29 @@ export THINGS_TIMEZONE=Europe/Moscow   # owner's IANA zone; "today" is the UTC d
 go test -race ./...
 ```
 
+## What changed in this fork
+
+This fork started from the archived [mattydsmith/things-cloud-mcp](https://github.com/mattydsmith/things-cloud-mcp/tree/3164e8a5e09423ff7b1a77db160c15ff59150bf5). The comparison below covers [v2.0.1](https://github.com/pachamaker/things-cloud-mcp/tree/v2.0.1).
+
+| Area | Original MCP | This fork |
+| --- | --- | --- |
+| Remote access | Fly.io setup with a shared API key option | VPS deployment with owner-scoped OAuth for MCP and optional REST. Writes and REST are off by default. ChatGPT web sign-in, task lookup, and ordinary Inbox creation were verified with Pocket ID. |
+| Task views | The older server and embedded SDK supplied the list logic | Today uses the owner's time zone, labels This Evening, and accounts for dismissed deadlines. Today and Anytime can both contain an active task where Things does. Project reads include to-dos under headings. |
+| Write safety | Create and edit exposed a `repeat` argument | Writes validate the target and references against a fresh mirror. Existing series can be read. Creating or changing recurrence and writing to its templates or instances are blocked. |
+| Sync and deployment | A copy of the SDK was embedded in the repository | The MCP server uses a pinned Go module. It serializes sync operations, backs off on rate limits, and rebuilds the mirror after a cloud history reset. Tag builds publish Linux amd64 and arm64 images to GHCR. |
+
+### SDK changes used by this release
+
+The move to [arthursoares/things-cloud-sdk v0.6.0](https://github.com/arthursoares/things-cloud-sdk/tree/v0.6.0) brought in support for reading `Task7` and replaying older mirrors. Those improvements came from upstream. The release pins [our SDK fork at `4d63f48`](https://github.com/pachamaker/things-cloud-sdk/commit/4d63f48f49dc) through a Go module replacement. It adds three fixes on top of v0.6.0:
+
+| SDK change | What it enables |
+| --- | --- |
+| Persist recurrence rule and template link (`rr`, `rt`) | The MCP can identify templates and instances, hide templates from lists, and block writes to series. [Upstream PR #40](https://github.com/arthursoares/things-cloud-sdk/pull/40) |
+| Persist start bucket, deadline suppression, and Today reference (`sb`, `dds`, `tir`) | The MCP can separate This Evening, honor dismissed deadlines, and classify Today using the data saved by Things. [Upstream PR #41](https://github.com/arthursoares/things-cloud-sdk/pull/41) |
+| Handle malformed deletion records without stalling sync | Apply deletions with a valid target. If the target is missing or invalid, record the skipped deletion and advance the sync cursor. Invalid task payloads still stop sync. [Upstream PR #42](https://github.com/arthursoares/things-cloud-sdk/pull/42) |
+
+The three fixes ship in the pinned fork. The upstream PRs were open when checked on 2026-11-09.
+
 ## Credits
 
 Built on top of [arthursoares/things-cloud-sdk](https://github.com/arthursoares/things-cloud-sdk), which reverse-engineered the Things Cloud sync protocol. Since ADR-0001 the server uses it as a pinned Go dependency (`go.mod`) instead of an embedded copy.
