@@ -1,6 +1,6 @@
 # Things Cloud
 
-A Go server and SDK for the [Things 3](https://culturedcode.com/things/) cloud API. Gives [Claude](https://claude.ai) (and other MCP-compatible AI assistants) full read/write access to your task manager.
+A Go server and SDK for the [Things 3](https://culturedcode.com/things/) cloud API. Gives [Claude](https://claude.ai) (and other MCP-compatible AI assistants) read access and optional writes for supported operations.
 
 Built on a reverse-engineered, unofficial SDK — there is no official API documentation from Cultured Code.
 
@@ -18,8 +18,9 @@ Built on a reverse-engineered, unofficial SDK — there is no official API docum
 >
 > **Authentication.** Every data route requires an OAuth 2.1 access token issued to you by
 > your own authorization server (Pocket ID, see [`docs/deployment/vps.md`](docs/deployment/vps.md));
-> without OAuth settings the server only starts in local-only mode on `127.0.0.1`. Sign-in
-> from Claude and ChatGPT through Pocket ID has not been verified end to end yet.
+> without OAuth settings the server requires explicit local-only mode on `127.0.0.1`.
+> ChatGPT web sign-in, task lookup and ordinary task creation were verified on a personal
+> Things Cloud account with Pocket ID. Claude and mobile flows are outside that verification.
 
 ## What it does
 
@@ -28,7 +29,7 @@ The server syncs your Things Cloud data into a local SQLite database and exposes
 - **MCP Endpoint** (`/mcp`) — [Model Context Protocol](https://modelcontextprotocol.io/) for AI assistants like Claude
 - **REST API** (`/api/*`) — off by default, same OAuth tokens, for scripts and apps
 
-Changes you make in the Things app show up immediately. Tasks Claude creates appear in Things within seconds. No restart required.
+MCP reads refresh the local mirror from Things Cloud, subject to sync throttling. Supported writes go through Things Cloud and appear in Things after the app syncs.
 The server performs an initial sync at startup and now exits if it cannot establish a clean local snapshot.
 
 ```
@@ -48,7 +49,7 @@ The server performs an initial sync at startup and now exits if it cannot establ
 
 ## MCP tools (35)
 
-Once connected, Claude can do pretty much everything you'd do in the Things app:
+Once connected, an MCP client can use the supported operations below:
 
 - **Browse your views** — Today, Inbox, Anytime, Someday, Upcoming, All Tasks, by Project, by Area, Completed (with date filters)
 - **Look things up** — get any task, area, or tag; search by title or note content
@@ -135,10 +136,10 @@ Once connected, Claude can do pretty much everything you'd do in the Things app:
 | `YYYY-MM-DD` | Set a hard deadline |
 | `none` | Clear an existing deadline (edit only) |
 
-#### Recurring tasks — not supported
+#### Recurring tasks — readable, writes disabled
 
 Recurrence cannot be set, changed or removed through this server. `repeat` is not part of
-the tool schemas, and any `repeat` value sent to `things_create_task`, `things_edit_task`,
+the tool schemas, and any non-empty `repeat` value sent to `things_create_task`, `things_edit_task`,
 `/api/tasks/create` or `/api/tasks/edit` — `"none"` included — is rejected with an error
 before anything is written. Recurrence writes have corrupted Things on macOS and iOS
 (incident 2026-08-18, KI-01). Set up or remove recurrence in the Things app. Background:
@@ -164,7 +165,7 @@ in the Things app.
 
 ## Getting started
 
-See **[docs/installation.md](docs/installation.md)** for full setup instructions. The short version:
+See **[the VPS deployment guide](docs/deployment/vps.md)** for full setup instructions. The short version:
 
 1. Set up a VPS with Caddy and Pocket ID ([docs/deployment/vps.md](docs/deployment/vps.md))
 2. Configure your Things Cloud credentials and the OAuth settings
@@ -173,7 +174,7 @@ See **[docs/installation.md](docs/installation.md)** for full setup instructions
 
 ### Privacy and cost
 
-Your credentials are stored as encrypted secrets on your own Fly.io account — you're not giving them to anyone. Fly.io doesn't bill you if your monthly usage is under $5. After 2+ months of active development and daily use, the author has not been billed.
+The self-hosted service uses your Things Cloud credentials and stores a SQLite mirror on your VPS. ChatGPT receives a scoped OAuth token from Pocket ID. Your VPS provider determines hosting costs.
 
 ### Test with a separate account
 
@@ -443,8 +444,7 @@ heading, and a separate check confirmed that the task's tag and three checklist 
 survived the move and restart.
 
 Search excluded trashed tasks. A direct lookup by UUID could still return `open`
-without a Trash flag. The run covered macOS on a sandbox account. iOS, recurring-task
-writes, and production use remain outside this run's coverage.
+without a Trash flag. The run covered macOS on a sandbox account. iOS and recurring-task writes remain outside this run's coverage. The separate personal VPS smoke test verified ChatGPT OAuth, task lookup and ordinary task creation through to Things.
 
 ## Local development
 
