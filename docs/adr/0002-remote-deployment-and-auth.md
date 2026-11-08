@@ -56,8 +56,9 @@ Facts that shape the decision (sources collected 2026-10-10):
 4. **Scopes:** `things.read` and `things.write`. Write tools require `things.write`;
    granting only `things.read` gives a safe read-only connector (useful on ChatGPT
    plans where write behaviour is unclear, and for Claude Research mode).
-5. **REST `/api/*`:** off by default; when enabled, behind the same token validation.
-   Static `API_KEY` is removed.
+5. **API surface:** use MCP for reads and writes. The former REST routes,
+   `ENABLE_REST_API`, and static `API_KEY` are removed. Keep the health check and
+   OAuth discovery metadata public.
 6. **Stopgap:** until step 2 ships, the server is not exposed publicly. If the owner
    needs remote access earlier, option E may be used for at most two weeks with
    access logs disabled for that path and the secret rotated afterwards.

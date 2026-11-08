@@ -159,8 +159,8 @@ exporter's own tests need no Things and no network beyond installing things.py:
 ```
 
 Black-box scripts in `tests/` call a running server and **create real items** in the
-account it is connected to. The writing ones (`test-mcp.sh`, `test-smoke.sh`,
-`test-api.sh`) first check for the sandbox marker area `MCP E2E SANDBOX`
+account it is connected to. The writing ones (`test-mcp.sh`, `test-smoke.sh`)
+first check for the sandbox marker area `MCP E2E SANDBOX`
 (`tests/sandbox-guard.sh`) and refuse to write without it:
 
 ```bash
@@ -179,14 +179,13 @@ Configuration (environment variables):
 | `OAUTH_ALLOWED_CLIENTS` | no | Comma-separated `client_id` allowlist; unset accepts any client the issuer grants this API |
 | `INSECURE_NO_AUTH_LOCAL_ONLY` | yes¹ | `true` serves without authentication, listens on `127.0.0.1` only and rejects requests whose `Host` or `Origin` is not loopback (local development, sandbox scripts). Cannot be combined with the `OAUTH_*` settings |
 | `PORT` | no | Listen port, default `8080` |
-| `ENABLE_WRITES` | no | `true` registers the write tools and REST write endpoints. Unset or `false`: read-only, the write tools are not even listed (ADR-0004). Any other value stops the server at startup |
-| `ENABLE_REST_API` | no | `true` serves `/api/*` behind the same tokens as `/mcp`; off by default (ADR-0002) |
+| `ENABLE_WRITES` | no | `true` registers the write tools. Unset or `false`: read-only, the write tools are not even listed (ADR-0004). Any other value stops the server at startup |
 | `DATA_DIR` | no | Directory of the SQLite cache `things-upstream.db`, default `/data` (created with mode 0700). The cache is disposable: delete the file to force a full resync. A rebuild after an account reset leaves the old mirror as `things-upstream.db.before-rebuild` (KI-28) |
 | `THINGS_TIMEZONE` | no (set it) | Owner's IANA zone, e.g. `Europe/Moscow`: decides "today" for views, `when`, deadlines and `completed_*` dates (ADR-0003). Unset: the UTC day, with a startup warning. An unknown name or `Local` stops the server at startup. Zone data is built in |
 
 ¹ Either the three OAuth settings or `INSECURE_NO_AUTH_LOCAL_ONLY=true`; without either the
 server refuses to start. Tokens need the scope `things.read` for any request and
-`things.write` for write tools and REST write endpoints. `API_KEY` is gone: the server
+`things.write` for write tools. `API_KEY` is gone: the server
 refuses to start while it is set (ADR-0002).
 
 Baseline: CI (`.github/workflows/ci.yml`) runs `go mod tidy -diff`, build, vet,
@@ -203,7 +202,7 @@ or push tags and never publish images.
 
 | Path | What | Status |
 |---|---|---|
-| `server/main.go` | Process wiring, router, REST handlers, `DATA_DIR` | live |
+| `server/main.go` | Process wiring, MCP router, `DATA_DIR` | live |
 | `server/auth.go` | OAuth resource server: config, JWKS cache, RFC 9068 token checks, RFC 9728 metadata, scopes per tool (KI-07) | live |
 | `server/mcp.go` | MCP tool registry, read handlers, output formatting | live |
 | `server/write.go` | Write commands, wire payload builders, ID generator, `historyWrite` | live |
@@ -303,8 +302,8 @@ refused (KI-01), and no list shows templates (KI-05). This needs the SDK to stor
 ## 9. Coding conventions
 
 - Follow the existing style of the file you edit; `gofmt`/`goimports` clean.
-- Errors: wrap with `%w`; user-facing validation errors use `invalidInputf` so REST maps
-  them to 400. MCP tools return `mcp.NewToolResultError` with an actionable message.
+- Wrap errors with `%w`. Use `invalidInputf` for validation errors and
+  `mcp.NewToolResultError` for actionable messages from MCP tools.
 - No comments that restate code; comment only non-obvious protocol facts, with a
   pointer to the evidence (`docs/protocol/...`, capture fixture, KI).
 - No TODO comments; open a KI instead.

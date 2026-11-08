@@ -3,7 +3,7 @@
 Register entry: **KI-01** in `docs/known-issues.md`; decision: ADR-0004.
 
 **Status:** any non-empty `repeat` value is rejected with an error on `things_create_task` and
-`things_edit_task` (both MCP and REST), **including `repeat: "none"`**. Clearing a rule still
+`things_edit_task`, **including `repeat: "none"`**. Clearing a rule still
 writes `rr: null` onto an item that may be a repeating template or instance, which is itself a
 recurrence write. `repeat` is no longer part of the MCP tool schemas; the handlers still read it
 so that a stray value is rejected instead of silently ignored. The guard is `rejectRepeat`

@@ -366,9 +366,7 @@ func startSandboxHarness(t *testing.T, mode harnessMode) *sandboxHarness {
 	h.red.add(history.ID)
 	h.today = ownerToday()
 
-	mux := http.NewServeMux()
-	mux.Handle("/mcp", localGate{}.protect(newMCPHandler(true), false))
-	srv := httptest.NewServer(mux)
+	srv := httptest.NewServer(newRouter(localGate{}, true))
 	t.Cleanup(srv.Close)
 
 	h.mcp, err = mcpclient.NewStreamableHttpClient(srv.URL+"/mcp", transport.WithHTTPBasicClient(&http.Client{Transport: direct}))

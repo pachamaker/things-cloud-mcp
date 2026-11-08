@@ -183,15 +183,14 @@ workaround can be deleted.
   obscure hostname.
 - **Fix:** ADR-0002 option B. The server is an OAuth 2.1 resource server: RFC 9728
   metadata at `/.well-known/oauth-protected-resource/mcp`, `401` with
-  `WWW-Authenticate: Bearer resource_metadata=…` on `/mcp` and `/api/*`, RFC 9068 JWT
+  `WWW-Authenticate: Bearer resource_metadata=…` on `/mcp`, RFC 9068 JWT
   checks against the issuer's JWKS (`typ at+jwt`, `iss`, `aud` = `MCP_PUBLIC_URL`,
   `exp`/`nbf`, `sub` = `OAUTH_ALLOWED_SUBJECT`, optional `client_id` allowlist). Scopes:
-  `things.read` for any request, `things.write` for write tools and REST writes;
+  `things.read` for any request, `things.write` for write tools;
   `ENABLE_WRITES` stays the server-wide ceiling. Without OAuth settings the server starts
   only with `INSECURE_NO_AUTH_LOCAL_ONLY=true` and then listens on `127.0.0.1` and refuses
-  non-loopback `Host`/`Origin` (DNS rebinding). The REST API is off by default and
-  `API_KEY` is gone. Tests: `server/auth_test.go`, `server/auth_mcp_test.go` (local test
-  issuer, no network).
+  non-loopback `Host`/`Origin` (DNS rebinding). `API_KEY` and the REST routes have been removed.
+  Tests: `server/auth_test.go`, `server/auth_mcp_test.go` (local test issuer).
 
 ### KI-08 · Destructive debug endpoints ship in the production binary
 - **Status:** fixed (phase 0) — every `/api/debug/*` route and the `DEBUG` variable are
@@ -214,8 +213,7 @@ workaround can be deleted.
   plus an injectable `http.Client`; a test that the secret never appears in output.
 
 ### KI-35 · Tool errors can echo the history key
-- **Status:** fixed (PR #10, `4eb6c4a`) — tool results,
-  REST error bodies and log lines now read `write failed: Post
+- **Status:** fixed (PR #10, `4eb6c4a`) — tool results and log lines now read `write failed: Post
   "https://cloud.culturedcode.com/<redacted>": …` · **Evidence:** confirmed (sandbox
   harness offline self-test, 2026-10-11: a refused commit surfaced as the tool error below)
 - **Symptom:** when a Things Cloud request fails below HTTP (timeout, DNS, refused
@@ -226,18 +224,18 @@ workaround can be deleted.
   so the key is a bearer capability for the whole task database, and the error lands in
   the LLM client's transcript.
 - **Root cause:** the SDK's `http.Client` returns a `*url.Error` carrying the full URL;
-  `historyWrite` and `syncForRead` (`server/write.go`) wrap it with `%w`, and the MCP and
-  REST handlers return `err.Error()`.
+  `historyWrite` and `syncForRead` (`server/write.go`) wrap it with `%w`, and the MCP
+  handlers return `err.Error()`.
 - **Fix:** `redactRequestURL` (`server/redact.go`) replaces the path
   and query of a `*url.Error` with `<redacted>`, keeping `Op`, the host and the cause,
-  where SDK errors enter the server: the sync gate (all reads, `/api/sync`, the initial
-  sync), `historyWrite` (pull, commit, re-sync after a 409) and the history pull in
+  where SDK errors enter the server: the sync gate (reads and initial sync),
+  `historyWrite` (pull, commit, re-sync after a 409) and the history pull in
   `connectThings`. `TestHistoryWrite_KI35_ErrorHidesHistoryKey` and its siblings in
-  `server/redact_test.go` drive the MCP and REST handlers through a refusing
-  `http.DefaultTransport` and check the tool result, the REST body and the log. The
+  `server/redact_test.go` drive the MCP handlers through a refusing
+  `http.DefaultTransport` and check the tool result and the log. The
   sandbox harness keeps its own redaction as a second layer.
 - **Remaining:** errors of `client.Verify`/`OwnHistory`
-  outside the sync gate (`/api/verify`, `failed to get history` at startup) can carry the
+  outside the sync gate (`failed to get history` at startup) can carry the
   account e-mail address, not the key.
 
 ### KI-10 · Writes are accepted for UUIDs that do not exist (or have the wrong type)
@@ -248,7 +246,7 @@ workaround can be deleted.
   needs an open to-do, uncomplete a completed or canceled one; project, parent to-do,
   area, tags, heading project and checklist items must exist (a trashed project or
   parent is refused). A refused write sends nothing and returns an invalid-input error
-  (REST 400). Side effect: `project: "none"` used to write `pr=["none"]` and is now
+  from the MCP tool. Side effect: `project: "none"` used to write `pr=["none"]` and is now
   refused · **Evidence:** confirmed (before the fix `server/write.go:650-852` validated
   only the Base58 shape)
 - **Remaining:** SDK v0.6.0 does not store `rr`/`rt`, so repeating templates and
@@ -407,8 +405,8 @@ workaround can be deleted.
   start date was listed in Upcoming instead of Someday).
 - **Fix:** `server/readmodel.go` clears every start date and deadline with year ≥ 4000
   on each task it reads from the mirror (`clearSentinels`), before view classification,
-  pagination or output: every list and view, `things_list_completed`, `things_get_task`
-  and the REST endpoints. Completion dates are instants and stay as they are;
+  pagination or output: every list and view, `things_list_completed`, and `things_get_task`.
+  Completion dates are instants and stay as they are;
   `formatTask` applies the same rule to both day fields. Tests:
   `TestClearSentinels_KI04`, `TestReadModel_KI04_NoSentinelInAnyList`,
   `TestReadModel_KI04_NeverStartDateIsSomeday`,
@@ -438,7 +436,7 @@ workaround can be deleted.
 - **Templates ([#34](https://github.com/pachamaker/things-cloud-mcp/pull/34), on the SDK fork until arthursoares#40 is
   released):** `openList` in `server/readmodel.go` drops every repeating template from
   the views, `things_list_all_tasks` (and so `things_search_tasks`), projects, project and
-  area listings and the REST lists, closed items included or not. `things_get_task` and
+  area listings, closed items included or not. `things_get_task` and
   `things_list_completed` are unchanged. Task output gains `repeating: "template"` or
   `"instance"`. Tests: `TestReadModel_KI05_HidesRepeatingTemplates`,
   `TestFormatTask_KI05_RepeatingMarker`; the sandbox seed checks now fail when a template is
@@ -675,7 +673,7 @@ workaround can be deleted.
   startup, on reads every 15 min, after a 404 on the mirrored history (at most once a
   minute) and before a write when the last check is older than a minute, so a write never
   lands in a history a reset left behind. A failed check never fails a good read.
-- **Rebuild:** the sync gate starts it in the background; meanwhile every tool and REST
+- **Rebuild:** the sync gate starts it in the background; meanwhile every tool
   call gets `the local Things mirror is being rebuilt …; try again in a minute`. The mirror
   file (with `-wal`/`-shm`) moves to `things-upstream.db.before-rebuild` next to it,
   replacing the previous copy; a fresh mirror is synced from index 0, and the writer moves to

@@ -6,8 +6,7 @@
 
 SANDBOX_MARKER_AREA="MCP E2E SANDBOX"
 
-# has_marker_area reads a JSON list of areas on stdin; MCP tools return
-# lowercase keys, the REST API the SDK's field names.
+# has_marker_area reads the MCP tool's JSON list of areas on stdin.
 has_marker_area() {
   SANDBOX_MARKER_AREA="$SANDBOX_MARKER_AREA" python3 -c '
 import json, os, sys
@@ -37,9 +36,4 @@ require_sandbox_mcp() {
   printf '%s' "$resp" \
     | python3 -c "import sys,json; print(json.loads(sys.stdin.read())['result']['content'][0]['text'])" 2>/dev/null \
     | has_marker_area || refuse_non_sandbox
-}
-
-# require_sandbox_rest <base URL> <Authorization header>
-require_sandbox_rest() {
-  curl -s --max-time 30 "$1/api/areas" -H "$2" | has_marker_area || refuse_non_sandbox
 }

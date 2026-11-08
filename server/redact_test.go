@@ -3,13 +3,11 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -115,17 +113,6 @@ func toolErrorText(t *testing.T, res *mcp.CallToolResult, err error) string {
 	return text.Text
 }
 
-func restErrorText(t *testing.T, rec *httptest.ResponseRecorder) string {
-	t.Helper()
-	var body struct {
-		Error string `json:"error"`
-	}
-	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-		t.Fatalf("decode REST error body: %v", err)
-	}
-	return body.Error
-}
-
 func assertNoHistoryKey(t *testing.T, where, s string) {
 	t.Helper()
 	if strings.Contains(s, ki35HistoryKey) {
@@ -175,16 +162,6 @@ func TestHistoryWrite_KI35_ErrorHidesHistoryKey(t *testing.T) {
 				t.Errorf("tool error = %q, want %q", got, tc.want)
 			}
 
-			resetHistory()
-			rec := httptest.NewRecorder()
-			handleCompleteTask(rec, httptest.NewRequest(http.MethodPost, "/api/tasks/complete", strings.NewReader(`{"uuid":"`+id+`"}`)))
-			if rec.Code != http.StatusInternalServerError {
-				t.Errorf("REST status = %d, want 500", rec.Code)
-			}
-			if got := restErrorText(t, rec); got != tc.want {
-				t.Errorf("REST error = %q, want %q", got, tc.want)
-			}
-
 			assertNoHistoryKey(t, "log", logs.String())
 		})
 	}
@@ -195,33 +172,10 @@ func TestReadSync_KI35_ErrorHidesHistoryKey(t *testing.T) {
 	syncErr := refusedRequest(t, http.MethodGet, "https://cloud.culturedcode.com"+ki35HistoryURL+"/items?start-index=0")
 	cause := `Get "https://cloud.culturedcode.com/<redacted>": ` + errConnRefused.Error()
 
-	reads := []struct {
-		name string
-		read func(t *testing.T) string
-		want string
-	}{
-		{"MCP read tool", func(t *testing.T) string {
-			res, err := mcpListToday(context.Background(), mcp.CallToolRequest{})
-			return toolErrorText(t, res, err)
-		}, "pre-read sync failed: " + cause},
-		{"REST read", func(t *testing.T) string {
-			rec := httptest.NewRecorder()
-			handleToday(rec, httptest.NewRequest(http.MethodGet, "/api/tasks/today", nil))
-			return restErrorText(t, rec)
-		}, "pre-read sync failed: " + cause},
-		{"REST sync", func(t *testing.T) string {
-			rec := httptest.NewRecorder()
-			handleSync(rec, httptest.NewRequest(http.MethodPost, "/api/sync", nil))
-			return restErrorText(t, rec)
-		}, "sync failed: " + cause},
-	}
-	for _, r := range reads {
-		t.Run(r.name, func(t *testing.T) {
-			mirror = newSyncGate(&fakeSyncer{errs: []error{syncErr}}, newFakeClock().Now)
-			if got := r.read(t); got != r.want {
-				t.Errorf("error = %q, want %q", got, r.want)
-			}
-		})
+	mirror = newSyncGate(&fakeSyncer{errs: []error{syncErr}}, newFakeClock().Now)
+	res, err := mcpListToday(context.Background(), mcp.CallToolRequest{})
+	if got, want := toolErrorText(t, res, err), "pre-read sync failed: "+cause; got != want {
+		t.Errorf("tool error = %q, want %q", got, want)
 	}
 	assertNoHistoryKey(t, "log", logs.String())
 }
