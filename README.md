@@ -255,7 +255,7 @@ before their first write unless the account has the area `MCP E2E SANDBOX`:
 ### macOS Things app test matrix
 
 The broader Things app test matrix tracks **154 cases**. Recorded results are
-**122 passed, 4 failed, 9 partial, 1 blocked, and 18 not run**. A partial result
+**123 passed, 4 failed, 8 partial, 1 blocked, and 18 not run**. A partial result
 means only part of the expected behavior was verified. ✅ marks a passed case.
 The four failed cases below have no confirmed fix commit in the test record. The matrix includes
 app-only checks and checks that also observe sync. The separate MCP sandbox
@@ -350,7 +350,7 @@ results below cover the smaller set of critical bidirectional scenarios.
 | DOC-082 | repeat | Selected weekdays | ✅ |
 | DOC-083 | repeat | Repeat project | ✅ |
 | DOC-084 | repeat | Template edits propagate | ✅ |
-| DOC-085 | repeat | Pause and resume | **PARTIAL** — No instance appeared while the rule was paused on Nov 8. Resume in Things for Mac cleared the pause and generated a Nov 8 instance linked to the same template. The instance UUID was still missing from the VPS mirror at the last sync check. |
+| DOC-085 | repeat | Pause and resume | ✅ — No instance appeared while paused on Nov 8. After Resume, Things for Mac generated a Nov 8 instance whose UUID, start date, and template link matched the VPS mirror. |
 | DOC-086 | repeat | Stop repeating | ✅ |
 | DOC-087 | repeat | Deadline lead time | ✅ |
 | DOC-088 | search | Immediate title search | ✅ |
