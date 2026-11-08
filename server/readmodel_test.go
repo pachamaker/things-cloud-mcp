@@ -538,3 +538,29 @@ func TestReadModel_TasksInViewOn_GivenDay(t *testing.T) {
 		}
 	}
 }
+
+func TestReadModel_DOC134_TrashInheritedFromProject(t *testing.T) {
+	t.Parallel()
+	r := readModel{mirror: listMirror{
+		{UUID: "deleted-area-project", Type: things.TaskTypeProject, InTrash: true},
+		{UUID: "heading", Type: things.TaskTypeHeading, ParentTaskIDs: []string{"deleted-area-project"}},
+		{UUID: "direct-child", Schedule: things.TaskScheduleAnytime, ParentTaskIDs: []string{"deleted-area-project"}},
+		{UUID: "heading-child", Schedule: things.TaskScheduleAnytime, ActionGroupIDs: []string{"heading"}},
+		{UUID: "other", Schedule: things.TaskScheduleAnytime},
+	}}
+	for _, tc := range []struct {
+		name string
+		list func(listOpts) ([]*things.Task, error)
+	}{{"anytime", r.TasksInAnytime}, {"all", r.AllTasks}} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.list(listOpts{Limit: 1})
+			if err != nil || len(got) != 1 || got[0].UUID != "other" {
+				t.Fatalf("list = %v, %v; want the unrelated task only", got, err)
+			}
+			got, err = tc.list(listOpts{QueryOpts: sync.QueryOpts{IncludeTrashed: true}})
+			if err != nil || len(got) != 3 {
+				t.Fatalf("list with trash = %v, %v; want all three tasks", got, err)
+			}
+		})
+	}
+}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -98,9 +99,15 @@ func paginate[T any](items []T, opts listOpts) []T {
 // as its next occurrence in Upcoming, which no list here has yet (KI-36). The
 // SDK's IncludeCompleted gate only excludes completed (status 3); Things hides
 // canceled ones from open lists too.
-func openList(tasks []*things.Task, err error, opts listOpts) ([]*things.Task, error) {
+func (r readModel) openList(tasks []*things.Task, err error, opts listOpts) ([]*things.Task, error) {
 	if err != nil {
 		return nil, err
+	}
+	if !opts.IncludeTrashed {
+		tasks, err = r.withoutInheritedTrash(tasks)
+		if err != nil {
+			return nil, err
+		}
 	}
 	open := tasks[:0:0]
 	for _, t := range tasks {
@@ -112,6 +119,54 @@ func openList(tasks []*things.Task, err error, opts listOpts) ([]*things.Task, e
 	return paginate(open, opts), nil
 }
 
+// Things can trash a project without setting tr on its descendants (DOC-134).
+// Follow both parent links, including a heading that carries the project link.
+func (r readModel) withoutInheritedTrash(tasks []*things.Task) ([]*things.Task, error) {
+	cache := make(map[string]*things.Task, len(tasks))
+	for _, t := range tasks {
+		cache[t.UUID] = t
+	}
+	out := tasks[:0:0]
+	for _, t := range tasks {
+		if t.InTrash {
+			continue
+		}
+		parents := append(append([]string(nil), t.ParentTaskIDs...), t.ActionGroupIDs...)
+		seen := make(map[string]bool)
+		trashed := false
+		for len(parents) != 0 {
+			id := parents[len(parents)-1]
+			parents = parents[:len(parents)-1]
+			if id == "" || seen[id] {
+				continue
+			}
+			seen[id] = true
+			parent, ok := cache[id]
+			if !ok {
+				var err error
+				parent, err = r.mirror.Task(id)
+				if err != nil {
+					return nil, fmt.Errorf("look up parent %s for trash status: %w", id, err)
+				}
+				cache[id] = parent
+			}
+			if parent == nil {
+				continue
+			}
+			if parent.InTrash {
+				trashed = true
+				break
+			}
+			parents = append(parents, parent.ParentTaskIDs...)
+			parents = append(parents, parent.ActionGroupIDs...)
+		}
+		if !trashed {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
 func paged[T any](items []T, err error, opts listOpts) ([]T, error) {
 	if err != nil {
 		return nil, err
@@ -121,12 +176,12 @@ func paged[T any](items []T, err error, opts listOpts) ([]T, error) {
 
 func (r readModel) AllTasks(opts listOpts) ([]*things.Task, error) {
 	tasks, err := withoutSentinels(r.mirror.AllTasks(opts.QueryOpts))
-	return openList(tasks, err, opts)
+	return r.openList(tasks, err, opts)
 }
 
 func (r readModel) AllProjects(opts listOpts) ([]*things.Task, error) {
 	tasks, err := withoutSentinels(r.mirror.AllProjects(opts.QueryOpts))
-	return openList(tasks, err, opts)
+	return r.openList(tasks, err, opts)
 }
 
 func (r readModel) AllAreasWithOpts(opts listOpts) ([]*things.Area, error) {
@@ -154,7 +209,7 @@ func (r readModel) tasksInViewOn(view listView, opts listOpts, today civil.Date)
 		return nil, err
 	}
 	tasks = tasksInView(tasks, view, today)
-	return openList(tasks, nil, opts)
+	return r.openList(tasks, nil, opts)
 }
 
 func (r readModel) TasksInInbox(opts listOpts) ([]*things.Task, error) {
@@ -215,19 +270,23 @@ func (r readModel) TasksInProject(projectUUID string, opts listOpts) (tasks, hea
 	for _, t := range tasks {
 		clearSentinels(t)
 	}
-	tasks, err = openList(tasks, nil, opts)
+	tasks, err = r.openList(tasks, nil, opts)
 	return tasks, headings, err
 }
 
 func (r readModel) TasksInArea(areaUUID string, opts listOpts) ([]*things.Task, error) {
 	tasks, err := withoutSentinels(r.mirror.TasksInArea(areaUUID, opts.QueryOpts))
-	return openList(tasks, err, opts)
+	return r.openList(tasks, err, opts)
 }
 
 // CompletedTasksInRange returns completed to-dos, most recent first.
 // completedAfter is inclusive, completedBefore is exclusive.
 func (r readModel) CompletedTasksInRange(limit int, completedAfter, completedBefore *time.Time) ([]*things.Task, error) {
 	tasks, err := withoutSentinels(r.mirror.AllTasks(sync.QueryOpts{IncludeCompleted: true}))
+	if err != nil {
+		return nil, err
+	}
+	tasks, err = r.withoutInheritedTrash(tasks)
 	if err != nil {
 		return nil, err
 	}
