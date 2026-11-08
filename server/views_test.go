@@ -213,7 +213,7 @@ func TestOpenList_KI05_DropsClosedAndKeepsOrder(t *testing.T) {
 		return out
 	}
 
-	open, err := openList(tasks, nil, listOpts{})
+	open, err := (readModel{}).openList(tasks, nil, listOpts{})
 	if err != nil {
 		t.Fatalf("openList: %v", err)
 	}
@@ -221,12 +221,12 @@ func TestOpenList_KI05_DropsClosedAndKeepsOrder(t *testing.T) {
 		t.Errorf("open list = %v, want %v", got, want)
 	}
 
-	page, _ := openList(tasks, nil, listOpts{Limit: 1, Offset: 1})
+	page, _ := (readModel{}).openList(tasks, nil, listOpts{Limit: 1, Offset: 1})
 	if got, want := uuids(page), []string{"open-2"}; !slices.Equal(got, want) {
 		t.Errorf("paginated after filtering = %v, want %v", got, want)
 	}
 
-	all, _ := openList(tasks, nil, listOpts{QueryOpts: sync.QueryOpts{IncludeCompleted: true}})
+	all, _ := (readModel{}).openList(tasks, nil, listOpts{QueryOpts: sync.QueryOpts{IncludeCompleted: true}})
 	if len(all) != len(tasks) {
 		t.Errorf("IncludeCompleted kept %d of %d", len(all), len(tasks))
 	}
