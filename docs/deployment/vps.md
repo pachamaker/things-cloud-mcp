@@ -1,21 +1,47 @@
-# Self-hosting on a VPS (Claude + ChatGPT, any device)
+# Self-hosting on a VPS for remote MCP clients
 
 Target deployment from [ADR-0002](../adr/0002-remote-deployment-and-auth.md). Replaces
 the Fly.io guide in [`../installation.md`](../installation.md).
 
-> **Status.** `things-mcp` is an OAuth 2.1 resource server (KI-07): every data route needs
-> an access token for the owner, and the server does not start without the OAuth settings
-> below. ChatGPT web sign-in, task lookup and ordinary task creation were verified
-> with v2.0.1 and Pocket ID v2.19.2. Claude and mobile flows are outside that check.
-> Do the first connection against a sandbox Things account and check §6.3.
+Connect any LLM client that supports custom remote MCP servers over Streamable HTTP
+and can authorize with your OAuth 2.1 provider. Support for local MCP over `stdio`
+alone is insufficient. ChatGPT and Claude are setup examples.
+
+> **Verified deployment.** The maintainer ran Things Cloud MCP v2.0.1 and Pocket ID
+> v2.19.2 in Docker Compose on a Linux VPS. Cloudflare proxied HTTPS to Nginx on the
+> VPS, and Nginx forwarded requests to both services on loopback. Scoped Cloudflare Access
+> policies allowed machine-to-machine OAuth and MCP requests to reach the services
+> while keeping Pocket ID administration behind Access. ChatGPT web used a confidential
+> OAuth client with PKCE, PAR disabled, and passkey sign-in. The maintainer verified
+> task lookup against the VPS mirror with `things.read`. After enabling writes and
+> reauthorizing with `things.write`, the maintainer created one ordinary Inbox task
+> through ChatGPT and confirmed it in Things for Mac and in the mirror.
+>
+> Caddy is the reference setup below. A clean install using it, Claude, and mobile
+> clients are outside the recorded end-to-end verification. Use a sandbox Things account
+> for your first connection and follow §6.3.
+
+## Cloudflare is optional
+
+**DNS → Caddy → Things Cloud MCP + Pocket ID**
+
+- Point `mcp.example.com` and `auth.example.com` to the VPS public IPv4 with
+  DNS A records at any provider.
+- Use a Linux VPS with Docker Engine and the Compose plugin. Allow incoming TCP
+  ports 80 and 443 so Caddy can obtain public TLS certificates and serve HTTPS.
+- Use a Things Cloud account and an MCP client that supports remote OAuth.
+  Start with a separate test account.
+- Allow the VPS to reach Things Cloud and the public Pocket ID hostname over HTTPS.
+
+Caddy routes the MCP hostname to Things Cloud MCP and the auth hostname to Pocket ID.
+Both services stay on the internal Docker network.
 
 ## 1. Topology
 
 ```mermaid
 flowchart LR
   subgraph Internet
-    claude[Claude cloud<br/>160.79.104.0/21]
-    openai[ChatGPT cloud<br/>chatgpt-connectors.json]
+    client[Remote MCP client]
     browser[Owner's browser<br/>OAuth login]
   end
   subgraph VPS["VPS · Docker Compose"]
@@ -26,8 +52,8 @@ flowchart LR
     vol2[(pocket-id-data)]
   end
   cloud[(Things Cloud)]
-  claude -->|https://mcp.example.com/mcp| caddy
-  openai --> caddy
+  client -->|https://mcp.example.com/mcp| caddy
+  client -->|OAuth discovery and token exchange| caddy
   browser -->|https://auth.example.com| caddy
   caddy --> app
   caddy --> pid
@@ -44,11 +70,11 @@ internal Docker network.
 | Item | Recommendation |
 |---|---|
 | VPS | 1 vCPU, 1 GB RAM, 10 GB disk; Ubuntu 24.04 LTS or Debian 13 |
-| Region | Close to Things Cloud (AWS) and the assistants' egress, e.g. Frankfurt/Amsterdam; avoid networks that filter traffic to AWS/Anthropic/OpenAI |
-| IPv4 | **Required.** Claude connectors are IPv4-only |
+| Region | Choose a VPS that can reach Things Cloud and is reachable by your MCP client |
+| IPv4 | The reference setup uses A records. Use IPv4 if your client requires it (for example, Claude custom connectors) |
 | Domain | Two names with A records: `mcp.example.com`, `auth.example.com` |
-| Software | Docker Engine + Compose plugin |
-| Accounts | Things Cloud account (start with a **sandbox** account), Claude and/or ChatGPT |
+| Software | Docker Engine, Compose plugin, OpenSSL |
+| Accounts | Things Cloud account (start with a **sandbox** account) and access to a compatible remote MCP client |
 
 ## 3. Host hardening (once)
 
@@ -70,7 +96,8 @@ adduser deploy && usermod -aG sudo,docker deploy
 ├── compose.yaml
 ├── Caddyfile
 └── secrets/
-    └── things.env        # chmod 600, never committed
+    ├── things.env        # chmod 600, never committed
+    └── pocket-id.env     # chmod 600, never committed
 ```
 
 ### Image
@@ -122,16 +149,33 @@ same `Dockerfile`.
 ```bash
 THINGS_USERNAME=you@example.com
 THINGS_PASSWORD=change-me
-# Off by default: without it the server is read-only (ADR-0004).
-ENABLE_WRITES=true
+# Start read-only. Enable writes after the read check in §6.3.
+# ENABLE_WRITES=true
 # OAuth (KI-07). All three are required; the server refuses to start without them.
 MCP_PUBLIC_URL=https://mcp.example.com/mcp
 OAUTH_ISSUER=https://auth.example.com
-OAUTH_ALLOWED_SUBJECT=<your Pocket ID user id, the sub of its tokens>
+# Fill in after creating your Pocket ID account in §5.
+OAUTH_ALLOWED_SUBJECT=
 # Optional: accept tokens only from these OAuth clients (comma-separated client ids).
-# OAUTH_ALLOWED_CLIENTS=<claude client id>,<chatgpt client id>
+# OAUTH_ALLOWED_CLIENTS=<client id 1>,<client id 2>
 # Owner's IANA zone: decides "today" (ADR-0003). Unset means the UTC day.
 THINGS_TIMEZONE=Europe/Moscow
+```
+
+Create `secrets/things.env` with mode `0600` before running Compose. Leave the owner
+subject blank until §5.
+
+Generate `secrets/pocket-id.env` once from `/opt/things-mcp`. The command refuses
+to overwrite an existing file. Keep the key when recreating the container.
+
+```bash
+install -d -m 0700 secrets
+(
+  umask 077
+  set -C
+  key=$(openssl rand -base64 32) || exit 1
+  printf 'ENCRYPTION_KEY=%s\n' "$key" > secrets/pocket-id.env
+)
 ```
 
 `compose.yaml`:
@@ -139,7 +183,7 @@ THINGS_TIMEZONE=Europe/Moscow
 ```yaml
 services:
   caddy:
-    image: caddy:2.11
+    image: caddy:2.11.9-alpine
     restart: unless-stopped
     ports: ["80:80", "443:443"]
     volumes:
@@ -149,7 +193,7 @@ services:
     networks: [edge]
 
   things-mcp:
-    image: ghcr.io/pachamaker/things-cloud-mcp:v2.0.0   # pin a release tag (§4 Image)
+    image: ghcr.io/pachamaker/things-cloud-mcp:v2.0.1
     restart: unless-stopped
     env_file: ./secrets/things.env
     volumes:
@@ -160,8 +204,9 @@ services:
     # The image brings its own HEALTHCHECK (`things-server healthcheck`).
 
   pocket-id:
-    image: ghcr.io/pocket-id/pocket-id:v2   # pin an exact version, v2.14 or newer
+    image: ghcr.io/pocket-id/pocket-id:v2.19.2
     restart: unless-stopped
+    env_file: ./secrets/pocket-id.env
     environment:
       APP_URL: https://auth.example.com
       TRUST_PROXY: "true"
@@ -179,53 +224,45 @@ volumes:
   pocket-id-data: {}
 ```
 
-Check Pocket ID's documentation for the environment variables of the version you pin.
+## 5. Bootstrap Pocket ID before starting MCP
 
-`Caddyfile`:
+Use this temporary `Caddyfile`. Replace `203.0.113.10/32` with the trusted public IPv4
+of the operator's browser. This matcher is for the direct setup with DNS pointing at
+the VPS. If a CDN or proxy sits in front of Caddy, use an operator-only access policy
+at that proxy.
 
 ```caddyfile
-mcp.example.com {
-	encode zstd gzip
-	reverse_proxy things-mcp:8080
-}
-
 auth.example.com {
-	reverse_proxy pocket-id:1411
+    @operator remote_ip 203.0.113.10/32
+    handle @operator {
+        reverse_proxy pocket-id:1411
+    }
+    handle {
+        respond 403
+    }
 }
 ```
 
-Caddy reaches the app over the Docker network (not loopback), so `mcp-go`'s
-DNS-rebinding protection (v0.56+, after the planned upgrade) will accept the forwarded
-`Host`; on `/mcp` the OAuth token is what keeps other sites out. Caddy's access logs redact
-`Authorization` and cookies by default.
-
-Start:
+Start only the identity service and its proxy:
 
 ```bash
-cd /opt/things-mcp && docker compose pull && docker compose up -d && docker compose logs -f things-mcp
+cd /opt/things-mcp
+docker compose pull
+docker compose up -d caddy pocket-id
 ```
 
-The server performs a full initial sync and exits if it fails (wrong credentials,
-Things Cloud unreachable). It then loads Pocket ID's signing keys from `OAUTH_ISSUER` and
-logs `Auth: loaded N signing key(s)`; a warning there means the container cannot reach the
-issuer yet (Pocket ID still starting, DNS, or a firewall), and requests get `503` until it
-can. The container fetches `https://auth.example.com` over the public name, so the VPS
-must be able to reach its own address.
-
-## 5. Identity provider (Pocket ID)
-
-Needs Pocket ID v2.14 or newer (APIs with permissions, RFC 9068 access tokens, CIMD,
-RFC 8414 metadata). Menu names below are from v2.18.
-
-1. Open `https://auth.example.com`, create the admin user, register a passkey on your
-   phone and laptop.
+1. From a second network outside the allowlist, confirm that
+   `https://auth.example.com/setup` returns `403`. Then open that URL from the
+   allowed browser, create the admin account, and enroll a passkey. Keep a second
+   passkey for recovery. [Pocket ID installation](https://pocket-id.org/docs/setup/installation)
 2. **Administration → APIs → add an API** for `things-mcp`:
    - resource: `https://mcp.example.com/mcp`, exactly `MCP_PUBLIC_URL` (tokens carry it as
      `aud`; the resource cannot be changed later);
    - permissions: `things.read` and `things.write`.
-3. **Administration → OIDC Clients**, one per assistant. On each client's **Access** tab,
+3. **Administration → OIDC Clients**, one per MCP client. On each client's **Access** tab,
    add the API with user-delegated access and choose its permissions; restrict the
-   client to a user group that contains only you.
+   client to a user group that contains only you. Use the OAuth client type and exact
+   redirect URI required by your client. The examples below use PKCE.
    - **Claude:** a public client (PKCE) with callback
      `https://claude.ai/api/mcp/auth_callback`. Alternatively Claude's published identity
      (CIMD) works only with the API's **Allow all metadata document clients** switch, which
@@ -237,8 +274,48 @@ RFC 8414 metadata). Menu names below are from v2.18.
      `https://chatgpt.com/connector_platform_oauth_redirect`. Start with `things.read`.
      After granting `things.write` and enabling writes on the server, reauthorize the
      plugin to obtain a token with the new scope.
-4. Put your user id (the `sub` claim of your tokens) into `OAUTH_ALLOWED_SUBJECT`, and
-   optionally the client ids into `OAUTH_ALLOWED_CLIENTS`; restart `things-mcp`.
+4. Copy the owner's Pocket ID user ID into `OAUTH_ALLOWED_SUBJECT` (the token's
+   `sub` claim). Optionally set `OAUTH_ALLOWED_CLIENTS` to the allowed client IDs.
+
+Replace the temporary `Caddyfile` with the normal routes. Keep the setup alias,
+the setup page, and its API blocked:
+
+```caddyfile
+mcp.example.com {
+    encode zstd gzip
+    reverse_proxy things-mcp:8080
+}
+
+auth.example.com {
+    @setup path /setup /setup/* /signup/setup /signup/setup/* /api/signup/setup /api/signup/setup/*
+    handle @setup {
+        respond 403
+    }
+    handle {
+        reverse_proxy pocket-id:1411
+    }
+}
+```
+
+Apply the proxy configuration first:
+
+```bash
+docker compose up -d --force-recreate caddy
+```
+
+From outside the VPS, confirm that `/setup` and `/signup/setup` return `403` on
+the auth hostname and `/.well-known/oauth-authorization-server` returns `200`.
+Then start MCP:
+
+```bash
+docker compose up -d things-mcp
+docker compose ps
+```
+
+MCP performs its initial Things Cloud sync before listening. It fetches Pocket ID
+signing keys using the public issuer URL. If it cannot reach the issuer,
+check DNS, TLS and the VPS firewall. After changing `secrets/things.env`, run
+`docker compose up -d --force-recreate things-mcp` to load the new values.
 
 What the server accepts: a JWT signed with a key from Pocket ID's JWKS (asymmetric
 algorithms only), header `typ` `at+jwt`, `iss` = `OAUTH_ISSUER`, `aud` containing
@@ -252,7 +329,13 @@ JWKS and the token endpoint must likewise be reachable by the client. Keep Pocke
 and initial setup routes protected. Before connecting, verify that unauthenticated MCP
 requests get a Bearer challenge (`401`), and that metadata returns `200`.
 
-## 6. Connect the assistants
+## 6. Connect an MCP client
+
+In your client, add `https://mcp.example.com/mcp` as a custom remote MCP server,
+select OAuth, and enter the client ID and secret if your client requires them. The
+client must obtain a token for that exact MCP URL as its OAuth resource, with the
+`things.read` scope for initial testing. Verify the connection with the read check
+in §6.3. The following examples show where to add the server in two clients.
 
 ### 6.1 Claude (web, desktop, then mobile)
 1. claude.ai → **Customize → Connectors → Add custom connector**.
@@ -263,33 +346,43 @@ requests get a Bearer challenge (`401`), and that metadata returns `200`.
 5. Per tool, set write tools to "Ask" (default for `destructiveHint`) and read tools to
    "Always allow" if you like.
 
-### 6.2 ChatGPT (web, then mobile)
-1. `chatgpt.com/plugins` → **+** → **Add custom MCP server**.
-2. URL `https://mcp.example.com/mcp`, authentication **OAuth**, static client
-   credentials from step 5.
-3. Install the plugin and call it with `@` in a chat.
-4. Check whether your plan allows write tools; until then keep the client on
-   `things.read`.
+### 6.2 ChatGPT (web)
+1. Open [ChatGPT Plugins](https://chatgpt.com/plugins) → **+** → **Add custom MCP server**.
+2. Enter `https://mcp.example.com/mcp` as the server URL. Choose **OAuth** and enter
+   the ChatGPT client's ID and secret from Pocket ID (§5).
+3. Create and install the plugin. Complete Pocket ID sign-in with your passkey and
+   approve access. Use `@` to select the installed plugin in a chat.
+
+Workspace permissions can affect access. See [OpenAI's setup guide](https://developers.openai.com/api/docs/guides/custom-mcp-server).
 
 ### 6.3 Check the setup
 
 ```bash
-curl -s https://mcp.example.com/.well-known/oauth-protected-resource/mcp
-curl -si -X POST https://mcp.example.com/mcp | grep -i '^www-authenticate'
+curl -fsS https://auth.example.com/.well-known/oauth-authorization-server
+curl -fsS https://mcp.example.com/.well-known/oauth-protected-resource/mcp
+curl -si -X POST https://mcp.example.com/mcp
 ```
 
-The first prints `resource` = `https://mcp.example.com/mcp` and
-`authorization_servers` = `["https://auth.example.com"]`; the second shows
-`Bearer resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource/mcp"`.
-After connecting, `docker compose logs things-mcp | grep auth:` must not show rejected
-tokens. For the first connection, use a sandbox Things account.
+The issuer metadata must return `200` and advertise a reachable `jwks_uri` that also
+returns `200`. The MCP metadata must return `200` with the exact `resource` and
+`authorization_servers` URLs. The unauthenticated POST must return `401` with
+`WWW-Authenticate: Bearer` pointing to the MCP metadata.
+
+For an authenticated read check, create a uniquely named task in the sandbox account
+using Things and wait for it to sync. Connect your MCP client and sign in through
+Pocket ID. In ChatGPT web, select the installed plugin in a chat. Check that the
+connection exposes read tools with no write tools. Ask the assistant to find the task
+by its exact title with `things_search_tasks`, then call `things_get_task` with the
+returned `uuid`. Inspect the tool result and compare the title and status with Things.
+If you have the Things link, compare its ID as well. This tests the OAuth flow and a
+real read from the mirror.
 
 ## 7. Backups
 
 | What | Why | How |
 |---|---|---|
 | `things-data` volume | Write audit log (`audit.jsonl`, planned); the SQLite mirror itself is a rebuildable cache. The server keeps no OAuth state: it only validates tokens | Nightly `VACUUM INTO` copy or Litestream to S3-compatible storage; copy off the box |
-| `pocket-id-data` | Users, passkeys, clients | Nightly volume snapshot |
+| `pocket-id-data` and the Pocket ID encryption key | Users, passkeys, clients and encrypted state | Snapshot the volume and back up the key separately. Restore with the original key. |
 | Things history export (planned, read-only job built on the SDK's `History.Items`) | Independent copy of the account history for diagnosing a bad write | Nightly JSON dump, 30-day retention |
 | Things itself | Source of truth | Things for Mac keeps local backups; keep them enabled |
 

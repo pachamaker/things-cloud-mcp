@@ -1,13 +1,13 @@
 # Things Cloud
 
-A Go server and SDK for the [Things 3](https://culturedcode.com/things/) cloud API. Gives [Claude](https://claude.ai) (and other MCP-compatible AI assistants) read access and optional writes for supported operations.
+A Go server and SDK for the [Things 3](https://culturedcode.com/things/) cloud API. Any LLM client that supports custom remote MCP servers over Streamable HTTP and compatible OAuth 2.1 can read Things data and optionally write it using the supported tools.
 
 Built on a reverse-engineered, unofficial SDK — there is no official API documentation from Cultured Code.
 
 > **Fork status.** This is an independently maintained fork of the archived
 > [`mattydsmith/things-cloud-mcp`](https://github.com/mattydsmith/things-cloud-mcp).
-> It is being reworked for self-hosting on a VPS with authenticated access from Claude
-> and ChatGPT. Known defects and the plan are in [`docs/known-issues.md`](docs/known-issues.md)
+> It is being reworked for self-hosting on a VPS with authenticated access from compatible
+> MCP clients. Known defects and the plan are in [`docs/known-issues.md`](docs/known-issues.md)
 > and [`docs/roadmap.md`](docs/roadmap.md). Contributors and AI agents start at
 > [`AGENTS.md`](AGENTS.md).
 >
@@ -19,22 +19,47 @@ Built on a reverse-engineered, unofficial SDK — there is no official API docum
 > **Authentication.** Every data route requires an OAuth 2.1 access token issued to you by
 > your own authorization server (Pocket ID, see [`docs/deployment/vps.md`](docs/deployment/vps.md));
 > without OAuth settings the server requires explicit local-only mode on `127.0.0.1`.
-> ChatGPT web sign-in, task lookup and ordinary task creation were verified on a personal
-> Things Cloud account with Pocket ID. Claude and mobile flows are outside that verification.
+> ChatGPT web sign-in, task lookup, and ordinary Inbox creation were verified with MCP
+> v2.0.1, Pocket ID v2.19.2, Nginx, and Cloudflare on a VPS. The
+> [deployment guide](docs/deployment/vps.md) distinguishes that setup from the Caddy
+> reference configuration.
 
 ## What it does
 
-The server syncs your Things Cloud data into a local SQLite database and exposes it to clients through the [Model Context Protocol](https://modelcontextprotocol.io/) at `/mcp`.
+The server syncs your Things Cloud data into a local SQLite database. Clients use [Model Context Protocol](https://modelcontextprotocol.io/) tools over Streamable HTTP at `/mcp`.
 
 MCP reads refresh the local mirror from Things Cloud, subject to sync throttling. Supported writes go through Things Cloud and appear in Things after the app syncs.
 The server performs an initial sync at startup and now exits if it cannot establish a clean local snapshot.
 
+### Architecture
+
 ```mermaid
 flowchart LR
-    Client[MCP client] -->|/mcp| Server[Things Cloud MCP]
-    Server <-->|Sync and optional writes| Cloud[Things Cloud]
-    Things[Things app] <-->|Native sync| Cloud
+    Assistant["MCP client"]
+    Browser["Owner's browser"]
+    Things["Things app"]
+    Cloud["Things Cloud"]
+
+    subgraph VPS["VPS · Docker Compose"]
+        Caddy["Caddy · HTTPS"]
+        MCP["Things Cloud MCP"]
+        Identity["Pocket ID · OAuth and passkeys"]
+        Mirror[("SQLite task mirror")]
+    end
+
+    Assistant -->|"HTTPS · MCP with OAuth token"| Caddy
+    Assistant -->|"OAuth discovery and token exchange"| Caddy
+    Browser -->|"Passkey sign-in"| Caddy
+    Caddy -->|"mcp.example.com"| MCP
+    Caddy -->|"auth.example.com"| Identity
+    MCP -.->|"Fetch OAuth metadata and public keys via HTTPS"| Caddy
+    MCP <-->|"Sync and optional writes"| Cloud
+    MCP <-->|"Read and update mirror"| Mirror
+    Things <-->|"Native sync"| Cloud
 ```
+
+DNS points both hostnames to the VPS. Caddy routes HTTPS traffic by hostname.
+Only Caddy publishes ports in this setup. See the [VPS deployment guide](docs/deployment/vps.md).
 
 ## MCP tools (35)
 
@@ -157,22 +182,19 @@ See **[the VPS deployment guide](docs/deployment/vps.md)** for full setup instru
 
 1. Set up a VPS with Caddy and Pocket ID ([docs/deployment/vps.md](docs/deployment/vps.md))
 2. Configure your Things Cloud credentials and the OAuth settings
-3. Add `https://mcp.<your-domain>/mcp` as a custom connector in Claude or ChatGPT and sign in with your passkey
-4. Create a Skill file for your workflow
+3. Add `https://mcp.<your-domain>/mcp` as a custom server in your MCP client and sign in. The [VPS guide](docs/deployment/vps.md#6-connect-an-mcp-client) includes setup examples for ChatGPT and Claude.
 
 ### Privacy and cost
 
-The self-hosted service uses your Things Cloud credentials and stores a SQLite mirror on your VPS. ChatGPT receives a scoped OAuth token from Pocket ID. Your VPS provider determines hosting costs.
+The self-hosted service uses your Things Cloud credentials and stores a SQLite mirror on your VPS. The MCP client receives a scoped OAuth token from Pocket ID and can see the task data returned by the tools it calls. Your VPS provider determines hosting costs.
 
 ### Test with a separate account
 
 Since this uses the Things Cloud sync protocol directly, consider creating a separate Things Cloud account to experiment with before pointing it at your main account.
 
-## Skills
+## Optional workflow instructions
 
-The MCP server gives Claude the ability to interact with Things, but to get the most out of it you need a **Claude Skill file** — a small instruction file that teaches Claude your specific projects, tags, and workflows.
-
-See **[docs/skills.md](docs/skills.md)** for a step-by-step guide to creating your own.
+If your assistant supports custom instructions, add context about your projects, tags, and workflows. The [Claude Skill examples](docs/skills.md) can be adapted to other clients. Workflow instructions are optional; MCP tools work without them.
 
 ## HTTP endpoints
 

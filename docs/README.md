@@ -11,7 +11,7 @@ Start with [`../AGENTS.md`](../AGENTS.md) if you are about to change code.
 | [`known-issues.md`](known-issues.md) | Defect register (`KI-NN`) with root causes and fix direction |
 | [`roadmap.md`](roadmap.md) | Phased plan with exit criteria |
 | [`adr/`](adr/README.md) | Architecture decision records |
-| [`deployment/vps.md`](deployment/vps.md) | Self-hosting on a VPS for Claude and ChatGPT |
+| [`deployment/vps.md`](deployment/vps.md) | Self-hosting on a VPS and connecting compatible remote MCP clients |
 | [`testing/sandbox-e2e.md`](testing/sandbox-e2e.md) | Sandbox end-to-end tests: safety model, setup, seed list, cadence |
 | [`testing/conformance.md`](testing/conformance.md) | Conformance snapshots: the server's views against the Things app's, privacy, when to snapshot |
 | [`../testdata/captures/`](../testdata/captures/README.md) | Sanitized payloads the official Things apps wrote: evidence for the protocol notes |
