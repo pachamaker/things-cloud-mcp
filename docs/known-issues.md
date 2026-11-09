@@ -68,6 +68,62 @@ workaround can be deleted.
 
 ---
 
+## Security audit follow-ups (2026-11-09)
+
+The audit used synthetic data and local stubs. The open entries below still apply
+to `main` at `8d25067`. The native Things client's response to the write integrity
+cases has not been verified.
+
+### KI-39 · Edits can create a cycle in the task hierarchy
+- **Status:** open (P1) · **Evidence:** a local test saw an edit send a task's own ID
+  as its parent. `checkRefs` checks the proposed parent's type and state without
+  checking ancestry (`server/preconditions.go`, `server/write.go` `editTask`).
+- **Proposed fix:** reject a proposed parent that is the target itself or one of its
+  descendants. Check the parent chain in the mirror during the write precheck and
+  stop safely if it contains an existing cycle.
+- **Verification:** a self-reference and a two-task cycle each produce zero cloud
+  commits. A valid move to an unrelated parent still succeeds.
+
+### KI-40 · A write conflict can replay a stale payload
+- **Status:** open (P1) · **Evidence:** a local test changed a referenced object between
+  attempts. `historyWrite` retried the original payload at a newer ancestor index
+  without rerunning its preconditions (`server/write.go`).
+- **Proposed fix:** return an actionable conflict after the first `409`. The caller
+  can refresh the affected task and its references before deciding whether to retry.
+  Any future automatic retry must rebuild and validate the write against the same
+  history state it uses for the new commit.
+- **Verification:** if a referenced project moves to Trash between precheck and commit,
+  Things Cloud receives exactly one commit attempt and the caller gets a conflict.
+  Update the sandbox test that currently expects an automatic retry.
+
+### KI-41 · MCP POST bodies have no application size limit
+- **Status:** open (P1) · **Evidence:** a local test with a read token sent an oversized
+  body without `Content-Length`. The MCP library read it in full (`server/main.go`
+  `newRouter`, `mcp-go` v0.44.0 `server/streamable_http.go`). With no upstream limit,
+  large concurrent requests can exhaust memory.
+- **Proposed fix:** bound POST bodies at `/mcp` before the MCP handler reads them and
+  return HTTP `413` when a request exceeds the limit.
+- **Verification:** over-limit requests with and without `Content-Length` return
+  `413`. Normal MCP tool calls continue to work.
+
+### KI-42 · Cached signing keys have no hard expiry during issuer outages
+- **Status:** open (P2) · **Evidence:** a fake clock and unavailable issuer showed that
+  `jwksCache.lookup` still accepted an otherwise valid token with keys last fetched
+  24 hours earlier (`server/auth.go`). This extends the time a compromised signing
+  key can be used during an outage. JWT expiration checks still apply.
+- **Proposed fix:** keep a bounded grace period for transient issuer failures and
+  stop using cached keys past a hard age limit. Report issuer unavailability while
+  the refresh fails and resume after a successful refresh.
+- **Verification:** use a fake clock to check acceptance during the grace period,
+  HTTP `503` after the limit, and recovery when fresh keys become available.
+
+### KI-43 · Legacy REST credential verification returned account metadata
+- **Status:** fixed on `main` in `ac3a284` ([#43](https://github.com/pachamaker/things-cloud-mcp/pull/43)).
+  The REST API and its opt-in switch were removed. Keep REST disabled on older
+  releases that still support it.
+- **Verification:** `TestRouter_FormerRESTRoutesReturnNotFound` covers all 14 retired
+  routes, including `/api/verify`. Standard CI and offline MCP read/write tests passed.
+
 ## P0 — Data safety and security
 
 ### KI-25 · `Task7` items are silently dropped (Things ≥ 3.23)
@@ -603,6 +659,15 @@ workaround can be deleted.
   and a leftover cleanup test, a 1 request/s throttle, and read-only checks of a manual
   seed list (`Task7`, repeating to-dos). Offline self-test against an in-memory fake:
   `go test -tags 'e2e fakecloud' -run '^TestSandbox' ./server`.
+- **Manual CI run near UTC midnight (2026-11-09):** [run 42538304998](https://github.com/pachamaker/things-cloud-mcp/actions/runs/42538304998/job/128907425240#step:4:24)
+  on `ac3a284` reached the offline self-test at 00:06 UTC, inside the harness's
+  15-minute midnight guard. `THINGS_E2E_REQUIRE_RUN=1` converted the four guarded
+  skips into failures. The real sandbox, seed checks, and cleanup steps were skipped,
+  so the run provides no end-to-end result against Things Cloud. The standard CI
+  [passed on `ac3a284`](https://github.com/pachamaker/things-cloud-mcp/actions/runs/42538112302)
+  and [on `8d25067`](https://github.com/pachamaker/things-cloud-mcp/actions/runs/42538415081),
+  which changed only documentation. For manual verification, run `Sandbox e2e` well
+  outside 23:45–00:15 UTC. The scheduled start at 03:17 UTC leaves that margin.
 - **Remaining:** a green seed-check run in CI (green locally on 2026-10-11), then a Mac +
   iOS round trip (ADR-0004). Since
   phase 0 the harness retries a GET after a 429 (30 s, 1 min, 2 min, or `Retry-After`;
