@@ -26,10 +26,7 @@ Built on a reverse-engineered, unofficial SDK — there is no official API docum
 
 ## What it does
 
-The server syncs your Things Cloud data into a local SQLite database and exposes it through two interfaces:
-
-- **MCP Endpoint** (`/mcp`) — [Model Context Protocol](https://modelcontextprotocol.io/) tools over Streamable HTTP
-- **REST API** (`/api/*`) — off by default, same OAuth tokens, for scripts and apps
+The server syncs your Things Cloud data into a local SQLite database. Clients use [Model Context Protocol](https://modelcontextprotocol.io/) tools over Streamable HTTP at `/mcp`.
 
 MCP reads refresh the local mirror from Things Cloud, subject to sync throttling. Supported writes go through Things Cloud and appear in Things after the app syncs.
 The server performs an initial sync at startup and now exits if it cannot establish a clean local snapshot.
@@ -155,10 +152,9 @@ Once connected, an MCP client can use the supported operations below:
 
 #### Recurring tasks — readable, writes disabled
 
-Recurrence cannot be set, changed or removed through this server. `repeat` is not part of
-the tool schemas, and any non-empty `repeat` value sent to `things_create_task`, `things_edit_task`,
-`/api/tasks/create` or `/api/tasks/edit` — `"none"` included — is rejected with an error
-before anything is written. Recurrence writes have corrupted Things on macOS and iOS
+Recurrence cannot be set, changed or removed through this server. The tool schemas omit
+`repeat`. Both `things_create_task` and `things_edit_task` reject any non-empty value,
+including `"none"`, before writing. Recurrence writes have corrupted Things on macOS and iOS
 (incident 2026-08-18, KI-01). Set up or remove recurrence in the Things app. Background:
 [`docs/known-issues/repeat-disabled.md`](docs/known-issues/repeat-disabled.md).
 
@@ -174,9 +170,9 @@ in the Things app.
 
 ## Operational Notes
 
-- **Startup is fail-fast.** The server now requires the initial sync to succeed before it starts serving REST or MCP traffic.
+- **Startup is fail-fast.** The server now requires the initial sync to succeed before it starts serving MCP traffic.
 - **Shutdown is graceful.** `SIGINT` and `SIGTERM` trigger an HTTP shutdown with a timeout instead of dropping in-flight requests immediately.
-- **Read surfaces support pagination.** REST list endpoints and the corresponding MCP list tools accept optional `limit` and `offset` values.
+- **MCP lists support pagination.** List tools accept optional `limit` and `offset` values.
 - **Old `tir`/`sr` cache corruption is repaired automatically.** Opening a pre-fix sync database triggers a one-time local cache reset and full resync from Things Cloud history.
 - **Soft-deleted rows are purged from the local cache after sync.** This keeps the SQLite mirror from growing forever while preserving normal sync semantics.
 
@@ -200,35 +196,19 @@ Since this uses the Things Cloud sync protocol directly, consider creating a sep
 
 If your assistant supports custom instructions, add context about your projects, tags, and workflows. The [Claude Skill examples](docs/skills.md) can be adapted to other clients. Workflow instructions are optional; MCP tools work without them.
 
-## REST API
-
-The REST API is off unless the server runs with `ENABLE_REST_API=true`. Every `/api/*`
-endpoint then requires `Authorization: Bearer <access token>` from the same authorization
-server as `/mcp`, with the scope `things.read`; the write endpoints also need `things.write`.
-A local-only server (`INSECURE_NO_AUTH_LOCAL_ONLY=true`) needs no token. The write endpoints
-and write tools exist only when the server runs with `ENABLE_WRITES=true`; by default it is
-read-only.
-
-See **[docs/endpoints-and-things-cloud.md](docs/endpoints-and-things-cloud.md)** for how the REST and MCP surfaces sync from Things Cloud history, answer reads from the local SQLite mirror, and commit writes back to the cloud.
+## HTTP endpoints
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /` | Health check (no token) |
-| `GET /.well-known/oauth-protected-resource/mcp` | RFC 9728 protected-resource metadata (no token) |
-| `GET /api/verify` | Verify Things Cloud credentials |
-| `GET /api/sync` | Trigger sync, returns change count |
-| `GET /api/tasks/today` | Tasks scheduled for today. Optional query params: `limit`, `offset` |
-| `GET /api/tasks/inbox` | Tasks in the inbox. Optional query params: `limit`, `offset` |
-| `GET /api/tasks/anytime` | Tasks in Anytime. Optional query params: `limit`, `offset` |
-| `GET /api/tasks/someday` | Tasks in Someday. Optional query params: `limit`, `offset` |
-| `GET /api/tasks/upcoming` | Tasks in Upcoming. Optional query params: `limit`, `offset` |
-| `GET /api/projects` | All projects. Optional query params: `limit`, `offset` |
-| `GET /api/areas` | All areas. Optional query params: `limit`, `offset` |
-| `GET /api/tags` | All tags. Optional query params: `limit`, `offset` |
-| `POST /api/tasks/create` | Create a task |
-| `POST /api/tasks/edit` | Edit a task |
-| `POST /api/tasks/complete` | Complete a task |
-| `POST /api/tasks/trash` | Trash a task |
+| `/mcp` | MCP over Streamable HTTP. Remote requests require an OAuth access token. |
+| `GET /` | Public health check |
+| `GET /.well-known/oauth-protected-resource/mcp` | Public OAuth protected-resource metadata |
+
+Upgrading from a release with REST support? Remove `ENABLE_REST_API` from your
+configuration. Former `/api/*` routes return `404`. Migrate scripts that use those
+routes to MCP tool calls before upgrading.
+
+See [how MCP tools sync with Things Cloud](docs/endpoints-and-things-cloud.md).
 
 ## SDK
 
@@ -264,7 +244,6 @@ before their first write unless the account has the area `MCP E2E SANDBOX`:
 ./tests/test-mcp.sh 010        # All MCP write tools (44 checks)
 ./tests/test-mcp-read.sh       # All MCP read tools (29 checks)
 ./tests/test-mcp-protocol.sh   # JSON-RPC handshake and error handling (11 checks)
-./tests/test-api.sh            # All REST endpoints (needs ENABLE_REST_API=true; ACCESS_TOKEN=… against an OAuth server)
 ```
 
 ### macOS Things app test matrix
@@ -273,8 +252,8 @@ The broader Things app test matrix tracks **154 cases**. Recorded results are
 **126 passed, 2 failed, 8 partial, 1 blocked, and 17 not run**. A partial result
 means only part of the expected behavior was verified. ✅ marks a passed case.
 The matrix preserves historical app and sync observations. The current test scope
-is server behavior exposed through REST and MCP. Things Cloud synchronization
-between Things clients is out of scope.
+is server behavior exposed through MCP. Earlier test runs also covered the former REST API.
+Things Cloud synchronization between Things clients is out of scope.
 
 <details>
 <summary>All 154 Things app test cases and recorded results</summary>
@@ -480,7 +459,7 @@ This fork started from the archived [mattydsmith/things-cloud-mcp](https://githu
 
 | Area | Original MCP | This fork |
 | --- | --- | --- |
-| Remote access | Fly.io setup with a shared API key option | VPS deployment with owner-scoped OAuth for MCP and optional REST. Writes and REST are off by default. ChatGPT web sign-in, task lookup, and ordinary Inbox creation were verified with Pocket ID. |
+| Remote access | Fly.io setup with a shared API key option | VPS deployment with owner-scoped OAuth for MCP. Writes are off by default. ChatGPT web sign-in, task lookup, and ordinary Inbox creation were verified with Pocket ID. |
 | Task views | The older server and embedded SDK supplied the list logic | Today uses the owner's time zone, labels This Evening, and accounts for dismissed deadlines. Today and Anytime can both contain an active task where Things does. Project reads include to-dos under headings. |
 | Write safety | Create and edit exposed a `repeat` argument | Writes validate the target and references against a fresh mirror. Existing series can be read. Creating or changing recurrence and writing to its templates or instances are blocked. |
 | Sync and deployment | A copy of the SDK was embedded in the repository | The MCP server uses a pinned Go module. It serializes sync operations, backs off on rate limits, and rebuilds the mirror after a cloud history reset. Tag builds publish Linux amd64 and arm64 images to GHCR. |

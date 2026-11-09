@@ -808,7 +808,7 @@ func TestOAuthGate_KI07(t *testing.T) {
 	t.Run("no token: 401 challenge without an error code", func(t *testing.T) {
 		t.Parallel()
 		is := newTestIssuer(t, newFakeClock())
-		h := newTestGate(t, is, true).protect(reachedHandler(), false)
+		h := newTestGate(t, is, true).protect(reachedHandler())
 		for _, authz := range []string{"", "Basic b3duZXI6cHc=", "Bearer ", "Bearer"} {
 			res := callGate(t, h, authz)
 			if res.code != http.StatusUnauthorized || res.reached {
@@ -824,7 +824,7 @@ func TestOAuthGate_KI07(t *testing.T) {
 	t.Run("read-only server advertises things.read only", func(t *testing.T) {
 		t.Parallel()
 		is := newTestIssuer(t, newFakeClock())
-		res := callGate(t, newTestGate(t, is, false).protect(reachedHandler(), false), "")
+		res := callGate(t, newTestGate(t, is, false).protect(reachedHandler()), "")
 		if !strings.Contains(res.challenge, `scope="things.read"`) {
 			t.Errorf("WWW-Authenticate = %q", res.challenge)
 		}
@@ -834,7 +834,7 @@ func TestOAuthGate_KI07(t *testing.T) {
 		t.Parallel()
 		is := newTestIssuer(t, newFakeClock())
 		token := is.mint(t, mintOpts{claims: func(c map[string]any) { c["sub"] = "someone-else" }})
-		res := callGate(t, newTestGate(t, is, true).protect(reachedHandler(), false), "Bearer "+token)
+		res := callGate(t, newTestGate(t, is, true).protect(reachedHandler()), "Bearer "+token)
 		if res.code != http.StatusUnauthorized || res.reached {
 			t.Fatalf("status %d reached %v, want 401", res.code, res.reached)
 		}
@@ -850,24 +850,14 @@ func TestOAuthGate_KI07(t *testing.T) {
 		t.Parallel()
 		is := newTestIssuer(t, newFakeClock())
 		g := newTestGate(t, is, true)
-		cases := []struct {
-			scope     string
-			needWrite bool
-			want      string
-		}{
-			{"", false, `scope="things.read"`},
-			{"openid profile", false, `scope="things.read"`},
-			{"things.write", false, `scope="things.read"`},
-			{"things.read", true, `scope="things.read things.write"`},
-		}
-		for _, c := range cases {
-			token := is.mint(t, mintOpts{claims: func(m map[string]any) { m["scope"] = c.scope }})
-			res := callGate(t, g.protect(reachedHandler(), c.needWrite), "Bearer "+token)
+		for _, scope := range []string{"", "openid profile", "things.write"} {
+			token := is.mint(t, mintOpts{claims: func(m map[string]any) { m["scope"] = scope }})
+			res := callGate(t, g.protect(reachedHandler()), "Bearer "+token)
 			if res.code != http.StatusForbidden || res.reached {
-				t.Fatalf("scope %q needWrite %v: status %d reached %v, want 403", c.scope, c.needWrite, res.code, res.reached)
+				t.Fatalf("scope %q: status %d reached %v, want 403", scope, res.code, res.reached)
 			}
-			if !strings.Contains(res.challenge, `error="insufficient_scope"`) || !strings.Contains(res.challenge, c.want) {
-				t.Errorf("scope %q: WWW-Authenticate = %q, want %s", c.scope, res.challenge, c.want)
+			if !strings.Contains(res.challenge, `error="insufficient_scope"`) || !strings.Contains(res.challenge, `scope="things.read"`) {
+				t.Errorf("scope %q: WWW-Authenticate = %q", scope, res.challenge)
 			}
 		}
 	})
@@ -879,14 +869,14 @@ func TestOAuthGate_KI07(t *testing.T) {
 		read := is.mint(t, mintOpts{claims: func(m map[string]any) { m["scope"] = "things.read" }})
 		write := is.mint(t, mintOpts{})
 
-		if res := callGate(t, g.protect(reachedHandler(), false), "Bearer "+read); res.code != http.StatusOK || !res.reached || res.access.write {
+		if res := callGate(t, g.protect(reachedHandler()), "Bearer "+read); res.code != http.StatusOK || !res.reached || res.access.write {
 			t.Errorf("read token: %+v", res)
 		}
-		if res := callGate(t, g.protect(reachedHandler(), false), "bearer "+read); res.code != http.StatusOK || !res.reached {
+		if res := callGate(t, g.protect(reachedHandler()), "bearer "+read); res.code != http.StatusOK || !res.reached {
 			t.Errorf("lower-case scheme: %+v", res)
 		}
-		if res := callGate(t, g.protect(reachedHandler(), true), "Bearer "+write); res.code != http.StatusOK || !res.access.write {
-			t.Errorf("write token on a write route: %+v", res)
+		if res := callGate(t, g.protect(reachedHandler()), "Bearer "+write); res.code != http.StatusOK || !res.access.write {
+			t.Errorf("write token: %+v", res)
 		}
 	})
 
@@ -894,7 +884,7 @@ func TestOAuthGate_KI07(t *testing.T) {
 		t.Parallel()
 		is := newTestIssuer(t, newFakeClock())
 		is.setDown(true)
-		res := callGate(t, newTestGate(t, is, true).protect(reachedHandler(), false), "Bearer "+is.mint(t, mintOpts{}))
+		res := callGate(t, newTestGate(t, is, true).protect(reachedHandler()), "Bearer "+is.mint(t, mintOpts{}))
 		if res.code != http.StatusServiceUnavailable || res.reached {
 			t.Fatalf("status %d reached %v, want 503", res.code, res.reached)
 		}
@@ -925,7 +915,7 @@ func TestLocalGate_KI07(t *testing.T) {
 			req.Header.Set("Origin", tt.origin)
 		}
 		rec := httptest.NewRecorder()
-		localGate{}.protect(reachedHandler(), true).ServeHTTP(rec, req)
+		localGate{}.protect(reachedHandler()).ServeHTTP(rec, req)
 		if rec.Code != tt.want {
 			t.Errorf("Host %q Origin %q: status %d, want %d", tt.host, tt.origin, rec.Code, tt.want)
 		}
@@ -1069,13 +1059,13 @@ func TestListenAddr_KI07_LocalOnlyBindsLoopback(t *testing.T) {
 func TestParseSwitch(t *testing.T) {
 	t.Parallel()
 
-	if v, err := parseSwitch("ENABLE_REST_API", ""); v || err != nil {
+	if v, err := parseSwitch("ENABLE_WRITES", ""); v || err != nil {
 		t.Errorf("empty: %v %v", v, err)
 	}
-	if v, err := parseSwitch("ENABLE_REST_API", "true"); !v || err != nil {
+	if v, err := parseSwitch("ENABLE_WRITES", "true"); !v || err != nil {
 		t.Errorf("true: %v %v", v, err)
 	}
-	if _, err := parseSwitch("ENABLE_REST_API", "on"); err == nil || !strings.Contains(err.Error(), "ENABLE_REST_API") {
+	if _, err := parseSwitch("ENABLE_WRITES", "on"); err == nil || !strings.Contains(err.Error(), "ENABLE_WRITES") {
 		t.Errorf("on: error %v should name the variable", err)
 	}
 }

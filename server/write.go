@@ -347,10 +347,10 @@ func (u *taskUpdate) build() map[string]any {
 }
 
 // ---------------------------------------------------------------------------
-// API request types
+// Task write inputs
 // ---------------------------------------------------------------------------
 
-// CreateTaskRequest is the JSON body for POST /api/tasks/create.
+// CreateTaskRequest holds the inputs for creating a task.
 type CreateTaskRequest struct {
 	Title      string `json:"title"`
 	Note       string `json:"note,omitempty"`
@@ -362,7 +362,7 @@ type CreateTaskRequest struct {
 	Repeat     string `json:"repeat,omitempty"`      // always rejected, see rejectRepeat (KI-01)
 }
 
-// EditTaskRequest is the JSON body for POST /api/tasks/edit.
+// EditTaskRequest holds the inputs for editing a task.
 type EditTaskRequest struct {
 	UUID       string `json:"uuid"`
 	Title      string `json:"title,omitempty"`
@@ -374,11 +374,6 @@ type EditTaskRequest struct {
 	Area       string `json:"area,omitempty"`
 	Tags       string `json:"tags,omitempty"`
 	Repeat     string `json:"repeat,omitempty"` // always rejected, see rejectRepeat (KI-01)
-}
-
-// UUIDRequest is the JSON body for complete/trash endpoints.
-type UUIDRequest struct {
-	UUID string `json:"uuid"`
 }
 
 // ---------------------------------------------------------------------------
@@ -1177,111 +1172,6 @@ func deleteChecklistItem(uuid string) error {
 	}
 	syncAfterWrite()
 	return nil
-}
-
-// ---------------------------------------------------------------------------
-// Handlers
-// ---------------------------------------------------------------------------
-
-func handleCreateTask(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		jsonError(w, "method not allowed", 405)
-		return
-	}
-	var req CreateTaskRequest
-	if err := decodeJSONBody(w, r, &req); err != nil {
-		writeJSONDecodeError(w, "invalid JSON: ", err)
-		return
-	}
-	if req.Title == "" {
-		jsonError(w, "title is required", 400)
-		return
-	}
-	taskUUID, err := createTask(req)
-	if err != nil {
-		code := http.StatusInternalServerError
-		if isInvalidInput(err) {
-			code = http.StatusBadRequest
-		}
-		jsonError(w, err.Error(), code)
-		return
-	}
-	jsonResponse(w, map[string]string{"status": "created", "uuid": taskUUID, "title": req.Title})
-}
-
-func handleCompleteTask(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		jsonError(w, "method not allowed", 405)
-		return
-	}
-	var req UUIDRequest
-	if err := decodeJSONBody(w, r, &req); err != nil {
-		writeJSONDecodeError(w, "invalid JSON: ", err)
-		return
-	}
-	if req.UUID == "" {
-		jsonError(w, "uuid is required", 400)
-		return
-	}
-	if err := completeTask(req.UUID); err != nil {
-		code := http.StatusInternalServerError
-		if isInvalidInput(err) {
-			code = http.StatusBadRequest
-		}
-		jsonError(w, err.Error(), code)
-		return
-	}
-	jsonResponse(w, map[string]string{"status": "completed", "uuid": req.UUID})
-}
-
-func handleTrashTask(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		jsonError(w, "method not allowed", 405)
-		return
-	}
-	var req UUIDRequest
-	if err := decodeJSONBody(w, r, &req); err != nil {
-		writeJSONDecodeError(w, "invalid JSON: ", err)
-		return
-	}
-	if req.UUID == "" {
-		jsonError(w, "uuid is required", 400)
-		return
-	}
-	if err := trashTask(req.UUID); err != nil {
-		code := http.StatusInternalServerError
-		if isInvalidInput(err) {
-			code = http.StatusBadRequest
-		}
-		jsonError(w, err.Error(), code)
-		return
-	}
-	jsonResponse(w, map[string]string{"status": "trashed", "uuid": req.UUID})
-}
-
-func handleEditTask(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		jsonError(w, "method not allowed", 405)
-		return
-	}
-	var req EditTaskRequest
-	if err := decodeJSONBody(w, r, &req); err != nil {
-		writeJSONDecodeError(w, "invalid JSON: ", err)
-		return
-	}
-	if req.UUID == "" {
-		jsonError(w, "uuid is required", 400)
-		return
-	}
-	if err := editTask(req); err != nil {
-		code := http.StatusInternalServerError
-		if isInvalidInput(err) {
-			code = http.StatusBadRequest
-		}
-		jsonError(w, err.Error(), code)
-		return
-	}
-	jsonResponse(w, map[string]string{"status": "updated", "uuid": req.UUID})
 }
 
 // Ensure writeEnvelope implements Identifiable

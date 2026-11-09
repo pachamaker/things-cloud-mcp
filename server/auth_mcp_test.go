@@ -139,8 +139,23 @@ func serveRouter(h http.Handler, method, path, authz, body string) *httptest.Res
 	return rec
 }
 
-// Handlers behind these routes touch nil package globals, so only requests
-// the gate must stop are sent with a token.
+func TestRouter_FormerRESTRoutesReturnNotFound(t *testing.T) {
+	t.Parallel()
+	is := newTestIssuer(t, newFakeClock())
+	readToken := "Bearer " + is.mint(t, mintOpts{claims: func(m map[string]any) { m["scope"] = scopeRead }})
+	h := newRouter(newTestGate(t, is, true), true)
+	for _, path := range restReadRoutes {
+		if rec := serveRouter(h, http.MethodGet, path, "", ""); rec.Code != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404", path, rec.Code)
+		}
+	}
+	for _, path := range restWriteRoutes {
+		if rec := serveRouter(h, http.MethodPost, path, readToken, `{}`); rec.Code != http.StatusNotFound {
+			t.Errorf("POST %s with a valid token = %d, want 404", path, rec.Code)
+		}
+	}
+}
+
 func TestRouter_KI07(t *testing.T) {
 	t.Parallel()
 
@@ -152,68 +167,37 @@ func TestRouter_KI07(t *testing.T) {
 		readToken := "Bearer " + is.mint(t, mintOpts{claims: func(m map[string]any) { m["scope"] = scopeRead }})
 		writeToken := "Bearer " + is.mint(t, mintOpts{})
 
-		for _, restAPI := range []bool{false, true} {
-			h := newRouter(newTestGate(t, is, true), true, restAPI)
+		h := newRouter(newTestGate(t, is, true), true)
 
-			if rec := serveRouter(h, http.MethodGet, "/", "", ""); rec.Code != http.StatusOK {
-				t.Errorf("GET / = %d, want 200 (health check stays public)", rec.Code)
-			}
-			if rec := serveRouter(h, http.MethodGet, "/.well-known/oauth-protected-resource/mcp", "", ""); rec.Code != http.StatusOK {
-				t.Errorf("metadata = %d, want 200", rec.Code)
-			}
-			for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {
-				if rec := serveRouter(h, method, "/mcp", "", toolsList); rec.Code != http.StatusUnauthorized {
-					t.Errorf("%s /mcp without a token = %d, want 401", method, rec.Code)
-				}
-			}
-
-			rec := serveRouter(h, http.MethodPost, "/mcp", readToken, toolsList)
-			if rec.Code != http.StatusOK {
-				t.Fatalf("tools/list with a things.read token = %d", rec.Code)
-			}
-			for _, name := range writeToolNames {
-				if strings.Contains(rec.Body.String(), `"`+name+`"`) {
-					t.Errorf("tools/list through the router shows %s to a things.read token", name)
-				}
-			}
-			if rec := serveRouter(h, http.MethodPost, "/mcp", writeToken, toolsList); !strings.Contains(rec.Body.String(), `"things_create_task"`) {
-				t.Errorf("tools/list with a things.write token lacks write tools: %d", rec.Code)
-			}
-
-			for _, path := range append(slices.Clone(restReadRoutes), restWriteRoutes...) {
-				want := http.StatusNotFound
-				if restAPI {
-					want = http.StatusUnauthorized
-				}
-				if rec := serveRouter(h, http.MethodPost, path, "", `{}`); rec.Code != want {
-					t.Errorf("restAPI=%v %s without a token = %d, want %d", restAPI, path, rec.Code, want)
-				}
-			}
-			if restAPI {
-				for _, path := range restWriteRoutes {
-					if rec := serveRouter(h, http.MethodPost, path, readToken, `{"uuid":"x","title":"x"}`); rec.Code != http.StatusForbidden {
-						t.Errorf("%s with a things.read token = %d, want 403", path, rec.Code)
-					}
-				}
+		if rec := serveRouter(h, http.MethodGet, "/", "", ""); rec.Code != http.StatusOK {
+			t.Errorf("GET / = %d, want 200 (health check stays public)", rec.Code)
+		}
+		if rec := serveRouter(h, http.MethodGet, "/.well-known/oauth-protected-resource/mcp", "", ""); rec.Code != http.StatusOK {
+			t.Errorf("metadata = %d, want 200", rec.Code)
+		}
+		for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {
+			if rec := serveRouter(h, method, "/mcp", "", toolsList); rec.Code != http.StatusUnauthorized {
+				t.Errorf("%s /mcp without a token = %d, want 401", method, rec.Code)
 			}
 		}
-	})
 
-	t.Run("ENABLE_WRITES caps the REST API too", func(t *testing.T) {
-		t.Parallel()
-		is := newTestIssuer(t, newFakeClock())
-		writeToken := "Bearer " + is.mint(t, mintOpts{})
-		h := newRouter(newTestGate(t, is, false), false, true)
-		for _, path := range restWriteRoutes {
-			if rec := serveRouter(h, http.MethodPost, path, writeToken, `{"uuid":"x","title":"x"}`); rec.Code != http.StatusNotFound {
-				t.Errorf("read-only server: %s with a things.write token = %d, want 404", path, rec.Code)
+		rec := serveRouter(h, http.MethodPost, "/mcp", readToken, toolsList)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("tools/list with a things.read token = %d", rec.Code)
+		}
+		for _, name := range writeToolNames {
+			if strings.Contains(rec.Body.String(), `"`+name+`"`) {
+				t.Errorf("tools/list through the router shows %s to a things.read token", name)
 			}
+		}
+		if rec := serveRouter(h, http.MethodPost, "/mcp", writeToken, toolsList); !strings.Contains(rec.Body.String(), `"things_create_task"`) {
+			t.Errorf("tools/list with a things.write token lacks write tools: %d", rec.Code)
 		}
 	})
 
 	t.Run("local only", func(t *testing.T) {
 		t.Parallel()
-		h := newRouter(localGate{}, true, false)
+		h := newRouter(localGate{}, true)
 		rec := serveRouter(h, http.MethodPost, "/mcp", "", toolsList)
 		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "things_create_task") {
 			t.Errorf("local /mcp tools/list = %d %s", rec.Code, rec.Body.String())

@@ -137,7 +137,6 @@ Fly.io doesn't bill you if your monthly usage is under $5. The server scales to 
 | `THINGS_USERNAME` | Yes | Your Things account email |
 | `THINGS_PASSWORD` | Yes | Your Things account password |
 | `OAUTH_ISSUER`, `MCP_PUBLIC_URL`, `OAUTH_ALLOWED_SUBJECT` | Yes | OAuth settings, see [`deployment/vps.md`](deployment/vps.md) |
-| `ENABLE_REST_API` | No | `true` serves `/api/*` behind the same tokens as `/mcp` |
 | `PORT` | No | Server port (default: `8080`) |
 | `DATA_DIR` | No | Directory of the SQLite cache `things-upstream.db` (default: `/data`) |
 | `ENABLE_WRITES` | No | `true` enables the write tools and endpoints; read-only otherwise |
@@ -153,7 +152,5 @@ fly deploy
 ## Troubleshooting
 
 **Server won't start:** Check your credentials with `fly logs`. The most common issue is incorrect Things Cloud credentials.
-
-**Sync errors:** The server retries sync automatically. If issues persist, check `fly logs` for details. With `ENABLE_REST_API=true` you can trigger a manual sync via `curl -H "Authorization: Bearer <access token>" https://your-app-name.fly.dev/api/sync`.
 
 **Cold start latency:** The first request after idle may take a few seconds as Fly.io starts the machine and the server performs an initial sync. Subsequent requests are fast.

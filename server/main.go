@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -62,240 +61,12 @@ func jsonError(w http.ResponseWriter, msg string, code int) {
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
-func handleVerify(w http.ResponseWriter, r *http.Request) {
-	resp, err := client.Verify()
-	if err != nil {
-		jsonError(w, fmt.Sprintf("verification failed: %v", err), 401)
-		return
-	}
-	jsonResponse(w, resp)
-}
-
-func paginationQueryOpts(r *http.Request) (listOpts, error) {
-	opts := listOpts{}
-
-	if raw := r.URL.Query().Get("limit"); raw != "" {
-		limit, err := strconv.Atoi(raw)
-		if err != nil || limit < 0 {
-			return opts, fmt.Errorf("limit must be a non-negative integer")
-		}
-		opts.Limit = limit
-	}
-	if raw := r.URL.Query().Get("offset"); raw != "" {
-		offset, err := strconv.Atoi(raw)
-		if err != nil || offset < 0 {
-			return opts, fmt.Errorf("offset must be a non-negative integer")
-		}
-		opts.Offset = offset
-	}
-
-	return opts, nil
-}
-
-func handleSync(w http.ResponseWriter, r *http.Request) {
-	changes, err := mirror.Sync()
-	if err != nil {
-		jsonError(w, fmt.Sprintf("sync failed: %v", err), 500)
-		return
-	}
-	jsonResponse(w, map[string]interface{}{
-		"changes_count": len(changes),
-	})
-}
-
-func handleInbox(w http.ResponseWriter, r *http.Request) {
-	opts, err := paginationQueryOpts(r)
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := syncForRead(); err != nil {
-		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
-		return
-	}
-	state := readState()
-	tasks, err := state.TasksInInbox(opts)
-	if err != nil {
-		jsonError(w, fmt.Sprintf("failed to get inbox: %v", err), 500)
-		return
-	}
-	if tasks == nil {
-		jsonResponse(w, []*things.Task{})
-		return
-	}
-	jsonResponse(w, tasks)
-}
-
-func handleToday(w http.ResponseWriter, r *http.Request) {
-	opts, err := paginationQueryOpts(r)
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := syncForRead(); err != nil {
-		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
-		return
-	}
-	state := readState()
-	tasks, err := state.TasksInToday(opts)
-	if err != nil {
-		jsonError(w, fmt.Sprintf("failed to get today: %v", err), 500)
-		return
-	}
-	if tasks == nil {
-		jsonResponse(w, []*things.Task{})
-		return
-	}
-	jsonResponse(w, tasks)
-}
-
-func handleAnytime(w http.ResponseWriter, r *http.Request) {
-	opts, err := paginationQueryOpts(r)
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := syncForRead(); err != nil {
-		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
-		return
-	}
-	state := readState()
-	tasks, err := state.TasksInAnytime(opts)
-	if err != nil {
-		jsonError(w, fmt.Sprintf("failed to get anytime: %v", err), 500)
-		return
-	}
-	if tasks == nil {
-		jsonResponse(w, []*things.Task{})
-		return
-	}
-	jsonResponse(w, tasks)
-}
-
-func handleSomeday(w http.ResponseWriter, r *http.Request) {
-	opts, err := paginationQueryOpts(r)
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := syncForRead(); err != nil {
-		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
-		return
-	}
-	state := readState()
-	tasks, err := state.TasksInSomeday(opts)
-	if err != nil {
-		jsonError(w, fmt.Sprintf("failed to get someday: %v", err), 500)
-		return
-	}
-	if tasks == nil {
-		jsonResponse(w, []*things.Task{})
-		return
-	}
-	jsonResponse(w, tasks)
-}
-
-func handleUpcoming(w http.ResponseWriter, r *http.Request) {
-	opts, err := paginationQueryOpts(r)
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := syncForRead(); err != nil {
-		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
-		return
-	}
-	state := readState()
-	tasks, err := state.TasksInUpcoming(opts)
-	if err != nil {
-		jsonError(w, fmt.Sprintf("failed to get upcoming: %v", err), 500)
-		return
-	}
-	if tasks == nil {
-		jsonResponse(w, []*things.Task{})
-		return
-	}
-	jsonResponse(w, tasks)
-}
-
-func handleProjects(w http.ResponseWriter, r *http.Request) {
-	opts, err := paginationQueryOpts(r)
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := syncForRead(); err != nil {
-		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
-		return
-	}
-	state := readState()
-	projects, err := state.AllProjects(opts)
-	if err != nil {
-		jsonError(w, fmt.Sprintf("failed to get projects: %v", err), 500)
-		return
-	}
-	if projects == nil {
-		jsonResponse(w, []*things.Task{})
-		return
-	}
-	jsonResponse(w, projects)
-}
-
-func handleAreas(w http.ResponseWriter, r *http.Request) {
-	opts, err := paginationQueryOpts(r)
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := syncForRead(); err != nil {
-		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
-		return
-	}
-	state := readState()
-	areas, err := state.AllAreasWithOpts(opts)
-	if err != nil {
-		jsonError(w, fmt.Sprintf("failed to get areas: %v", err), 500)
-		return
-	}
-	if areas == nil {
-		jsonResponse(w, []*things.Area{})
-		return
-	}
-	jsonResponse(w, areas)
-}
-
-func handleTags(w http.ResponseWriter, r *http.Request) {
-	opts, err := paginationQueryOpts(r)
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := syncForRead(); err != nil {
-		jsonError(w, fmt.Sprintf("pre-read sync failed: %v", err), http.StatusServiceUnavailable)
-		return
-	}
-	state := readState()
-	tags, err := state.AllTagsWithOpts(opts)
-	if err != nil {
-		jsonError(w, fmt.Sprintf("failed to get tags: %v", err), 500)
-		return
-	}
-	if tags == nil {
-		jsonResponse(w, []*things.Tag{})
-		return
-	}
-	jsonResponse(w, tags)
-}
-
-// writesEnabled parses ENABLE_WRITES. Writes are off unless explicitly enabled,
-// so a new install cannot change the account by accident (ADR-0004).
 func writesEnabled(raw string) (bool, error) {
 	return parseSwitch("ENABLE_WRITES", raw)
 }
 
-// newRouter mounts every data route behind g: /mcp always, the REST API only
-// when restAPI is set (ADR-0002). "/" stays public as a health check.
-func newRouter(g gate, writes, restAPI bool) *http.ServeMux {
+// newRouter serves authenticated MCP and the public health check and OAuth metadata.
+func newRouter(g gate, writes bool) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -305,29 +76,7 @@ func newRouter(g gate, writes, restAPI bool) *http.ServeMux {
 		jsonResponse(w, map[string]string{"service": "things-cloud-api", "status": "ok", "version": version})
 	})
 	g.registerPublic(mux)
-	mux.Handle("/mcp", g.protect(newMCPHandler(writes), false))
-
-	if !restAPI {
-		return mux
-	}
-	read := func(path string, h http.HandlerFunc) { mux.Handle(path, g.protect(h, false)) }
-	write := func(path string, h http.HandlerFunc) { mux.Handle(path, g.protect(h, true)) }
-	read("/api/verify", handleVerify)
-	read("/api/sync", handleSync)
-	read("/api/tasks/inbox", handleInbox)
-	read("/api/tasks/today", handleToday)
-	read("/api/tasks/anytime", handleAnytime)
-	read("/api/tasks/someday", handleSomeday)
-	read("/api/tasks/upcoming", handleUpcoming)
-	read("/api/projects", handleProjects)
-	read("/api/areas", handleAreas)
-	read("/api/tags", handleTags)
-	if writes {
-		write("/api/tasks/create", handleCreateTask)
-		write("/api/tasks/complete", handleCompleteTask)
-		write("/api/tasks/trash", handleTrashTask)
-		write("/api/tasks/edit", handleEditTask)
-	}
+	mux.Handle("/mcp", g.protect(newMCPHandler(writes)))
 	return mux
 }
 
@@ -457,11 +206,7 @@ func main() {
 	if writes {
 		log.Println("Writes enabled (ENABLE_WRITES=true)")
 	} else {
-		log.Println("Read-only: write tools and endpoints are off; set ENABLE_WRITES=true to enable them")
-	}
-	restAPI, err := parseSwitch("ENABLE_REST_API", os.Getenv("ENABLE_REST_API"))
-	if err != nil {
-		log.Fatal(err)
+		log.Println("Read-only: write tools are off; set ENABLE_WRITES=true to enable them")
 	}
 
 	tz := os.Getenv("THINGS_TIMEZONE")
@@ -496,7 +241,7 @@ func main() {
 		g = og
 	}
 
-	server := &http.Server{Addr: listenAddr(authCfg, port), Handler: newRouter(g, writes, restAPI)}
+	server := &http.Server{Addr: listenAddr(authCfg, port), Handler: newRouter(g, writes)}
 
 	log.Printf("Starting server %s on %s", version, server.Addr)
 	if err := serveWithGracefulShutdown(shutdownCtx, server, shutdownTimeout); err != nil {

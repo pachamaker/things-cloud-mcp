@@ -17,7 +17,6 @@ All tests live in the `tests/` directory and run against a deployed server URL t
 | `test-mcp.sh` | MCP write tools + read verification | `BASE_URL=https://your-app-name.fly.dev ./test-mcp.sh [cycle]` |
 | `test-mcp-read.sh` | MCP read-only tools | `BASE_URL=https://your-app-name.fly.dev ./test-mcp-read.sh` |
 | `test-mcp-protocol.sh` | MCP JSON-RPC protocol | `BASE_URL=https://your-app-name.fly.dev ./test-mcp-protocol.sh` |
-| `test-api.sh` | REST API endpoints | `BASE_URL=http://localhost:8080 ./test-api.sh` (server with `ENABLE_REST_API=true`; add `ACCESS_TOKEN=...` against an OAuth server) |
 
 Each script exits with code 0 on success, 1 on any failure.
 
@@ -214,54 +213,7 @@ These tests verify all read-only MCP tools return valid responses. They don't cr
 
 ---
 
-## 4. REST API Endpoints (`test-api.sh`)
-
-**Status: Implemented — 21/21 passing**
-
-Tests the `/api/*` endpoints (server started with `ENABLE_REST_API=true`). Against an OAuth server pass an access token as the second arg or via `ACCESS_TOKEN`; against a local-only server (`INSECURE_NO_AUTH_LOCAL_ONLY=true`) omit it and the auth checks are skipped.
-
-### Health & Auth
-
-| # | Endpoint | Method | Check |
-|---|----------|--------|-------|
-| 1 | `GET /` | — | Returns `{"service":"things-cloud-api","status":"ok"}` |
-| 2 | `GET /api/verify` | No auth | Returns 401 |
-| 3 | `GET /api/verify` | With auth | Returns 200 with account info |
-
-### Read endpoints
-
-| # | Endpoint | Check |
-|---|----------|-------|
-| 4 | `GET /api/tasks/today` | Returns JSON array of tasks |
-| 5 | `GET /api/tasks/inbox` | Returns JSON array of tasks |
-| 6 | `GET /api/tasks/anytime` | Returns JSON array of tasks |
-| 7 | `GET /api/tasks/someday` | Returns JSON array of tasks |
-| 8 | `GET /api/tasks/upcoming` | Returns JSON array of tasks |
-| 9 | `GET /api/projects` | Returns JSON array of projects |
-| 10 | `GET /api/areas` | Returns JSON array of areas |
-| 11 | `GET /api/tags` | Returns JSON array of tags |
-| 12 | `GET /api/sync` | Returns `{"changes_count": N}` |
-
-### Write endpoints
-
-| # | Endpoint | Body | Check |
-|---|----------|------|-------|
-| 13 | `POST /api/tasks/create` | `{"title":"[api-test] Task"}` | Returns uuid, status=created |
-| 14 | `POST /api/tasks/edit` | `{"uuid":"...","title":"..."}` | Returns status=updated |
-| 15 | `POST /api/tasks/complete` | `{"uuid":"..."}` | Returns status=completed |
-| 16 | `POST /api/tasks/trash` | `{"uuid":"..."}` | Returns status=trashed |
-
-### Write endpoint validation
-
-| # | Endpoint | Body | Expected |
-|---|----------|------|----------|
-| 17 | `POST /api/tasks/create` | `{}` (no title) | 400 "title is required" |
-| 18 | `POST /api/tasks/complete` | `{}` (no uuid) | 400 "uuid is required" |
-| 19 | `GET /api/tasks/create` | Wrong method | 405 "method not allowed" |
-
----
-
-## 5. MCP Protocol (`test-mcp-protocol.sh`)
+## 4. MCP Protocol (`test-mcp-protocol.sh`)
 
 **Status: Implemented — 12/12 passing**
 

@@ -140,7 +140,6 @@ same `Dockerfile`.
 | `MCP_PUBLIC_URL`, `OAUTH_ISSUER`, `OAUTH_ALLOWED_SUBJECT` | Required (KI-07): without them the server refuses to start. `OAUTH_ALLOWED_CLIENTS` is optional |
 | `ENABLE_WRITES` | `true` to register write tools; unset means read-only (ADR-0004) |
 | `THINGS_TIMEZONE` | Set it to your IANA zone: decides "today" (ADR-0003); unset means the UTC day |
-| `ENABLE_REST_API` | Optional, off by default |
 | `DATA_DIR` | Leave unset: the cache lives in `/data`, the volume below. If you change it, mount a volume writable by uid `65532` at that path |
 | `PORT` | Leave unset (`8080`). The health check reads the same variable |
 | `INSECURE_NO_AUTH_LOCAL_ONLY` | Never on a VPS: the server would listen on the container's loopback only and be unreachable |
@@ -159,8 +158,6 @@ OAUTH_ISSUER=https://auth.example.com
 OAUTH_ALLOWED_SUBJECT=
 # Optional: accept tokens only from these OAuth clients (comma-separated client ids).
 # OAUTH_ALLOWED_CLIENTS=<client id 1>,<client id 2>
-# Optional: serve /api/* behind the same tokens.
-# ENABLE_REST_API=true
 # Owner's IANA zone: decides "today" (ADR-0003). Unset means the UTC day.
 THINGS_TIMEZONE=Europe/Moscow
 ```
@@ -407,6 +404,9 @@ Test a restore once: stop the stack, restore volumes on a fresh VM, start, verif
   backoff up to an hour.
 
 ## 9. Updating
+
+Remove `ENABLE_REST_API` from older configurations. The server returns `404` for
+former `/api/*` routes. Migrate direct REST callers to MCP before upgrading.
 
 Upgrading from a version before KI-07: the server refuses to start until the OAuth
 settings from §4 are in `secrets/things.env`, and while `API_KEY` is still set.

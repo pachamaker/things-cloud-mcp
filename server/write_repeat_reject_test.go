@@ -68,42 +68,6 @@ func TestEditTask_KI01_RejectsAnyRepeat(t *testing.T) {
 	}
 }
 
-func TestRESTWrites_KI01_RejectRepeat(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name    string
-		handler http.HandlerFunc
-		body    string
-	}{
-		{"create daily", handleCreateTask, `{"title":"Test task","repeat":"daily"}`},
-		{"create none", handleCreateTask, `{"title":"Test task","repeat":"none"}`},
-		{"edit weekly", handleEditTask, `{"uuid":"` + generateUUID() + `","repeat":"weekly"}`},
-		{"edit none", handleEditTask, `{"uuid":"` + generateUUID() + `","repeat":"none"}`},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			req := httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(tc.body))
-			rec := httptest.NewRecorder()
-			tc.handler(rec, req)
-
-			if rec.Code != http.StatusBadRequest {
-				t.Fatalf("status = %d, want %d (body %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
-			}
-			var resp map[string]string
-			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-				t.Fatalf("decode response: %v", err)
-			}
-			if !strings.Contains(resp["error"], "KI-01") {
-				t.Fatalf("expected KI-01 in error, got %q", resp["error"])
-			}
-		})
-	}
-}
-
 func TestMCPWrites_KI01_RejectRepeat(t *testing.T) {
 	t.Parallel()
 
