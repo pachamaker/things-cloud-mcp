@@ -603,6 +603,15 @@ workaround can be deleted.
   and a leftover cleanup test, a 1 request/s throttle, and read-only checks of a manual
   seed list (`Task7`, repeating to-dos). Offline self-test against an in-memory fake:
   `go test -tags 'e2e fakecloud' -run '^TestSandbox' ./server`.
+- **Manual CI run near UTC midnight (2026-11-09):** [run 42538304998](https://github.com/pachamaker/things-cloud-mcp/actions/runs/42538304998/job/128907425240#step:4:24)
+  on `ac3a284` reached the offline self-test at 00:06 UTC, inside the harness's
+  15-minute midnight guard. `THINGS_E2E_REQUIRE_RUN=1` converted the four guarded
+  skips into failures. The real sandbox, seed checks, and cleanup steps were skipped,
+  so the run provides no end-to-end result against Things Cloud. The standard CI
+  [passed on `ac3a284`](https://github.com/pachamaker/things-cloud-mcp/actions/runs/42538112302)
+  and [on `8d25067`](https://github.com/pachamaker/things-cloud-mcp/actions/runs/42538415081),
+  which changed only documentation. For manual verification, run `Sandbox e2e` well
+  outside 23:45–00:15 UTC. The scheduled start at 03:17 UTC leaves that margin.
 - **Remaining:** a green seed-check run in CI (green locally on 2026-10-11), then a Mac +
   iOS round trip (ADR-0004). Since
   phase 0 the harness retries a GET after a 429 (30 s, 1 min, 2 min, or `Retry-After`;
