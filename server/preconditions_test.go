@@ -209,7 +209,7 @@ func assertPrecondition(t *testing.T, err error, wantErr string) {
 		t.Fatalf("error = %v, want one containing %q", err, wantErr)
 	}
 	if !isInvalidInput(err) {
-		t.Errorf("error %v is not an invalid-input error (REST would answer 500, not 400)", err)
+		t.Errorf("error %v is not an invalid-input error", err)
 	}
 }
 

@@ -1,11 +1,6 @@
 # How Endpoints Interact with Things Cloud
 
-This server does **not** expose the raw Things Cloud API directly.
-
-Instead, it sits between Things Cloud and two local surfaces:
-
-- the MCP endpoint at `/mcp`
-- the REST API at `/api/*`
+Clients call MCP tools at `/mcp`. The server handles the Things Cloud protocol internally.
 
 The important distinction is:
 
@@ -22,18 +17,7 @@ For most read operations, the server:
 2. Updates the local SQLite cache
 3. Answers the request from SQLite, not directly from the cloud response
 
-That means endpoints like:
-
-- `GET /api/tasks/today`
-- `GET /api/tasks/inbox`
-- `GET /api/tasks/anytime`
-- `GET /api/tasks/someday`
-- `GET /api/tasks/upcoming`
-- `GET /api/projects`
-- `GET /api/areas`
-- `GET /api/tags`
-
-and the matching MCP read tools all behave as **local queries over synced state**.
+MCP list, get, and search tools query this synced local state.
 
 ### Write path
 
@@ -43,15 +27,6 @@ For write operations, the server:
 2. Syncs the writable history to get the latest ancestor index
 3. Sends a commit to Things Cloud
 4. Re-syncs local state so subsequent reads reflect the change
-
-That means endpoints like:
-
-- `POST /api/tasks/create`
-- `POST /api/tasks/edit`
-- `POST /api/tasks/complete`
-- `POST /api/tasks/trash`
-
-and the matching MCP write tools are **history commits**, not direct SQL writes.
 
 ## Things Cloud Endpoints Used Under the Hood
 
@@ -66,11 +41,11 @@ The server uses a small set of underlying Things Cloud endpoints:
 
 There are other SDK-supported endpoints in the repo, but those four are the main ones used by the server's read/write flow.
 
-## How Read Endpoints Work
+## How Read Tools Work
 
 ### 1. Pre-read sync
 
-Most read handlers call the sync engine before they answer.
+Most read tools call the sync engine before they answer.
 
 Conceptually:
 
@@ -84,7 +59,7 @@ This is why the read surfaces feel "live" without querying Things Cloud for ever
 
 ### 2. Local query phase
 
-Once sync completes, the endpoint reads from the local `sync.State()` API.
+Once sync completes, the tool reads from the local `sync.State()` API.
 
 Examples:
 
@@ -105,16 +80,16 @@ only sets the trash flag on the ancestor (DOC-134).
 - **Someday**: `schedule = 2` and not future-dated
 - **Upcoming**: `schedule = 2` with a future `scheduled_date` or `today_index_ref`
 
-So these read endpoints are best understood as:
+So these tools are best understood as:
 
 - **Things Cloud history sync first**
 - **local view classification second**
 
-## How Write Endpoints Work
+## How Write Tools Work
 
 ### 1. Request mapping
 
-Write handlers convert the API or MCP request into the Things wire format used by the history stream.
+Write handlers convert the MCP request into the Things wire format used by the history stream.
 
 Examples:
 
@@ -151,37 +126,6 @@ After a successful commit, the server runs the sync engine again so the local SQ
 
 That keeps subsequent reads and MCP responses consistent with the cloud history rather than relying on an assumed local mutation.
 
-## Endpoint Categories
-
-### Direct cloud passthrough-ish endpoints
-
-These are close to direct Things Cloud calls:
-
-- `GET /api/verify`
-- `GET /api/sync`
-
-`/api/verify` checks credentials against the account endpoint.
-`/api/sync` explicitly runs the sync engine and returns how many semantic changes were detected.
-
-### Synced local read endpoints
-
-These endpoints first sync, then answer from SQLite:
-
-- all `/api/tasks/*` read endpoints
-- `/api/projects`
-- `/api/areas`
-- `/api/tags`
-- most MCP read tools
-- search tools that operate on synced task content
-
-### Cloud write endpoints
-
-These endpoints write a new history commit to Things Cloud and then re-sync:
-
-- task create/edit/move/complete/trash endpoints
-- project/area/tag/heading/checklist creation endpoints
-- matching MCP write tools
-
 ## Practical Implications
 
 ### Reads are eventually consistent with cloud history
@@ -194,7 +138,7 @@ If the Things app has just written something and Things Cloud propagation is sti
 
 Views like Today, Anytime, Someday, and Upcoming are defined by this repo's sync/query logic, not by dedicated Things Cloud endpoints.
 
-That means if you change the local classification rules, the endpoint behavior changes even though the upstream Things Cloud API stays the same.
+That means if you change the local classification rules, the tool behavior changes even though the upstream Things Cloud API stays the same.
 
 ### Writes are safer because they round-trip through cloud history
 

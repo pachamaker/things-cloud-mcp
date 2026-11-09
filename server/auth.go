@@ -107,7 +107,7 @@ func parseSwitch(name, raw string) (bool, error) {
 // forgotten variable never exposes the task database (AGENTS.md rule 5).
 func loadAuthConfig(getenv func(string) string) (authConfig, error) {
 	if getenv("API_KEY") != "" {
-		return authConfig{}, errors.New("API_KEY is no longer supported: /api/* takes the same OAuth access tokens as /mcp (ADR-0002); unset it")
+		return authConfig{}, errors.New("API_KEY is no longer supported: use OAuth access tokens for /mcp (ADR-0002); unset it")
 	}
 	localOnly, err := parseSwitch("INSECURE_NO_AUTH_LOCAL_ONLY", strings.TrimSpace(getenv("INSECURE_NO_AUTH_LOCAL_ONLY")))
 	if err != nil {
@@ -497,7 +497,7 @@ func (s *scopeSet) UnmarshalJSON(b []byte) error {
 // gate authenticates data routes. protect wraps a handler; registerPublic
 // adds the unauthenticated routes the gate itself needs.
 type gate interface {
-	protect(next http.Handler, needWrite bool) http.Handler
+	protect(next http.Handler) http.Handler
 	registerPublic(mux *http.ServeMux)
 }
 
@@ -508,7 +508,7 @@ type gate interface {
 // neither, so the gate does.
 type localGate struct{}
 
-func (localGate) protect(next http.Handler, _ bool) http.Handler {
+func (localGate) protect(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !isLoopbackHost(r.Host) || !isLoopbackOrigin(r.Header.Get("Origin")) {
 			jsonError(w, "local-only server: requests must name localhost or a loopback address", http.StatusForbidden)
@@ -582,7 +582,7 @@ func (g *oauthGate) warmUp(ctx context.Context) {
 	log.Printf("Auth: loaded %d signing key(s) from %s", n, g.cfg.Issuer)
 }
 
-func (g *oauthGate) protect(next http.Handler, needWrite bool) http.Handler {
+func (g *oauthGate) protect(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, ok := bearerToken(r)
 		if !ok {
@@ -601,12 +601,8 @@ func (g *oauthGate) protect(next http.Handler, needWrite bool) http.Handler {
 			g.challenge(w, http.StatusUnauthorized, "invalid_token", "The access token is invalid or expired", strings.Join(g.scopes, " "))
 			return
 		}
-		need := scopeRead
-		if needWrite {
-			need = scopeRead + " " + scopeWrite
-		}
-		if !info.scopes[scopeRead] || (needWrite && !info.scopes[scopeWrite]) {
-			g.challenge(w, http.StatusForbidden, "insufficient_scope", "The access token lacks a required scope", need)
+		if !info.scopes[scopeRead] {
+			g.challenge(w, http.StatusForbidden, "insufficient_scope", "The access token lacks a required scope", scopeRead)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(withAccess(r.Context(), access{write: info.scopes[scopeWrite]})))

@@ -93,7 +93,7 @@ copy this repo used to carry: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4.
 
 | Path | Role | Notes |
 |---|---|---|
-| `server/main.go` | Process wiring, router, REST handlers, graceful shutdown | Globals `client`, `mirrorDB`, `mirror`, `history`; cache at `$DATA_DIR/things-upstream.db` |
+| `server/main.go` | Process wiring, MCP router, graceful shutdown | Globals `client`, `mirrorDB`, `mirror`, `history`; cache at `$DATA_DIR/things-upstream.db` |
 | `server/mirror.go` | Owns the mirror file and its Syncer; history check (account key + head vs the stored key + cursor) and rebuild | KI-28; one backup `things-upstream.db.before-rebuild` |
 | `server/auth.go` | OAuth resource server: config, JWKS cache, RFC 9068 token checks, RFC 9728 metadata, per-tool scopes | Every data route goes through a `gate` (KI-07) |
 | `server/mcp.go` | MCP tool registry and read handlers, output formatting | `mark3labs/mcp-go` v0.44, Streamable HTTP, stateless |
@@ -103,7 +103,6 @@ copy this repo used to carry: `docs/2026-10-10-upstream-sdk-spike.md` §3–§4.
 | `server/today.go` | `THINGS_TIMEZONE` parsing, `ownerToday()` | Global `ownerZone`, set once in `main` |
 | `domain/civil` | Civil date, clock, owner's "today", wire encoding of day values, zone loading (ADR-0003) | Pure; embeds `time/tzdata` |
 | `server/syncgate.go` | Serialises and coalesces `Syncer.Sync()`, backs off on 429, runs history checks and background rebuilds with backoff, logs the history items the SDK skips | The SDK `Syncer` has no lock (KI-27, KI-28); skipped items: KI-29 |
-| `server/json_body.go` | Bounded JSON body decoding for REST | |
 | `server/redact.go` | Hides the URL of a failed Things Cloud request where SDK errors enter the server (sync gate, `historyWrite`, startup) | The URL carries the history key, a bearer capability (KI-35) |
 | SDK `thingscloud` | HTTP client, histories, items, wire types (`Task6`/`Task7`), Base58 codec, notes, account | `History.Write` refuses non-canonical IDs |
 | SDK `sync` | `Syncer`: incremental pull, per-batch cursor, cache replay with backup, SQLite store, `State` queries | The fork stores `rr`, `rt`, `sb`, `dds`, `tir` (`TaskReplayVersion` 5: an older cache is replayed once on first start) and skips tombstones without a target as `ItemSkipped` |
@@ -211,7 +210,6 @@ Ubiquitous language (use these words in code, tools and docs):
 flowchart TB
   subgraph transport["transport/ (thin)"]
     mcpT[mcp: tool schemas, annotations, structured output]
-    restT[rest: optional, same use cases]
     oauth[auth: RFC 9728 resource metadata + JWT validation]
   end
   subgraph app["app/ (use cases)"]

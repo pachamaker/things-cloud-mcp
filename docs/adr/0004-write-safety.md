@@ -32,7 +32,7 @@ No fixture → no encoder → the tool rejects the request with
 `docs/protocol/things-cloud.md` §5.1 and §6.
 
 ### 2. Recurrence is disabled
-`repeat` is removed from tool schemas and rejected on REST until the allowlist has a
+`repeat` is removed from tool schemas until the allowlist has a
 verified "create repeating to-do" encoder **and** the server stores `rr`/`rt`. Edits
 never touch templates. Re-enabling requires a new ADR.
 
