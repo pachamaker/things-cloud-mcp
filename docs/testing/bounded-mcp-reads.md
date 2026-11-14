@@ -67,6 +67,10 @@ byte-limited pages, metadata errors and Unicode text reconstruction. The fake-cl
 harness passed locally (70.16 seconds) and exercises the registered tools against a local Things protocol stand-in.
 It is a separate check from an actual Things Cloud account or ChatGPT connection.
 
+Local tidy/build/vet/race checks and fake-cloud harness passed. The separate
+`govulncheck@v1.8.0` scan failed on the existing Go 1.26.10 standard-library pin
+(GO-2026-6859, fixed in 1.26.11). See KI-44 before releasing.
+
 ### Serialized payload measurement
 
 Measured locally on 2026-11-14 with synthetic tasks, each containing a 1500-byte

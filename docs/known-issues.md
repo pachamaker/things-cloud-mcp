@@ -124,6 +124,20 @@ cases has not been verified.
 - **Verification:** `TestRouter_FormerRESTRoutesReturnNotFound` covers all 14 retired
   routes, including `/api/verify`. Standard CI and offline MCP read/write tests passed.
 
+### KI-44 · Pinned Go toolchain fails the current vulnerability scan
+
+- **Status:** open (2026-11-14), release blocker.
+- **Evidence:** local `govulncheck@v1.8.0` reports reachable standard-library
+  vulnerability [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859),
+  "HTTP/1 server crash due to MaxBytesReader header race in net/http".
+  Found in Go 1.26.10, fixed in Go 1.26.11 according to the scanner.
+- **Scope:** main and the bounded-read branch share the Go 1.26.10 pin. The
+  bounded-read feature does not upgrade the toolchain. A scanner result establishes
+  the dependency finding, not an exploit reproduced against the deployment.
+- **Fix direction:** update the `go.mod` toolchain and Docker builder tag/digest
+  together per KI-32, then rerun build, vet, race tests and govulncheck. Check image
+  availability and digest before editing. Keep the minimum Go version policy.
+
 ## P0 — Data safety and security
 
 ### KI-25 · `Task7` items are silently dropped (Things ≥ 3.23)
