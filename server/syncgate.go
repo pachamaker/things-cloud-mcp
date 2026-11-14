@@ -57,10 +57,11 @@ type mirrorGuard interface {
 // (KI-28). Calls fail fast while a rebuild runs, and rebuilds back off, so a
 // mirror that stays stale cannot loop on full resyncs.
 type syncGate struct {
-	inner  changeSyncer
-	guard  mirrorGuard
-	now    func() time.Time
-	window time.Duration
+	readSource func() (readModel, readRevisionState, error)
+	inner      changeSyncer
+	guard      mirrorGuard
+	now        func() time.Time
+	window     time.Duration
 
 	mu          gosync.Mutex
 	lastStart   time.Time

@@ -29,8 +29,9 @@ var errMirrorClosed = errors.New("the local Things mirror is closed")
 // rebuild replaces both (KI-28), so readers take the state through State and
 // never keep the Syncer.
 type mirrorFile struct {
-	path   string
-	client *things.Client
+	generation uint64
+	path       string
+	client     *things.Client
 
 	mu     gosync.RWMutex
 	syncer *sync.Syncer // the latest Syncer, closed while open is false
@@ -139,6 +140,7 @@ func (f *mirrorFile) reset() error {
 		return fmt.Errorf("open a fresh mirror: %w", err)
 	}
 	f.syncer, f.open = s, true
+	f.generation++
 	return nil
 }
 
