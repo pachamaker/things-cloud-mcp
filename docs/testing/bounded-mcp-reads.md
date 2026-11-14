@@ -83,9 +83,6 @@ are not reduced by this contract. Full HTTP traversal correctness is tested, whi
 SQLite query-performance tuning remains separate. Microbenchmark timings from a
 single iteration are unsuitable for latency guarantees.
 
-CI supports manual dispatch for checking an exact feature-branch commit when a PR
-event does not schedule checks. It runs the same secret-free jobs.
-
 ## Live verification gate
 
 Run the existing sandbox workflow on the PR branch, using only its configured
