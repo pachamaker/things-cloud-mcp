@@ -40,7 +40,7 @@ func TestReadArgumentsStrict(t *testing.T) {
 	if err != nil || p.Limit != 25 || p.Offset != 0 {
 		t.Fatalf("defaults %+v %v", p, err)
 	}
-	for _, v := range []any{0, -1, 1.5, math.NaN(), math.Inf(1), "2", true, nil, 1e30, 101, json.Number("1.5")} {
+	for _, v := range []any{0, -1, 1.5, math.NaN(), math.Inf(1), "2", true, nil, 1e30, 101, json.Number("1.5"), json.Number("1e1000000000")} {
 		if _, err := parsePageOptions(readRequest(map[string]any{"limit": v})); err == nil {
 			t.Errorf("accepted %v (%T)", v, v)
 		}
@@ -85,4 +85,19 @@ func TestReadEnvelopeByteBudget(t *testing.T) {
 	var out map[string]any
 	readJSON(t, readError("bad", strings.Repeat("\"界", 30000)), &out)
 	readJSON(t, boundedReadResult(map[string]float64{"n": math.NaN()}), &out)
+}
+
+func TestOversizedMetadataIdentifiesEntity(t *testing.T) {
+	var e struct {
+		Error struct {
+			Code  string `json:"code"`
+			UUID  string `json:"uuid"`
+			Field string `json:"field"`
+		} `json:"error"`
+	}
+	result := boundedReadResult(tagOutput{UUID: "tag-one", Title: strings.Repeat("secret-title", 4000)})
+	text := readJSON(t, result, &e)
+	if !result.IsError || e.Error.Code != "item_too_large" || e.Error.UUID != "tag-one" || e.Error.Field != "title" || strings.Contains(text, "secret-title") {
+		t.Fatal(text)
+	}
 }

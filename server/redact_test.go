@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -110,6 +111,14 @@ func toolErrorText(t *testing.T, res *mcp.CallToolResult, err error) string {
 	if !ok {
 		t.Fatalf("expected text content, got %T", res.Content[0])
 	}
+	var envelope struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal([]byte(text.Text), &envelope) == nil && envelope.Error.Message != "" {
+		return envelope.Error.Message
+	}
 	return text.Text
 }
 
@@ -174,7 +183,7 @@ func TestReadSync_KI35_ErrorHidesHistoryKey(t *testing.T) {
 
 	mirror = newSyncGate(&fakeSyncer{errs: []error{syncErr}}, newFakeClock().Now)
 	res, err := mcpListToday(context.Background(), mcp.CallToolRequest{})
-	if got, want := toolErrorText(t, res, err), "pre-read sync failed: "+cause; got != want {
+	if got, want := toolErrorText(t, res, err), "pre-read sync or query failed: "+cause; got != want {
 		t.Errorf("tool error = %q, want %q", got, want)
 	}
 	assertNoHistoryKey(t, "log", logs.String())

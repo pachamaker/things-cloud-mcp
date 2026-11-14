@@ -312,14 +312,13 @@ func completedInRange(tasks []*things.Task, limit int, completedAfter, completed
 	}
 	var out []*things.Task
 	for _, t := range tasks {
-		if t.Status != things.TaskStatusCompleted || t.CompletionDate == nil {
+		if t.IsRepeatingTemplate() || t.Status != things.TaskStatusCompleted || t.CompletionDate == nil {
 			continue
 		}
-		done := t.CompletionDate.Unix()
-		if completedAfter != nil && done < completedAfter.Unix() {
+		if completedAfter != nil && t.CompletionDate.Before(*completedAfter) {
 			continue
 		}
-		if completedBefore != nil && done >= completedBefore.Unix() {
+		if completedBefore != nil && !t.CompletionDate.Before(*completedBefore) {
 			continue
 		}
 		out = append(out, t)

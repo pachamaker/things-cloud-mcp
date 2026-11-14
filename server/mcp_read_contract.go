@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"reflect"
+	"strconv"
 	"unicode/utf8"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -50,6 +52,11 @@ func integerArgument(req mcp.CallToolRequest, name string, fallback, minimum, ma
 	}
 	if number {
 		raw = []byte(value.(json.Number))
+	}
+	// Reject extreme exponents before exact rational parsing can allocate large integers.
+	f, parseErr := strconv.ParseFloat(string(raw), 64)
+	if parseErr != nil || math.IsNaN(f) || math.IsInf(f, 0) || f < float64(minimum) || f > float64(maximum) {
+		return 0, fmt.Errorf("%s must be an in-range integer", name)
 	}
 	r, ok := new(big.Rat).SetString(string(raw))
 	if !ok || !r.IsInt() || !r.Num().IsInt64() {
@@ -109,7 +116,7 @@ func boundedReadResult(v any) *mcp.CallToolResult {
 		return readError("encode_error", "failed to encode read result JSON")
 	}
 	if len(b) > maxReadBytes {
-		return readError("item_too_large", "read result exceeds 24 KiB; request a smaller page or read task text in chunks")
+		return oversizedReadItem(v)
 	}
 	return mcp.NewToolResultText(string(b))
 }
@@ -140,7 +147,7 @@ func encodeCollectionPage[T any](items []T, p pageOptions, revision string, toda
 		}
 		if len(b) > maxReadBytes {
 			if page.Returned == 0 {
-				return readError("item_too_large", "first result cannot fit in 24 KiB; inspect the entity in Things")
+				return oversizedReadItem(items[i])
 			}
 			reason := "bytes"
 			page.PageLimitedBy = &reason
@@ -156,4 +163,26 @@ func runePrefix(text string, count int) string {
 		return text
 	}
 	return string([]rune(text)[:count])
+}
+
+// Only identity and the field name are exposed, never the oversized value.
+func oversizedReadItem(v any) *mcp.CallToolResult {
+	raw, e := json.Marshal(v)
+	if e != nil {
+		return readError("encode_error", "failed to encode read result")
+	}
+	var fields map[string]json.RawMessage
+	_ = json.Unmarshal(raw, &fields)
+	var uuid string
+	_ = json.Unmarshal(fields["uuid"], &uuid)
+	largest, field := 0, "result"
+	for name, value := range fields {
+		if len(value) > largest || (len(value) == largest && name < field) {
+			largest, field = len(value), name
+		}
+	}
+	b, _ := json.Marshal(map[string]any{"error": map[string]string{"code": "item_too_large", "message": "Entity metadata exceeds 24 KiB; inspect it in Things", "uuid": runePrefix(uuid, 128), "field": field}})
+	result := mcp.NewToolResultText(string(b))
+	result.IsError = true
+	return result
 }

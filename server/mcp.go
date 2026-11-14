@@ -133,77 +133,8 @@ func jsonToolResultWithIndent(v any, indent bool) *mcp.CallToolResult {
 	return mcp.NewToolResultText(string(b))
 }
 
-func tasksResult(tasks []*things.Task) *mcp.CallToolResult {
-	outputs := make([]taskOutput, len(tasks))
-	for i, t := range tasks {
-		outputs[i] = formatTask(t)
-	}
-	return jsonToolResultWithIndent(outputs, true)
-}
-
-// todayTasksResult flags the to-dos Today lists under This Evening, on the
-// same day the list was classified for.
-func todayTasksResult(tasks []*things.Task, today civil.Date) *mcp.CallToolResult {
-	outputs := make([]taskOutput, len(tasks))
-	for i, t := range tasks {
-		outputs[i] = formatTask(t)
-		outputs[i].Evening = inEvening(t, today)
-	}
-	return jsonToolResultWithIndent(outputs, true)
-}
-
-// projectTasksResult names each to-do's heading, so the model can group a
-// project without another call (KI-13).
-func projectTasksResult(tasks, headings []*things.Task) *mcp.CallToolResult {
-	titles := make(map[string]string, len(headings))
-	for _, h := range headings {
-		titles[h.UUID] = h.Title
-	}
-	outputs := make([]taskOutput, len(tasks))
-	for i, t := range tasks {
-		outputs[i] = formatTask(t)
-		outputs[i].HeadingTitle = titles[outputs[i].HeadingID]
-	}
-	return jsonToolResultWithIndent(outputs, true)
-}
-
-func areasResult(areas []*things.Area) *mcp.CallToolResult {
-	out := make([]areaOutput, len(areas))
-	for i, a := range areas {
-		out[i] = areaOutput{UUID: a.UUID, Title: a.Title}
-	}
-	return jsonToolResultWithIndent(out, true)
-}
-
-func tagsResult(tags []*things.Tag) *mcp.CallToolResult {
-	out := make([]tagOutput, len(tags))
-	for i, t := range tags {
-		out[i] = tagOutput{UUID: t.UUID, Title: t.Title, Shorthand: t.ShortHand}
-	}
-	return jsonToolResultWithIndent(out, true)
-}
-
-func checklistResult(items []*things.CheckListItem) *mcp.CallToolResult {
-	out := make([]checklistOutput, len(items))
-	for i, c := range items {
-		s := "open"
-		if c.Status == things.TaskStatusCompleted {
-			s = "completed"
-		}
-		out[i] = checklistOutput{UUID: c.UUID, Title: c.Title, Status: s}
-	}
-	return jsonToolResultWithIndent(out, true)
-}
-
 func writeResult(fields map[string]string) *mcp.CallToolResult {
 	return jsonToolResult(fields)
-}
-
-func syncForMCPReadResult() *mcp.CallToolResult {
-	if err := syncForRead(); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("pre-read sync failed: %v", err))
-	}
-	return nil
 }
 
 // parseDateOrRFC3339 reads an instant; a bare YYYY-MM-DD means the start of
@@ -230,289 +161,72 @@ func todayNote() string {
 	return fmt.Sprintf("\"Today\" is the calendar day in %s, the timezone configured on the server.", ownerZone)
 }
 
-func mcpPaginationOpts(req mcp.CallToolRequest) (listOpts, error) {
-	opts := listOpts{
-		Limit:  req.GetInt("limit", 0),
-		Offset: req.GetInt("offset", 0),
-	}
-	if opts.Limit < 0 {
-		return listOpts{}, fmt.Errorf("limit must be a non-negative integer")
-	}
-	if opts.Offset < 0 {
-		return listOpts{}, fmt.Errorf("offset must be a non-negative integer")
-	}
-	return opts, nil
-}
-
 // ---------------------------------------------------------------------------
 // Read tool handlers
 // ---------------------------------------------------------------------------
 
 func mcpListToday(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	opts, err := mcpPaginationOpts(req)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	today := ownerToday()
-	tasks, err := readState().tasksInViewOn(viewToday, opts, today)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	return todayTasksResult(tasks, today), nil
+	return mcpReadCollection("things_list_today", req)
 }
 
 func mcpListAnytime(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	opts, err := mcpPaginationOpts(req)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	tasks, err := readState().TasksInAnytime(opts)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	return tasksResult(tasks), nil
+	return mcpReadCollection("things_list_anytime", req)
 }
 
 func mcpListInbox(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	opts, err := mcpPaginationOpts(req)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	tasks, err := readState().TasksInInbox(opts)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	return tasksResult(tasks), nil
+	return mcpReadCollection("things_list_inbox", req)
 }
 
 func mcpListSomeday(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	opts, err := mcpPaginationOpts(req)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	tasks, err := readState().TasksInSomeday(opts)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	return tasksResult(tasks), nil
+	return mcpReadCollection("things_list_someday", req)
 }
 
 func mcpListUpcoming(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	opts, err := mcpPaginationOpts(req)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	tasks, err := readState().TasksInUpcoming(opts)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	return tasksResult(tasks), nil
+	return mcpReadCollection("things_list_upcoming", req)
 }
 
 func mcpListProjects(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	opts, err := mcpPaginationOpts(req)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	projects, err := readState().AllProjects(opts)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	return tasksResult(projects), nil
+	return mcpReadCollection("things_list_projects", req)
 }
 
 func mcpListAreas(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	opts, err := mcpPaginationOpts(req)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	areas, err := readState().AllAreasWithOpts(opts)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	return areasResult(areas), nil
+	return mcpReadCollection("things_list_areas", req)
 }
 
 func mcpListTags(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	opts, err := mcpPaginationOpts(req)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	tags, err := readState().AllTagsWithOpts(opts)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	return tagsResult(tags), nil
+	return mcpReadCollection("things_list_tags", req)
 }
 
 func mcpListAllTasks(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	opts, err := mcpPaginationOpts(req)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	tasks, err := readState().AllTasks(opts)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	return tasksResult(tasks), nil
+	return mcpReadCollection("things_list_all_tasks", req)
 }
 
 func mcpListProjectTasks(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	projectUUID, err := req.RequireString("project_uuid")
-	if err != nil {
-		return mcp.NewToolResultError("project_uuid is required"), nil
-	}
-	opts, err := mcpPaginationOpts(req)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	tasks, headings, err := readState().TasksInProject(projectUUID, opts)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	return projectTasksResult(tasks, headings), nil
+	return mcpReadCollection("things_list_project_tasks", req)
 }
 
 func mcpListAreaTasks(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	areaUUID, err := req.RequireString("area_uuid")
-	if err != nil {
-		return mcp.NewToolResultError("area_uuid is required"), nil
-	}
-	opts, err := mcpPaginationOpts(req)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	tasks, err := readState().TasksInArea(areaUUID, opts)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	return tasksResult(tasks), nil
+	return mcpReadCollection("things_list_area_tasks", req)
 }
 
 func mcpListCompleted(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	limit := req.GetInt("limit", 50)
-	completedAfter, err := parseDateOrRFC3339(req.GetString("completed_after", ""), "completed_after", ownerZone)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	completedBefore, err := parseDateOrRFC3339(req.GetString("completed_before", ""), "completed_before", ownerZone)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if completedAfter != nil && completedBefore != nil && !completedAfter.Before(*completedBefore) {
-		return mcp.NewToolResultError("completed_after must be earlier than completed_before"), nil
-	}
-
-	tasks, err := readState().CompletedTasksInRange(limit, completedAfter, completedBefore)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	return tasksResult(tasks), nil
+	return mcpReadCollection("things_list_completed", req)
 }
 
 func mcpListChecklistItems(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	taskUUID, err := req.RequireString("task_uuid")
-	if err != nil {
-		return mcp.NewToolResultError("task_uuid is required"), nil
-	}
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	items, err := mirrorState().ChecklistItems(taskUUID)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	return checklistResult(items), nil
+	return mcpReadCollection("things_list_checklist_items", req)
 }
 
 func mcpGetTask(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	uuid, err := req.RequireString("uuid")
-	if err != nil {
-		return mcp.NewToolResultError("uuid is required"), nil
-	}
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	task, err := readState().Task(uuid)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if task == nil {
-		return mcp.NewToolResultError("task not found"), nil
-	}
-	return jsonToolResultWithIndent(formatTask(task), true), nil
+	return mcpReadEntity("things_get_task", req)
 }
 
 func mcpGetArea(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	uuid, err := req.RequireString("uuid")
-	if err != nil {
-		return mcp.NewToolResultError("uuid is required"), nil
-	}
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	area, err := mirrorState().Area(uuid)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if area == nil {
-		return mcp.NewToolResultError("area not found"), nil
-	}
-	return jsonToolResultWithIndent(areaOutput{UUID: area.UUID, Title: area.Title}, true), nil
+	return mcpReadEntity("things_get_area", req)
 }
 
 func mcpGetTag(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	uuid, err := req.RequireString("uuid")
-	if err != nil {
-		return mcp.NewToolResultError("uuid is required"), nil
-	}
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	tag, err := mirrorState().Tag(uuid)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if tag == nil {
-		return mcp.NewToolResultError("tag not found"), nil
-	}
-	return jsonToolResultWithIndent(tagOutput{UUID: tag.UUID, Title: tag.Title, Shorthand: tag.ShortHand}, true), nil
+	return mcpReadEntity("things_get_tag", req)
 }
 
 // ---------------------------------------------------------------------------
@@ -713,28 +427,7 @@ func mcpCreateProject(_ context.Context, req mcp.CallToolRequest) (*mcp.CallTool
 // ---------------------------------------------------------------------------
 
 func mcpSearchTasks(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	query, err := req.RequireString("query")
-	if err != nil {
-		return mcp.NewToolResultError("query is required"), nil
-	}
-	if syncErr := syncForMCPReadResult(); syncErr != nil {
-		return syncErr, nil
-	}
-	tasks, err := readState().AllTasks(listOpts{})
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	q := strings.ToLower(query)
-	var matches []*things.Task
-	for _, t := range tasks {
-		if strings.Contains(strings.ToLower(t.Title), q) || strings.Contains(strings.ToLower(t.Note), q) {
-			matches = append(matches, t)
-		}
-	}
-	if matches == nil {
-		matches = []*things.Task{}
-	}
-	return tasksResult(matches), nil
+	return mcpReadCollection("things_search_tasks", req)
 }
 
 // ---------------------------------------------------------------------------
@@ -811,9 +504,38 @@ func newMCPHandler(writes bool) http.Handler {
 		}
 	}
 
+	addRead := func(tool mcp.Tool, handler server.ToolHandlerFunc) {
+		if strings.HasPrefix(tool.Name, "things_list_") || tool.Name == "things_search_tasks" {
+			tool.Description += " Returns compact summary pages without notes, default 25/max 100 items and at most 24 KiB. total is the full selection, returned is this page. Fetch more only when needed. Continue with next_offset and revision. On stale_page restart at zero and replace earlier results."
+			mcp.WithNumber("limit", mcp.Description("Page size, integer 1..100, default 25"), mcp.Min(1), mcp.Max(100))(&tool)
+			mcp.WithNumber("offset", mcp.Description("Non-negative integer offset, default 0"), mcp.Min(0))(&tool)
+			mcp.WithString("revision", mcp.Description("Required for offset > 0, copied from the first page"))(&tool)
+		}
+		if tool.Name == "things_search_tasks" {
+			mcp.WithString("scope", mcp.Description("open (default), completed, or their union all. Excludes canceled, trash and hidden templates."), mcp.Enum("open", "completed", "all"))(&tool)
+		}
+		for _, name := range []string{"limit", "offset"} {
+			if prop, ok := tool.InputSchema.Properties[name].(map[string]any); ok {
+				prop["type"] = "integer"
+			}
+		}
+
+		s.AddTool(tool, handler)
+	}
+
+	addRead(mcp.NewTool("things_get_task_text",
+		mcp.WithDescription("Read a task title or note in bounded Unicode chunks. Default 4000/max 8000 code points and at most 24 KiB JSON. Continue with next_offset and the returned revision. On stale_page restart at zero and replace the previous text."),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithString("uuid", mcp.Required()),
+		mcp.WithString("field", mcp.Enum("note", "title"), mcp.Description("note (default) or title")),
+		mcp.WithNumber("offset", mcp.Min(0)),
+		mcp.WithNumber("limit", mcp.Min(1), mcp.Max(8000)),
+		mcp.WithString("revision", mcp.Description("Required for continuation offset > 0")),
+	), mcpGetTaskText)
+
 	// --- Read tools ---
 
-	s.AddTool(mcp.NewTool("things_list_today",
+	addRead(mcp.NewTool("things_list_today",
 		mcp.WithDescription("List to-dos in the Things Today view: to-dos with a start date today or earlier (including overdue ones and scheduled ones whose date has arrived), to-dos placed in Today, and to-dos without a start date whose deadline is today or earlier (Inbox included). "+todayNote()+" A deadline no longer pulls a to-do in once the user dismissed it from Today in the Things app. To-dos in the This Evening section come last and carry \"evening\": true. Projects scheduled for today are not listed."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
@@ -826,7 +548,7 @@ func newMCPHandler(writes bool) http.Handler {
 		),
 	), mcpListToday)
 
-	s.AddTool(mcp.NewTool("things_list_anytime",
+	addRead(mcp.NewTool("things_list_anytime",
 		mcp.WithDescription("List started to-dos in the Things Anytime view, including started to-dos also shown in Today. "+todayNote()),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
@@ -839,7 +561,7 @@ func newMCPHandler(writes bool) http.Handler {
 		),
 	), mcpListAnytime)
 
-	s.AddTool(mcp.NewTool("things_list_inbox",
+	addRead(mcp.NewTool("things_list_inbox",
 		mcp.WithDescription("List tasks in the Things inbox"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
@@ -852,7 +574,7 @@ func newMCPHandler(writes bool) http.Handler {
 		),
 	), mcpListInbox)
 
-	s.AddTool(mcp.NewTool("things_list_someday",
+	addRead(mcp.NewTool("things_list_someday",
 		mcp.WithDescription("List to-dos in the Things Someday view: deferred to-dos without a start date. Those with a deadline today or earlier also appear in things_list_today."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
@@ -865,7 +587,7 @@ func newMCPHandler(writes bool) http.Handler {
 		),
 	), mcpListSomeday)
 
-	s.AddTool(mcp.NewTool("things_list_upcoming",
+	addRead(mcp.NewTool("things_list_upcoming",
 		mcp.WithDescription("List to-dos in the Things Upcoming view: deferred to-dos with a start date after today. Scheduled to-dos whose date has arrived are in things_list_today instead. "+todayNote()),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
@@ -878,7 +600,7 @@ func newMCPHandler(writes bool) http.Handler {
 		),
 	), mcpListUpcoming)
 
-	s.AddTool(mcp.NewTool("things_list_projects",
+	addRead(mcp.NewTool("things_list_projects",
 		mcp.WithDescription("List all projects in Things"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
@@ -891,7 +613,7 @@ func newMCPHandler(writes bool) http.Handler {
 		),
 	), mcpListProjects)
 
-	s.AddTool(mcp.NewTool("things_list_areas",
+	addRead(mcp.NewTool("things_list_areas",
 		mcp.WithDescription("List all areas in Things"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
@@ -904,7 +626,7 @@ func newMCPHandler(writes bool) http.Handler {
 		),
 	), mcpListAreas)
 
-	s.AddTool(mcp.NewTool("things_list_tags",
+	addRead(mcp.NewTool("things_list_tags",
 		mcp.WithDescription("List all tags in Things"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
@@ -917,7 +639,7 @@ func newMCPHandler(writes bool) http.Handler {
 		),
 	), mcpListTags)
 
-	s.AddTool(mcp.NewTool("things_list_all_tasks",
+	addRead(mcp.NewTool("things_list_all_tasks",
 		mcp.WithDescription("List all open tasks in Things"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
@@ -930,7 +652,7 @@ func newMCPHandler(writes bool) http.Handler {
 		),
 	), mcpListAllTasks)
 
-	s.AddTool(mcp.NewTool("things_list_project_tasks",
+	addRead(mcp.NewTool("things_list_project_tasks",
 		mcp.WithDescription("List to-dos in a specific Things project, including those under its headings: first the to-dos directly in the project, then each heading's to-dos in heading order. To-dos under a heading carry heading_id and heading_title."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uuid",
@@ -947,7 +669,7 @@ func newMCPHandler(writes bool) http.Handler {
 		),
 	), mcpListProjectTasks)
 
-	s.AddTool(mcp.NewTool("things_list_area_tasks",
+	addRead(mcp.NewTool("things_list_area_tasks",
 		mcp.WithDescription("List tasks in a specific Things area"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("area_uuid",
@@ -964,7 +686,7 @@ func newMCPHandler(writes bool) http.Handler {
 		),
 	), mcpListAreaTasks)
 
-	s.AddTool(mcp.NewTool("things_list_completed",
+	addRead(mcp.NewTool("things_list_completed",
 		mcp.WithDescription("List recently completed tasks, ordered by completion date (most recent first)"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
@@ -978,7 +700,7 @@ func newMCPHandler(writes bool) http.Handler {
 		),
 	), mcpListCompleted)
 
-	s.AddTool(mcp.NewTool("things_list_checklist_items",
+	addRead(mcp.NewTool("things_list_checklist_items",
 		mcp.WithDescription("List checklist items (lightweight checkboxes) within a task. These are different from subtasks — checklist items live inside the task's detail view and cannot have their own dates, tags, or notes. Use things_list_project_tasks with the task UUID to find subtasks instead."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("task_uuid",
@@ -987,8 +709,8 @@ func newMCPHandler(writes bool) http.Handler {
 		),
 	), mcpListChecklistItems)
 
-	s.AddTool(mcp.NewTool("things_get_task",
-		mcp.WithDescription("Get a single Things task by UUID"),
+	addRead(mcp.NewTool("things_get_task",
+		mcp.WithDescription("Get a single Things task by UUID. Normal-sized detail includes the full note. Oversized task text is explicitly marked truncated and can be retrieved with things_get_task_text. Never overwrite a stored field using incomplete text."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("uuid",
 			mcp.Required(),
@@ -996,7 +718,7 @@ func newMCPHandler(writes bool) http.Handler {
 		),
 	), mcpGetTask)
 
-	s.AddTool(mcp.NewTool("things_get_area",
+	addRead(mcp.NewTool("things_get_area",
 		mcp.WithDescription("Get a single Things area by UUID"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("uuid",
@@ -1005,7 +727,7 @@ func newMCPHandler(writes bool) http.Handler {
 		),
 	), mcpGetArea)
 
-	s.AddTool(mcp.NewTool("things_get_tag",
+	addRead(mcp.NewTool("things_get_tag",
 		mcp.WithDescription("Get a single Things tag by UUID"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("uuid",
@@ -1198,7 +920,7 @@ func newMCPHandler(writes bool) http.Handler {
 
 	// --- Search tools ---
 
-	s.AddTool(mcp.NewTool("things_search_tasks",
+	addRead(mcp.NewTool("things_search_tasks",
 		mcp.WithDescription("Search for tasks by title or note content (case-insensitive substring match)"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
