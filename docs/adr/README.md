@@ -13,6 +13,7 @@ pointer to their successor.
 | [0005](0005-view-semantics.md) | View semantics owned by one classifier, verified against real Things data | Proposed |
 | [0006](0006-tool-surface-v2.md) | MCP tool surface v2 | Proposed |
 | [0007](0007-engineering-workflow.md) | Engineering workflow | Proposed |
+| [0008](0008-bounded-mcp-reads.md) | Bounded MCP reads and explicit pagination | Accepted |
 
 To propose a decision: copy the structure of an existing ADR, use the next number, set
 status `Proposed`, and link it from the KI or roadmap item it serves.
