@@ -515,12 +515,31 @@ func (h *sandboxHarness) getTask(t *testing.T, uuid string) taskOutput {
 	return decodeAs[taskOutput](t, "things_get_task", h.mustCall(t, "things_get_task", map[string]any{"uuid": uuid}))
 }
 
-func (h *sandboxHarness) listTasks(t *testing.T, tool string, args map[string]any) []taskOutput {
+// listAllPages is used only by assertions that need the complete collection.
+func listAllPages[T any](h *sandboxHarness, t *testing.T, tool string, args map[string]any) []T {
 	t.Helper()
-	if args == nil {
-		args = map[string]any{}
+	request := map[string]any{}
+	for k, v := range args {
+		request[k] = v
 	}
-	return decodeAs[[]taskOutput](t, tool, h.mustCall(t, tool, args))
+	request["limit"] = 100
+	var items []T
+	for {
+		page := decodeAs[readPage[T]](t, tool, h.mustCall(t, tool, request))
+		items = append(items, page.Items...)
+		if !page.HasMore {
+			return items
+		}
+		if page.NextOffset == nil || page.Returned == 0 {
+			t.Fatal("non-progressing collection page")
+		}
+		request["offset"] = *page.NextOffset
+		request["revision"] = page.Revision
+	}
+}
+
+func (h *sandboxHarness) listTasks(t *testing.T, tool string, args map[string]any) []taskOutput {
+	return listAllPages[taskOutput](h, t, tool, args)
 }
 
 func containsTask(list []taskOutput, uuid string) bool {

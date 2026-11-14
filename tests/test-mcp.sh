@@ -52,7 +52,7 @@ has_uuid() {
   local json="$1" uuid="$2"
   echo "$json" | python3 -c "
 import sys,json
-items=json.loads(sys.stdin.read())
+items=json.loads(sys.stdin.read())['items']
 print('true' if any(i.get('uuid')=='$uuid' for i in items) else 'false')
 "
 }
@@ -269,8 +269,8 @@ check "task in project" "$(has_uuid "$PROJ" "$CREATED_TASK")" "true"
 # 35. List completed tasks
 echo "--- List Completed ---"
 COMPLETED=$(mcp_call "things_list_completed" "{\"limit\":5}" | extract_text)
-check "completed returns array" "$(echo "$COMPLETED" | python3 -c "import sys,json; items=json.loads(sys.stdin.read()); print('ok' if isinstance(items, list) else 'fail')")" "ok"
-check "completed includes completed_at" "$(echo "$COMPLETED" | python3 -c "import sys,json; items=json.loads(sys.stdin.read()); print('ok' if (not items or all('completed_at' in i for i in items)) else 'fail')")" "ok"
+check "completed returns page items" "$(echo "$COMPLETED" | python3 -c "import sys,json; items=json.loads(sys.stdin.read())['items']; print('ok' if isinstance(items, list) else 'fail')")" "ok"
+check "completed includes completed_at" "$(echo "$COMPLETED" | python3 -c "import sys,json; items=json.loads(sys.stdin.read())['items']; print('ok' if (not items or all('completed_at' in i for i in items)) else 'fail')")" "ok"
 
 # --- cleanup ---
 

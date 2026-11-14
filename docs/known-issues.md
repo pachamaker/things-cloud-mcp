@@ -695,7 +695,7 @@ cases has not been verified.
 | ID | Issue | Where |
 |---|---|---|
 | KI-18 | N+1 queries: every list loads each task + tags separately; since the SDK migration every view loads all open to-dos | SDK `sync/state.go` (`scanTaskUUIDs`), `server/readmodel.go` |
-| KI-19 | `things_search_tasks` has no limit and scans all tasks in Go. Accepted bounded-read contract in [ADR-0008](adr/0008-bounded-mcp-reads.md). | `server/mcp.go:666` |
+| KI-19 | `things_search_tasks` has no limit and scans all tasks in Go. Bounded reads implemented under [ADR-0008](adr/0008-bounded-mcp-reads.md), pending the next major release. [Verification and migration](testing/bounded-mcp-reads.md). | `server/mcp.go:666` |
 | KI-20 | Change detection calls `time.Now()` directly (non-deterministic tests) | SDK `sync/detect.go`; not used by the server |
 | KI-21 | Retry classification by substring of the error text — fixed for syncs by the SDK (typed `*HTTPError`); write 409 detection is a suffix match until the SDK types `History.Write` errors (spike report §4 B2) | `server/write.go` `isConflictError` |
 | KI-22 | `Host` header set manually and misleadingly | SDK `client.go:117` |
