@@ -176,11 +176,17 @@ func paged[T any](items []T, err error, opts listOpts) ([]T, error) {
 
 func (r readModel) AllTasks(opts listOpts) ([]*things.Task, error) {
 	tasks, err := withoutSentinels(r.mirror.AllTasks(opts.QueryOpts))
+	if err == nil {
+		orderReadTasks(tasks)
+	}
 	return r.openList(tasks, err, opts)
 }
 
 func (r readModel) AllProjects(opts listOpts) ([]*things.Task, error) {
 	tasks, err := withoutSentinels(r.mirror.AllProjects(opts.QueryOpts))
+	if err == nil {
+		orderReadTasks(tasks)
+	}
 	return r.openList(tasks, err, opts)
 }
 
@@ -208,6 +214,7 @@ func (r readModel) tasksInViewOn(view listView, opts listOpts, today civil.Date)
 	if err != nil {
 		return nil, err
 	}
+	orderReadTasks(tasks)
 	tasks = tasksInView(tasks, view, today)
 	return r.openList(tasks, nil, opts)
 }
@@ -242,6 +249,7 @@ func (r readModel) TasksInProject(projectUUID string, opts listOpts) (tasks, hea
 	if err != nil {
 		return nil, nil, err
 	}
+	orderReadTasks(headings)
 	ofProject := make(map[string]bool, len(headings))
 	for _, h := range headings {
 		ofProject[h.UUID] = true
@@ -250,6 +258,7 @@ func (r readModel) TasksInProject(projectUUID string, opts listOpts) (tasks, hea
 	if err != nil {
 		return nil, nil, err
 	}
+	orderReadTasks(direct)
 	for _, t := range direct {
 		if len(t.ActionGroupIDs) == 0 || !ofProject[t.ActionGroupIDs[0]] {
 			tasks = append(tasks, t)
@@ -265,6 +274,7 @@ func (r readModel) TasksInProject(projectUUID string, opts listOpts) (tasks, hea
 		if err != nil {
 			return nil, nil, err
 		}
+		orderReadTasks(under)
 		tasks = append(tasks, under...)
 	}
 	for _, t := range tasks {
@@ -276,6 +286,9 @@ func (r readModel) TasksInProject(projectUUID string, opts listOpts) (tasks, hea
 
 func (r readModel) TasksInArea(areaUUID string, opts listOpts) ([]*things.Task, error) {
 	tasks, err := withoutSentinels(r.mirror.TasksInArea(areaUUID, opts.QueryOpts))
+	if err == nil {
+		orderReadTasks(tasks)
+	}
 	return r.openList(tasks, err, opts)
 }
 
@@ -312,10 +325,22 @@ func completedInRange(tasks []*things.Task, limit int, completedAfter, completed
 		out = append(out, t)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].CompletionDate.Equal(*out[j].CompletionDate) {
+			return out[i].UUID < out[j].UUID
+		}
 		return out[i].CompletionDate.After(*out[j].CompletionDate)
 	})
 	if len(out) > limit {
 		out = out[:limit]
 	}
 	return out
+}
+
+func orderReadTasks(tasks []*things.Task) {
+	sort.Slice(tasks, func(i, j int) bool {
+		if tasks[i].Index == tasks[j].Index {
+			return tasks[i].UUID < tasks[j].UUID
+		}
+		return tasks[i].Index < tasks[j].Index
+	})
 }
