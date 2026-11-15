@@ -124,6 +124,20 @@ cases has not been verified.
 - **Verification:** `TestRouter_FormerRESTRoutesReturnNotFound` covers all 14 retired
   routes, including `/api/verify`. Standard CI and offline MCP read/write tests passed.
 
+### KI-44 · Pinned Go toolchain fails the current vulnerability scan
+
+- **Status:** fixed in this branch (2026-11-15), pending merge/release.
+- **Evidence:** baseline main (`a7a205e`) with Go 1.26.10 reports reachable
+  [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859) in `net/http` via
+  `govulncheck@v1.8.0`. The scanner identifies Go 1.26.11 as the fixed version.
+- **Fix:** pin `toolchain go1.26.11` and update the Docker builder tag and
+  multi-platform digest together. The minimum language version remains Go 1.25.0.
+  CI installs the toolchain from `go.mod`.
+- **Verification:** on Go 1.26.11, tidy/build/vet/race checks pass and
+  `govulncheck@v1.8.0` reports zero reachable vulnerabilities. Docker verification
+  details and the image digest are recorded in the PR.
+  A scanner result is dependency evidence, not a reproduced deployment exploit.
+
 ## P0 — Data safety and security
 
 ### KI-25 · `Task7` items are silently dropped (Things ≥ 3.23)
