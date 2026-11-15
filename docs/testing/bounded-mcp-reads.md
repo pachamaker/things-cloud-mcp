@@ -81,7 +81,8 @@ Reverification on 2026-11-15 after merging main (`0252cec`):
   advisories in imported/required code without reachable calls.
 - E2E-tagged tests compile. Offline fake-cloud sandbox tests passed (70.151 seconds).
 - GitHub CI passed on `48ad69f` ([run 43699727145](https://github.com/pachamaker/things-cloud-mcp/actions/runs/43699727145)).
-  Live sandbox results follow below; ChatGPT and real deployment rollback remain unverified.
+  Live sandbox and rollback results follow below. ChatGPT results are user-reported;
+  personal VPS/OAuth rollback remains unverified.
 
 
 ### Serialized payload measurement
@@ -202,5 +203,60 @@ rollback. Real deployment rollback remains untested.
 Before production rollout, record the currently deployed image digest. Test rolling
 back on disposable sandbox state to that exact image, reconnect the MCP client and
 restore the previous schemas/instructions. There are no mirror-schema or cloud-wire
-changes in this feature. Rollback behavior on a real deployment remains pending.
+changes in this feature. Container/mirror rollback on the live sandbox passed as recorded below.
+Personal VPS/OAuth/ChatGPT reconnection rollback remains unverified.
 Merge, release tagging and production rollout require the owner's instruction.
+
+
+### Sandbox Docker rollback result — 2026-11-15
+
+[Workflow run 43705684119](https://github.com/pachamaker/things-cloud-mcp/actions/runs/43705684119)
+passed on source commit `4098a3c`. The probe and five offline tests are committed in
+`tests/sandbox-rollback.py` and `tests/test_sandbox_rollback.py`. CI also passed on
+that commit ([run 43705665450](https://github.com/pachamaker/things-cloud-mcp/actions/runs/43705665450)).
+[Sanitized machine-readable evidence](evidence/pr45-sandbox-rollback-2026-11-15.json).
+
+The disposable Linux/amd64 GitHub runner started real Docker containers in this order,
+reusing one initially empty sandbox mirror directory and stopping each container before
+starting the next. No mirror snapshot was restored between phases.
+
+| Phase | Running version | List contract | Read tools | Open tasks | Result |
+|---|---|---|---:|---:|---|
+| Candidate | `pr45-rollback-4098a3c` | Page objects | 18 | 181 | ✅ |
+| Rollback | `v2.0.1` | Arrays | 17 | 181 | ✅ |
+| Re-upgrade | `pr45-rollback-4098a3c` | Page objects | 18 | 181 | ✅ |
+
+Rollback image (the linux/amd64 manifest of the previous personal deployment release):
+`ghcr.io/pachamaker/things-cloud-mcp@sha256:a6d09d152ae691d9f44e320466dd63add6cca6caac4845a76d19d68894d4277c`.
+The candidate image ID was
+`sha256:a9833b3d07137154505eb8436d1fddb7e997a24896bb04978865eeb0e3c26090`.
+
+All phases verified the sandbox marker, read-only tool registry, expected version,
+complete open-task selection and exact seed detail equality. The old schema lacked
+`revision` and `things_get_task_text`; the new schema restored both. Each phase opened
+the same SQLite mirror successfully, passed `PRAGMA integrity_check` and left no
+`.before-rebuild` backup. The schema and logical data fingerprint was identical:
+`648a73673a99ada4328052996abe96a6f3fe6ac0e144a80d82972b1e618c6f86`.
+The compared tables contained 50 areas, 72 tags, 22,389 tasks, 18,390 checklist items,
+3,364 task-tag links and zero area-tag links. The fingerprint includes all columns
+in these six data tables and the complete table schema, excluding sync timestamps
+and change-log contents. It is not a byte-for-byte SQLite file checksum.
+
+Safety/scope: only `THINGS_SANDBOX_*` environment secrets were supplied; writes were
+explicitly disabled, only read tools were invoked, and the sandbox marker was required
+before task reads. No SSH connection to the personal VPS, personal connector call or
+personal credentials were used for this rollback run. The probe used loopback-only
+local auth mode on an ephemeral runner; it did not test Pocket ID, HTTPS, ChatGPT
+schema refresh or production routing. Containers and the disposable mirror were removed.
+
+This closes the sandbox container/mirror rollback check. It does not claim that the
+personal deployment rollback script or OAuth/ChatGPT reconnection has been exercised.
+To repeat only this check, explicitly dispatch the existing sandbox workflow:
+
+```sh
+gh workflow run e2e.yml -R pachamaker/things-cloud-mcp \
+  --ref docs/bounded-mcp-reads -f mode=rollback
+```
+
+The default `full` mode and scheduled sandbox suite retain their previous behavior;
+rollback mode is manual-only and shares the `things-sandbox` concurrency group.

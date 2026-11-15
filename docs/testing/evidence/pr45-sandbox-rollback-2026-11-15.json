@@ -1,0 +1,70 @@
+{
+  "result": "passed",
+  "read_only": true,
+  "phases": [
+    {
+      "phase": "candidate",
+      "version": "pr45-rollback-4098a3c",
+      "image_id": "sha256:a9833b3d07137154505eb8436d1fddb7e997a24896bb04978865eeb0e3c26090",
+      "contract": "pages",
+      "tool_count": 18,
+      "task_count": 181,
+      "mirror": {
+        "logical_sha256": "648a73673a99ada4328052996abe96a6f3fe6ac0e144a80d82972b1e618c6f86",
+        "row_counts": {
+          "areas": 50,
+          "tags": 72,
+          "tasks": 22389,
+          "checklist_items": 18390,
+          "task_tags": 3364,
+          "area_tags": 0
+        }
+      },
+      "result": "passed"
+    },
+    {
+      "phase": "rollback",
+      "version": "v2.0.1",
+      "image_id": "sha256:a6d09d152ae691d9f44e320466dd63add6cca6caac4845a76d19d68894d4277c",
+      "contract": "arrays",
+      "tool_count": 17,
+      "task_count": 181,
+      "mirror": {
+        "logical_sha256": "648a73673a99ada4328052996abe96a6f3fe6ac0e144a80d82972b1e618c6f86",
+        "row_counts": {
+          "areas": 50,
+          "tags": 72,
+          "tasks": 22389,
+          "checklist_items": 18390,
+          "task_tags": 3364,
+          "area_tags": 0
+        }
+      },
+      "result": "passed"
+    },
+    {
+      "phase": "reupgrade",
+      "version": "pr45-rollback-4098a3c",
+      "image_id": "sha256:a9833b3d07137154505eb8436d1fddb7e997a24896bb04978865eeb0e3c26090",
+      "contract": "pages",
+      "tool_count": 18,
+      "task_count": 181,
+      "mirror": {
+        "logical_sha256": "648a73673a99ada4328052996abe96a6f3fe6ac0e144a80d82972b1e618c6f86",
+        "row_counts": {
+          "areas": 50,
+          "tags": 72,
+          "tasks": 22389,
+          "checklist_items": 18390,
+          "task_tags": 3364,
+          "area_tags": 0
+        }
+      },
+      "result": "passed"
+    }
+  ],
+  "scope": "Docker image rollback on one disposable sandbox mirror; no OAuth/ChatGPT/VPS rollback",
+  "workflow_url": "https://github.com/pachamaker/things-cloud-mcp/actions/runs/43705684119",
+  "source_commit": "4098a3c",
+  "date": "2026-11-15"
+}
