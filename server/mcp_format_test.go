@@ -158,7 +158,7 @@ func TestProjectTasksResult_KI13_HeadingFields(t *testing.T) {
 	}
 	headings := []*things.Task{{UUID: "h1", Title: "Errands", Type: things.TaskTypeHeading}}
 
-	res := projectTasksResult(tasks, headings)
+	res := boundedReadResult(summarizeTasks(tasks, headings, "things_list_project_tasks", civil.Date{}))
 	if res.IsError {
 		t.Fatalf("result is an error: %+v", res)
 	}
@@ -240,7 +240,7 @@ func TestTodayTasksResult_KI02_EveningFlag(t *testing.T) {
 		return got
 	}
 
-	got := decode(todayTasksResult(tasks, today))
+	got := decode(boundedReadResult(summarizeTasks(tasks, nil, "things_list_today", today)))
 	if len(got) != 2 {
 		t.Fatalf("got %d tasks, want 2", len(got))
 	}
@@ -251,7 +251,7 @@ func TestTodayTasksResult_KI02_EveningFlag(t *testing.T) {
 		t.Errorf("This Evening to-do: evening = %v, want true", got[1]["evening"])
 	}
 
-	for _, o := range decode(tasksResult(tasks)) {
+	for _, o := range decode(boundedReadResult(summarizeTasks(tasks, nil, "things_list_all_tasks", today))) {
 		if v, ok := o["evening"]; ok {
 			t.Errorf("%v: a list other than Today has evening %v", o["uuid"], v)
 		}

@@ -3,6 +3,9 @@
 ## Status
 Proposed (2026-10-10). Addresses KI-06, KI-12, KI-14, KI-24.
 
+The list fields and pagination in decision 2 are superseded by Accepted
+[ADR-0008](0008-bounded-mcp-reads.md). Full notes are retrieved on demand.
+
 ## Context
 - 36 narrow tools, UUID-only parameters, sparse output. A morning review takes many
   calls (`list_today` + `list_upcoming` + `list_projects` + `list_tags` to translate

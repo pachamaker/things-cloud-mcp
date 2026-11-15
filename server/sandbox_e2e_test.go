@@ -43,6 +43,14 @@ func TestSandboxE2E(t *testing.T) {
 		})
 		id["subtask"] = h.create(t, "things_create_task", map[string]any{"title": title("subtask"), "parent_task": id["task"]})
 
+		first := decodeAs[taskTextOutput](t, "things_get_task_text", h.mustCall(t, "things_get_task_text", map[string]any{"uuid": id["task"], "field": "note", "limit": 4}))
+		if !first.HasMore || first.NextOffset == nil || first.Text != "e2e " {
+			t.Fatal("unexpected first text chunk")
+		}
+		rest := decodeAs[taskTextOutput](t, "things_get_task_text", h.mustCall(t, "things_get_task_text", map[string]any{"uuid": id["task"], "field": "note", "offset": *first.NextOffset, "revision": first.Revision}))
+		if first.Text+rest.Text != "e2e task note" || rest.HasMore {
+			t.Fatal("task text chunks do not reconstruct note")
+		}
 		task := h.getTask(t, id["task"])
 		want := taskOutput{
 			UUID: id["task"], Title: title("task in project"), Note: "e2e task note", Status: "open", Type: "task",
@@ -168,7 +176,7 @@ func TestSandboxE2E(t *testing.T) {
 		if got := h.getTask(t, c); got.Status != "completed" || got.CompletedAt == "" {
 			t.Errorf("after complete: %s", publicTask(got))
 		}
-		done := h.listTasks(t, "things_list_completed", map[string]any{"limit": 200, "completed_after": today})
+		done := h.listTasks(t, "things_list_completed", map[string]any{"limit": 100, "completed_after": today})
 		if !containsTask(done, c) {
 			t.Error("things_list_completed does not list the completed task")
 		}
@@ -202,8 +210,7 @@ func TestSandboxE2E(t *testing.T) {
 		id["checklist"] = item
 		status := func() string {
 			t.Helper()
-			list := decodeAs[[]checklistOutput](t, "things_list_checklist_items",
-				h.mustCall(t, "things_list_checklist_items", map[string]any{"task_uuid": id["task"]}))
+			list := listAllPages[checklistOutput](h, t, "things_list_checklist_items", map[string]any{"task_uuid": id["task"]})
 			for _, c := range list {
 				if c.UUID == item {
 					return c.Status
@@ -251,12 +258,12 @@ func TestSandboxE2E(t *testing.T) {
 		if !containsTask(h.listTasks(t, "things_list_projects", nil), id["project"]) {
 			t.Error("things_list_projects does not list the project")
 		}
-		areas := decodeAs[[]areaOutput](t, "things_list_areas", h.mustCall(t, "things_list_areas", map[string]any{}))
+		areas := listAllPages[areaOutput](h, t, "things_list_areas", map[string]any{})
 		if !slices.ContainsFunc(areas, func(a areaOutput) bool { return a.UUID == id["area"] }) ||
 			!slices.ContainsFunc(areas, func(a areaOutput) bool { return a.Title == sandboxMarkerArea }) {
 			t.Error("things_list_areas lacks the run's area or the marker area")
 		}
-		tags := decodeAs[[]tagOutput](t, "things_list_tags", h.mustCall(t, "things_list_tags", map[string]any{}))
+		tags := listAllPages[tagOutput](h, t, "things_list_tags", map[string]any{})
 		if !slices.ContainsFunc(tags, func(tg tagOutput) bool { return tg.UUID == id["tag"] }) {
 			t.Error("things_list_tags does not list the tag")
 		}
@@ -662,8 +669,7 @@ func TestSandboxSeedChecks(t *testing.T) {
 		t.Errorf("SEED deadline deadline = %q, want 2030-06-01", got)
 	}
 
-	list := decodeAs[[]checklistOutput](t, "things_list_checklist_items",
-		h.mustCall(t, "things_list_checklist_items", map[string]any{"task_uuid": checklist.UUID}))
+	list := listAllPages[checklistOutput](h, t, "things_list_checklist_items", map[string]any{"task_uuid": checklist.UUID})
 	done := 0
 	for _, c := range list {
 		if c.Status == "completed" {
@@ -674,7 +680,7 @@ func TestSandboxSeedChecks(t *testing.T) {
 		t.Errorf("SEED checklist has %d items, %d ticked; want two with one ticked", len(list), done)
 	}
 
-	tags := decodeAs[[]tagOutput](t, "things_list_tags", h.mustCall(t, "things_list_tags", map[string]any{}))
+	tags := listAllPages[tagOutput](h, t, "things_list_tags", map[string]any{})
 	if !slices.ContainsFunc(tags, func(tg tagOutput) bool { return tg.UUID == tag.UUID }) {
 		t.Error("things_list_tags does not list SEED tag")
 	}
@@ -740,7 +746,7 @@ func TestSandboxSeedChecks(t *testing.T) {
 		h.expectRepeatingRefused(t, instance)
 	}
 
-	logbook := h.listTasks(t, "things_list_completed", map[string]any{"limit": 200})
+	logbook := h.listTasks(t, "things_list_completed", map[string]any{"limit": 100})
 	if !containsTask(logbook, completed.UUID) {
 		t.Error("things_list_completed does not list SEED completed")
 	}

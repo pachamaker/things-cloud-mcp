@@ -39,18 +39,9 @@ field() {
   echo "$json" | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('$key',''))" 2>/dev/null || echo ""
 }
 
-is_array() {
+is_page() {
   local json="$1"
-  echo "$json" | python3 -c "import sys,json; print('true' if isinstance(json.loads(sys.stdin.read()), list) else 'false')" 2>/dev/null || echo "false"
-}
-
-has_uuid() {
-  local json="$1" uuid="$2"
-  echo "$json" | python3 -c "
-import sys,json
-items=json.loads(sys.stdin.read())
-print('true' if any(i.get('uuid')=='$uuid' for i in items) else 'false')
-"
+  echo "$json" | python3 -c "import sys,json; print('true' if isinstance(json.loads(sys.stdin.read()).get('items'), list) else 'false')" 2>/dev/null || echo "false"
 }
 
 check() {
@@ -81,13 +72,13 @@ check "service up" "$(echo "$HEALTH" | python3 -c "import sys,json; print(json.l
 # 2. Read: list today (verifies sync + read path)
 echo "--- Read ---"
 TODAY=$(mcp_call "things_list_today" "{}" | extract_text)
-check "list today returns array" "$(is_array "$TODAY")" "true"
+check "list today returns page items" "$(is_page "$TODAY")" "true"
 
 PROJECTS=$(mcp_call "things_list_projects" "{}" | extract_text)
-check "list projects returns array" "$(is_array "$PROJECTS")" "true"
+check "list projects returns page items" "$(is_page "$PROJECTS")" "true"
 
 TAGS=$(mcp_call "things_list_tags" "{}" | extract_text)
-check "list tags returns array" "$(is_array "$TAGS")" "true"
+check "list tags returns page items" "$(is_page "$TAGS")" "true"
 
 # 3. Write: create a task
 source "${SCRIPT_DIR}/sandbox-guard.sh"

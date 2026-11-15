@@ -61,7 +61,7 @@ flowchart LR
 DNS points both hostnames to the VPS. Caddy routes HTTPS traffic by hostname.
 Only Caddy publishes ports in this setup. See the [VPS deployment guide](docs/deployment/vps.md).
 
-## MCP tools (35)
+## MCP tools (36)
 
 Once connected, an MCP client can use the supported operations below:
 
@@ -75,24 +75,39 @@ Once connected, an MCP client can use the supported operations below:
 <details>
 <summary>Full tool reference</summary>
 
+### Bounded reads (next major release)
+
+Collection reads now return `{items, returned, total, has_more, next_offset, revision,
+today, timezone, page_limited_by}`. The default page size is **25**, maximum **100**.
+Each read's compact JSON text is capped at **24 KiB** and can end a page earlier.
+Continue only as needed with `next_offset` and the returned `revision`. On
+`stale_page`, restart at offset zero and replace previous pages. Notes are omitted
+from list/search cards and represented by `has_note`.
+
+Use `things_get_task` for normal full detail and `things_get_task_text` to retrieve
+an oversized title/note in chunks. Search supports `scope=open|completed|all`.
+This is a breaking contract change after v3.0.0, including rejection of `limit=0`.
+See [migration, examples and verification](docs/testing/bounded-mcp-reads.md).
+
 ### Read tools
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `things_list_today` | Today view: start date today or earlier (overdue and scheduled-date-arrived to-dos), placed in Today, or no start date with a deadline today or earlier that was not dismissed from Today; This Evening to-dos come last with `"evening": true`; "today" is the day in `THINGS_TIMEZONE` (UTC if unset) | `limit`, `offset` |
-| `things_list_inbox` | Tasks in the inbox | `limit`, `offset` |
-| `things_list_anytime` | Tasks in Anytime | `limit`, `offset` |
-| `things_list_someday` | Tasks in Someday (deferred, no start date) | `limit`, `offset` |
-| `things_list_upcoming` | Tasks in Upcoming (start date after today) | `limit`, `offset` |
-| `things_list_all_tasks` | All open tasks | `limit`, `offset` |
-| `things_list_projects` | All projects | `limit`, `offset` |
-| `things_list_areas` | All areas | `limit`, `offset` |
-| `things_list_tags` | All tags | `limit`, `offset` |
-| `things_list_project_tasks` | To-dos in a project, those under its headings included: first the to-dos directly in the project, then each heading's in heading order; to-dos under a heading carry `heading_id` and `heading_title` | `project_uuid`, `limit`, `offset` |
-| `things_list_area_tasks` | Tasks in an area | `area_uuid`, `limit`, `offset` |
-| `things_list_completed` | Recently completed tasks | `limit`, `completed_after`, `completed_before` |
-| `things_list_checklist_items` | Checklist items for a task | `task_uuid` |
+| `things_list_today` | Today view: start date today or earlier (overdue and scheduled-date-arrived to-dos), placed in Today, or no start date with a deadline today or earlier that was not dismissed from Today; This Evening to-dos come last with `"evening": true`; "today" is the day in `THINGS_TIMEZONE` (UTC if unset) | `limit`, `offset`, `revision` |
+| `things_list_inbox` | Tasks in the inbox | `limit`, `offset`, `revision` |
+| `things_list_anytime` | Tasks in Anytime | `limit`, `offset`, `revision` |
+| `things_list_someday` | Tasks in Someday (deferred, no start date) | `limit`, `offset`, `revision` |
+| `things_list_upcoming` | Tasks in Upcoming (start date after today) | `limit`, `offset`, `revision` |
+| `things_list_all_tasks` | All open tasks | `limit`, `offset`, `revision` |
+| `things_list_projects` | All projects | `limit`, `offset`, `revision` |
+| `things_list_areas` | All areas | `limit`, `offset`, `revision` |
+| `things_list_tags` | All tags | `limit`, `offset`, `revision` |
+| `things_list_project_tasks` | To-dos in a project, those under its headings included: first the to-dos directly in the project, then each heading's in heading order; to-dos under a heading carry `heading_id` and `heading_title` | `project_uuid`, `limit`, `offset`, `revision` |
+| `things_list_area_tasks` | Tasks in an area | `area_uuid`, `limit`, `offset`, `revision` |
+| `things_list_completed` | Completed tasks with paginated date filtering | `limit`, `offset`, `revision`, `completed_after`, `completed_before` |
+| `things_list_checklist_items` | Checklist items for a task | `task_uuid`, `limit`, `offset`, `revision` |
 | `things_get_task` | Get a single task | `uuid` |
+| `things_get_task_text` | Read complete task title/note in bounded Unicode chunks | `uuid`, `field`, `limit`, `offset`, `revision` |
 | `things_get_area` | Get a single area | `uuid` |
 | `things_get_tag` | Get a single tag | `uuid` |
 
@@ -119,7 +134,7 @@ Once connected, an MCP client can use the supported operations below:
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `things_search_tasks` | Search tasks by title or note | `query` |
+| `things_search_tasks` | Search titles and notes with open/completed/all scope | `query`, `scope`, `limit`, `offset`, `revision` |
 
 ### Checklist item tools
 

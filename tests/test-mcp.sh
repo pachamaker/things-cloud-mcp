@@ -48,15 +48,6 @@ field() {
   echo "$json" | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('$key',''))" 2>/dev/null || echo ""
 }
 
-has_uuid() {
-  local json="$1" uuid="$2"
-  echo "$json" | python3 -c "
-import sys,json
-items=json.loads(sys.stdin.read())
-print('true' if any(i.get('uuid')=='$uuid' for i in items) else 'false')
-"
-}
-
 check() {
   local label="$1" got="$2" want="$3"
   if [ "$got" = "$want" ]; then
@@ -192,8 +183,7 @@ check "checklist item created" "$([ -n "$CREATED_CHECKLIST" ] && echo ok || echo
 
 # 21. List checklist items
 echo "--- List Checklist Items ---"
-CLIST=$(mcp_call "things_list_checklist_items" "{\"task_uuid\":\"${CREATED_TASK}\"}" | extract_text)
-check "checklist item in list" "$(has_uuid "$CLIST" "$CREATED_CHECKLIST")" "true"
+check "checklist item in list" "$(mcp_collection_has_uuid "$ENDPOINT" things_list_checklist_items "$CREATED_CHECKLIST" "{\"task_uuid\":\"${CREATED_TASK}\"}")" "true"
 
 # 22. Complete checklist item
 echo "--- Complete Checklist Item ---"
@@ -258,19 +248,17 @@ check "untrash ok" "$(field "$RESP" status)" "restored"
 
 # 33. List today — verify task appears
 echo "--- List Today ---"
-TODAY=$(mcp_call "things_list_today" "{}" | extract_text)
-check "task in today" "$(has_uuid "$TODAY" "$CREATED_TASK")" "true"
+check "task in today" "$(mcp_collection_has_uuid "$ENDPOINT" things_list_today "$CREATED_TASK")" "true"
 
 # 34. List project tasks
 echo "--- List Project Tasks ---"
-PROJ=$(mcp_call "things_list_project_tasks" "{\"project_uuid\":\"${CREATED_PROJECT}\"}" | extract_text)
-check "task in project" "$(has_uuid "$PROJ" "$CREATED_TASK")" "true"
+check "task in project" "$(mcp_collection_has_uuid "$ENDPOINT" things_list_project_tasks "$CREATED_TASK" "{\"project_uuid\":\"${CREATED_PROJECT}\"}")" "true"
 
 # 35. List completed tasks
 echo "--- List Completed ---"
 COMPLETED=$(mcp_call "things_list_completed" "{\"limit\":5}" | extract_text)
-check "completed returns array" "$(echo "$COMPLETED" | python3 -c "import sys,json; items=json.loads(sys.stdin.read()); print('ok' if isinstance(items, list) else 'fail')")" "ok"
-check "completed includes completed_at" "$(echo "$COMPLETED" | python3 -c "import sys,json; items=json.loads(sys.stdin.read()); print('ok' if (not items or all('completed_at' in i for i in items)) else 'fail')")" "ok"
+check "completed returns page items" "$(echo "$COMPLETED" | python3 -c "import sys,json; items=json.loads(sys.stdin.read())['items']; print('ok' if isinstance(items, list) else 'fail')")" "ok"
+check "completed includes completed_at" "$(echo "$COMPLETED" | python3 -c "import sys,json; items=json.loads(sys.stdin.read())['items']; print('ok' if (not items or all('completed_at' in i for i in items)) else 'fail')")" "ok"
 
 # --- cleanup ---
 
