@@ -1,6 +1,6 @@
 # Bounded MCP reads — verification and migration
 
-For maintainers and MCP client authors, 2026-11-14. Contract: [ADR-0008](../adr/0008-bounded-mcp-reads.md).
+For maintainers and MCP client authors, updated 2026-11-15. Contract: [ADR-0008](../adr/0008-bounded-mcp-reads.md).
 This branch targets the next major release after v3.0.0. Its release number is unassigned.
 
 ## Migration
@@ -67,9 +67,22 @@ byte-limited pages, metadata errors and Unicode text reconstruction. The fake-cl
 harness passed locally (70.16 seconds) and exercises the registered tools against a local Things protocol stand-in.
 It is a separate check from an actual Things Cloud account or ChatGPT connection.
 
-Local tidy/build/vet/race checks and fake-cloud harness passed. The separate
-`govulncheck@v1.8.0` scan failed on the existing Go 1.26.10 standard-library pin
-(GO-2026-6859, fixed in 1.26.11). See KI-44 before releasing.
+Main now includes [PR #46](https://github.com/pachamaker/things-cloud-mcp/pull/46),
+which upgrades the Go toolchain and pinned Docker builder to 1.26.11. This resolves
+the previous GO-2026-6859 scan finding (KI-44). Local checks are rerun on the
+merged branch; the results below distinguish them from GitHub CI and live gates.
+
+Reverification on 2026-11-15 after merging main (`0252cec`):
+
+- Go 1.26.11: `go mod tidy -diff`, build, vet and full race tests passed.
+- `staticcheck@2026.2.1 -tags 'e2e fakecloud'` passed after removing the unused
+  `syncForRead` helper; reads already synchronize through `withRead`.
+- `govulncheck@v1.8.0` passed with zero reachable vulnerabilities. It still reports
+  advisories in imported/required code without reachable calls.
+- E2E-tagged tests compile. Offline fake-cloud sandbox tests passed (70.151 seconds).
+- GitHub CI must be checked on the pushed merge commit. Live sandbox, ChatGPT and
+  real deployment rollback remain unverified.
+
 
 ### Serialized payload measurement
 

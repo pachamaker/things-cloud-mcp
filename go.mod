@@ -2,7 +2,7 @@ module github.com/pachamaker/things-cloud-mcp
 
 go 1.25.0
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 require (
 	github.com/arthursoares/things-cloud-sdk v0.6.0

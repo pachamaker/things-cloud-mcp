@@ -126,17 +126,17 @@ cases has not been verified.
 
 ### KI-44 · Pinned Go toolchain fails the current vulnerability scan
 
-- **Status:** open (2026-11-14), release blocker.
-- **Evidence:** local `govulncheck@v1.8.0` reports reachable standard-library
-  vulnerability [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859),
-  "HTTP/1 server crash due to MaxBytesReader header race in net/http".
-  Found in Go 1.26.10, fixed in Go 1.26.11 according to the scanner.
-- **Scope:** main and the bounded-read branch share the Go 1.26.10 pin. The
-  bounded-read feature does not upgrade the toolchain. A scanner result establishes
-  the dependency finding, not an exploit reproduced against the deployment.
-- **Fix direction:** update the `go.mod` toolchain and Docker builder tag/digest
-  together per KI-32, then rerun build, vet, race tests and govulncheck. Check image
-  availability and digest before editing. Keep the minimum Go version policy.
+- **Status:** fixed on main by [PR #46](https://github.com/pachamaker/things-cloud-mcp/pull/46) (2026-11-15), pending release.
+- **Evidence:** baseline main (`a7a205e`) with Go 1.26.10 reports reachable
+  [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859) in `net/http` via
+  `govulncheck@v1.8.0`. The scanner identifies Go 1.26.11 as the fixed version.
+- **Fix:** pin `toolchain go1.26.11` and update the Docker builder tag and
+  multi-platform digest together. The minimum language version remains Go 1.25.0.
+  CI installs the toolchain from `go.mod`.
+- **Verification:** on Go 1.26.11, tidy/build/vet/race checks pass and
+  `govulncheck@v1.8.0` reports zero reachable vulnerabilities. Docker verification
+  details and the image digest are recorded in PR #46.
+  A scanner result is dependency evidence, not a reproduced deployment exploit.
 
 ## P0 — Data safety and security
 

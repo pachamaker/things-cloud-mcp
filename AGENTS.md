@@ -95,10 +95,10 @@ docker run --rm --network none things-cloud-mcp:v2.0.0   # offline smoke: exits 
 If the default Go proxy is unreachable (e.g. a corporate proxy), prefix commands with
 `GOPROXY=https://proxy.golang.org,direct`.
 
-`go.mod` keeps `go 1.25.0` as the minimum and pins `toolchain go1.26.10` (KI-32): a local
-`go` older than that downloads and uses Go 1.26.10 (`GOTOOLCHAIN=auto`), a newer one
-builds with itself. CI and the Docker builder (`golang:1.26.10-alpine`, pinned by digest)
-use 1.26.10; bump the `toolchain` line and the `Dockerfile` tag and digest together.
+`go.mod` keeps `go 1.25.0` as the minimum and pins `toolchain go1.26.11` (KI-32): a local
+`go` older than that downloads and uses Go 1.26.11 (`GOTOOLCHAIN=auto`), a newer one
+builds with itself. CI and the Docker builder (`golang:1.26.11-alpine`, pinned by digest)
+use 1.26.11; bump the `toolchain` line and the `Dockerfile` tag and digest together.
 
 Run the server locally **against the sandbox account only**:
 
@@ -188,9 +188,9 @@ server refuses to start. Tokens need the scope `things.read` for any request and
 `things.write` for write tools. `API_KEY` is gone: the server
 refuses to start while it is set (ADR-0002).
 
-Baseline: CI (`.github/workflows/ci.yml`) runs `go mod tidy -diff`, build, vet,
-`go test -race ./...` and `govulncheck` on Go 1.26.10 for every pull request and push to
-`main`; all pass. `staticcheck -tags 'e2e fakecloud'` is gated too (KI-33). Do not add
+Baseline: CI (`.github/workflows/ci.yml`) is configured to run `go mod tidy -diff`, build, vet,
+`go test -race ./...` and `govulncheck` on Go 1.26.11 for every pull request and push to
+`main`; these checks must pass before release. `staticcheck -tags 'e2e fakecloud'` is gated too (KI-33). Do not add
 failures.
 
 Releases: pushing a `v*` tag runs `.github/workflows/release.yml`, which repeats the CI

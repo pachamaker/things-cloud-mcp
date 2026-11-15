@@ -216,16 +216,6 @@ func newIDFromReader(r io.Reader) (string, error) {
 	return "", fmt.Errorf("generate identifier: no safe draw in %d attempts", maxIDDraws)
 }
 
-// syncForRead syncs before a read operation, logging any errors.
-// Returns the error so callers can optionally surface it.
-func syncForRead() error {
-	if _, err := mirror.Sync(); err != nil {
-		log.Printf("[SYNC] pre-read sync failed: %v", err)
-		return err
-	}
-	return nil
-}
-
 // syncForWrite syncs before a write's preconditions, and checks the
 // account's history unless a check ran within the last minute (KI-28).
 func syncForWrite() error {
