@@ -16,6 +16,12 @@ name: Sandbox e2e
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Sandbox suite to run
+        type: choice
+        options: [full, rollback]
+        default: full
   schedule:
     # Once a day, far from 00:00 UTC: the job leaves THINGS_TIMEZONE unset, so
     # the server's "today" is the UTC day, and the harness skips itself within
@@ -31,6 +37,7 @@ concurrency:
 
 jobs:
   sandbox-e2e:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode != 'rollback' }}
     name: Sandbox e2e
     runs-on: ubuntu-latest
     environment: things-sandbox
@@ -87,3 +94,35 @@ jobs:
           THINGS_SANDBOX_PASSWORD: ${{ secrets.THINGS_SANDBOX_PASSWORD }}
           THINGS_E2E_REQUIRE_RUN: "1"
         run: go test -tags e2e -run '^TestSandboxCleanupLeftovers$' -count=1 -v -timeout 18m ./server
+
+  rollback:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'rollback' }}
+    runs-on: ubuntu-latest
+    environment: things-sandbox
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check probe offline
+        run: python3 -m unittest discover -s tests -p 'test_sandbox_rollback.py' -v
+      - name: Build candidate and pull exact rollback image
+        run: |
+          docker build --build-arg VERSION=pr45-rollback-${GITHUB_SHA::7} -t things-sandbox-rollback:candidate .
+          docker pull ghcr.io/pachamaker/things-cloud-mcp@sha256:a6d09d152ae691d9f44e320466dd63add6cca6caac4845a76d19d68894d4277c
+      - name: Candidate to v2.0.1 to candidate (sandbox, read-only)
+        env:
+          THINGS_SANDBOX_USERNAME: ${{ secrets.THINGS_SANDBOX_USERNAME }}
+          THINGS_SANDBOX_PASSWORD: ${{ secrets.THINGS_SANDBOX_PASSWORD }}
+        run: |
+          sudo --preserve-env=THINGS_SANDBOX_USERNAME,THINGS_SANDBOX_PASSWORD python3 tests/sandbox-rollback.py \
+            --old-image ghcr.io/pachamaker/things-cloud-mcp@sha256:a6d09d152ae691d9f44e320466dd63add6cca6caac4845a76d19d68894d4277c \
+            --new-image things-sandbox-rollback:candidate \
+            --new-version pr45-rollback-${GITHUB_SHA::7} \
+            --output "$RUNNER_TEMP/sandbox-rollback-result.json"
+      - name: Record sanitized result
+        if: ${{ always() }}
+        run: |
+          if test -f "$RUNNER_TEMP/sandbox-rollback-result.json"; then
+            cat "$RUNNER_TEMP/sandbox-rollback-result.json" >> "$GITHUB_STEP_SUMMARY"
+          fi
