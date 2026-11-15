@@ -143,7 +143,59 @@ by the `[e2e-gh43700227573-1]` title prefix and can be removed in the sandbox ap
 This verifies the registered MCP tools against real Things Cloud through the test
 harness. Large-page/byte-budget edge cases remain covered by synthetic tests; this
 run does not establish a ChatGPT integration or deployment rollback result.
-ChatGPT: pending. Production: unchanged.
+### ChatGPT personal-account read verification — 2026-11-15
+
+The owner explicitly authorized a personal deployment and read/write smoke test
+instead of a separate ChatGPT sandbox deployment. The deployed build is
+`pr45-b18a12b` (source `b18a12b71bd4490b996249001f8d4348f443fa1e`).
+The sandbox workflow above remains a separate test on sandbox credentials.
+
+The owner refreshed tools and tested in a new ChatGPT conversation, then supplied
+these results. The maintainer did not inspect that conversation's raw trace.
+No personal task titles, notes, UUIDs or revision tokens are included here.
+
+| ChatGPT check | Result |
+|---|---|
+| Updated schema discovery | ✅ `things_get_task_text` and `revision` available |
+| Today first page, `limit=2` | ✅ Two items, continuation available |
+| Next page using returned offset/revision | ✅ Two more items, no duplicate UUIDs |
+| Task detail | ✅ One selected task read successfully |
+| Title text, `limit=5` | ✅ Reconstructed in 13 calls, matched detail exactly |
+| Writes during this read-only conversation | None reported |
+| Naturally invalidated revision | Not observed |
+
+The owner reported `INVALID_ARGUMENT` for deliberately invalid revisions.
+A maintainer reproduced the response through the connected Things Cloud app in
+Codex, including a 64-character revision with exactly one character changed:
+
+```json
+{"content":[{"type":"text","text":"{\"error\":{\"code\":\"stale_page\",\"message\":\"pre-read sync or query failed: stale_page: data or query changed; restart at offset zero and replace previous results\"}}"}],"structuredContent":{"error_code":"INVALID_ARGUMENT"},"isError":true}
+```
+
+These are two different response layers. The MCP server emits `stale_page` in its
+JSON text error payload. The connected app also presents a generic
+`structuredContent.error_code=INVALID_ARGUMENT`; its precise mapping mechanism is
+not established by this test. Do not classify the domain error solely from that
+generic code: inspect `content[].text` and its `error.code` too.
+
+The maintainer then restarted at offset zero and successfully fetched the next
+page with the new revision, without duplicate UUIDs. This confirms explicit bad
+revision rejection and manual recovery through the Codex app. It does not prove
+ChatGPT automatically recovers after a naturally occurring sync/day change.
+
+### Personal deployment write smoke — separate from ChatGPT read verification
+
+Through the connected Things Cloud app in Codex, the maintainer created one
+synthetic Inbox QA task, read it back, edited its title/note and moved it to Today,
+then read back the changes and confirmed Today membership. The task was trashed;
+search no longer returned it and a read-only VPS mirror query confirmed
+`in_trash=1`. Server logs showed successful create/edit/trash commits. No existing
+personal tasks were modified. This is a Codex connector smoke, not a ChatGPT UI
+write test.
+
+The personal deployment has writes enabled and OAuth protection intact. The old
+image/configuration and a stopped-container mirror snapshot were retained for
+rollback. Real deployment rollback remains untested.
 
 ## Rollback gate
 
