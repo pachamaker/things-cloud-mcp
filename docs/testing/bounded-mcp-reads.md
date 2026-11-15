@@ -80,8 +80,8 @@ Reverification on 2026-11-15 after merging main (`0252cec`):
 - `govulncheck@v1.8.0` passed with zero reachable vulnerabilities. It still reports
   advisories in imported/required code without reachable calls.
 - E2E-tagged tests compile. Offline fake-cloud sandbox tests passed (70.151 seconds).
-- GitHub CI must be checked on the pushed merge commit. Live sandbox, ChatGPT and
-  real deployment rollback remain unverified.
+- GitHub CI passed on `48ad69f` ([run 43699727145](https://github.com/pachamaker/things-cloud-mcp/actions/runs/43699727145)).
+  Live sandbox results follow below; ChatGPT and real deployment rollback remain unverified.
 
 
 ### Serialized payload measurement
@@ -109,8 +109,40 @@ continuation, normal detail, text chunks and recovery from a changed revision.
 Confirm read-only credentials do not expose write tools. Record limitations rather
 than substituting a local HTTP test for a ChatGPT check.
 
-Live Things Cloud: pending. The GitHub `things-sandbox` environment currently allows
-protected branches only. Do not weaken this policy to run a feature branch.
+### Live sandbox result — 2026-11-15
+
+[Workflow run 43700227573](https://github.com/pachamaker/things-cloud-mcp/actions/runs/43700227573)
+completed successfully on PR #45 commit `48ad69f4dbbfbe8e000e01f725f8019ed054269c`.
+Run identifier: `e2e-gh43700227573-1`; server day: 2026-11-15, UTC.
+
+| Step | Result | Duration |
+|---|---|---:|
+| Offline harness self-test | ✅ | 70.453 s |
+| Live `TestSandboxE2E` | ✅ | 347.149 s |
+| Read-only `TestSandboxSeedChecks` | ✅ | 71.396 s |
+| `TestSandboxCleanupLeftovers` | ✅ | 33.733 s |
+
+All 12 live subtests passed: setup, placement, edit, lifecycle, checklist,
+repeat rejection, read tools, conflict 409, independent observer mirror, wire,
+cleanup and tool coverage. The wire check verified 41 committed items in history
+(1 Area3, 3 ChecklistItem3, 1 Tag4, 35 Task6 and 1 Tombstone2). The live test made
+308 cloud requests, including 56 posted commits and one tested 409; no GET retry
+for a 429 was needed. These are harness observations, not production benchmarks.
+
+Only the `things-sandbox` environment's `THINGS_SANDBOX_*` credentials were supplied.
+The harness passed its sandbox marker guard before writes and constrained writes to
+run-owned objects. No personal connector, VPS or personal Things credentials were used.
+The environment policy was not changed for this run; GitHub admitted the feature branch.
+
+Cleanup trashed 14 objects with zero failures and verified generated Task6 objects
+were in the trash. The final leftover cleanup passed. Cleanup is not complete deletion:
+this run's area `TQ6KwX6zfDtXqtbvgSuRqA` and tag `Hf4eFkS3ntgMKwoawGDXZy` remain,
+because the harness has no verified area/tag delete operation. They are identifiable
+by the `[e2e-gh43700227573-1]` title prefix and can be removed in the sandbox app.
+
+This verifies the registered MCP tools against real Things Cloud through the test
+harness. Large-page/byte-budget edge cases remain covered by synthetic tests; this
+run does not establish a ChatGPT integration or deployment rollback result.
 ChatGPT: pending. Production: unchanged.
 
 ## Rollback gate
