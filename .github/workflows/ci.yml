@@ -38,6 +38,9 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: Offline shell and rollback probes
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+
       - name: Test
         run: go test -race ./...
 

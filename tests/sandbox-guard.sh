@@ -5,14 +5,34 @@
 # at the owner's real server stops before its first write.
 
 SANDBOX_MARKER_AREA="MCP E2E SANDBOX"
+SANDBOX_HELPER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# has_marker_area reads the MCP tool's JSON list of areas on stdin.
+# Materialize all pages for assertions that require the complete selection.
+mcp_list_all() {
+  local endpoint="$1" tool="$2" args="${3:-}"
+  [ -n "$args" ] || args='{}'
+  python3 "${SANDBOX_HELPER_DIR}/mcp-collection.py" "$endpoint" "$tool" "$args"
+}
+
+mcp_collection_has_uuid() {
+  local endpoint="$1" tool="$2" uuid="$3" args="${4:-}" response
+  response=$(mcp_list_all "$endpoint" "$tool" "$args") || return 1
+  printf '%s' "$response" | python3 -c '
+import json, sys
+items=json.load(sys.stdin)["items"]
+print("true" if any(item.get("uuid") == sys.argv[1] for item in items) else "false")
+' "$uuid"
+}
+
+# has_marker_area reads the collected page items on stdin.
 has_marker_area() {
   SANDBOX_MARKER_AREA="$SANDBOX_MARKER_AREA" python3 -c '
 import json, os, sys
 try:
-    areas = json.loads(sys.stdin.read()) or []
-except ValueError:
+    areas = json.load(sys.stdin)["items"]
+    if not isinstance(areas, list) or not all(isinstance(a, dict) for a in areas):
+        sys.exit(1)
+except (ValueError, KeyError, TypeError):
     sys.exit(1)
 marker = os.environ["SANDBOX_MARKER_AREA"]
 sys.exit(0 if any((a.get("title") or a.get("Title")) == marker for a in areas) else 1)
@@ -28,12 +48,5 @@ refuse_non_sandbox() {
 
 # require_sandbox_mcp <mcp endpoint URL>
 require_sandbox_mcp() {
-  local resp
-  resp=$(curl -s --max-time 60 "$1" \
-    -X POST \
-    -H "Content-Type: application/json" \
-    --data-raw '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"things_list_areas","arguments":{}}}')
-  printf '%s' "$resp" \
-    | python3 -c "import sys,json; print(json.loads(sys.stdin.read())['result']['content'][0]['text'])" 2>/dev/null \
-    | has_marker_area || refuse_non_sandbox
+  mcp_list_all "$1" things_list_areas | has_marker_area || refuse_non_sandbox
 }

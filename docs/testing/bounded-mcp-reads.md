@@ -260,3 +260,24 @@ gh workflow run e2e.yml -R pachamaker/things-cloud-mcp \
 
 The default `full` mode and scheduled sandbox suite retain their previous behavior;
 rollback mode is manual-only and shares the `things-sandbox` concurrency group.
+
+
+### Final review shell regressions — fixed 2026-11-15
+
+The legacy writing shell suites now use `tests/mcp-collection.py` through the
+shared helpers in `tests/sandbox-guard.sh` whenever an assertion needs the complete
+collection. Sandbox-marker lookup and Today/project/checklist membership traverse
+all pages, preserving filters and the returned revision. Missing markers, stale or
+changed revisions, duplicate items, incomplete collections and non-progressing
+pages fail closed; a partial selection never authorizes writes.
+`test-smoke.sh` now checks page `items` rather than expecting legacy arrays.
+
+The regressions were reproduced before the fix. Nine offline shell tests now pass,
+including the sandbox marker and target task on the second page, preserved project
+filters, missing-marker refusal, stale/changed revisions, duplicate/non-progressing
+pages, absent tasks and smoke response-shape checks. These execute the real shell
+helpers with a fake `curl` executable, without sockets or credentials. The existing
+five rollback-probe unit tests pass too: 14 Python tests in total. They now run in
+ordinary CI via `python3 -m unittest discover -s tests -p 'test_*.py' -v`.
+Shell syntax checks, tidy/build/vet/race tests, staticcheck and govulncheck passed
+locally. No live account tests were repeated for this shell-only fix.
