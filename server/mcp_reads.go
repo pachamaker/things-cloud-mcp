@@ -237,11 +237,13 @@ func mcpReadCollection(tool string, req mcp.CallToolRequest) (*mcp.CallToolResul
 			}
 			var headingPages [][]areaOutput
 			if tool == "things_list_project_tasks" {
+				headings, e = r.withoutInheritedTrash(headings)
+				if e != nil {
+					return e
+				}
 				metadata := make([]areaOutput, 0, len(headings))
 				for _, heading := range headings {
-					if !heading.InTrash {
-						metadata = append(metadata, areaOutput{UUID: heading.UUID, Title: heading.Title})
-					}
+					metadata = append(metadata, areaOutput{UUID: heading.UUID, Title: heading.Title})
 				}
 				headingPages = [][]areaOutput{metadata}
 			}
