@@ -366,3 +366,14 @@ and two devices generating the same instance.
    harness's wire rules (`server/sandbox_rules_test.go`), run it, then open Things on Mac
    **and** iOS and confirm nothing breaks after a full sync and app restart.
 5. Update this document (evidence ✅) and the capability table in `AGENTS.md`.
+
+## Pending heading-assignment write (KI-45)
+
+The local MCP implementation accepts `heading` on create/edit and proposes
+`agr: [headingUUID]`, `pr: [owningProjectUUID]`, `ar: []`. Heading-only edits omit
+all scheduling, deadline, note, tag and index fields. This follows the SDK CLI's
+heading reference and clears conflicting containers explicitly; it is **not** a
+captured native payload. The existing project-move capture confirms only removal
+of a heading. `agr` stays 🟡 and heading assignment must not be released until §8
+has verified creation, same-project and cross-project moves, and preservation of
+unrelated fields on Mac and iOS. Offline tests are not native protocol evidence.

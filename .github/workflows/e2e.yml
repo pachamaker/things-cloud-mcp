@@ -20,7 +20,7 @@ on:
       mode:
         description: Sandbox suite to run
         type: choice
-        options: [full, rollback]
+        options: [full, rollback, capture-heading, heading]
         default: full
   schedule:
     # Once a day, far from 00:00 UTC: the job leaves THINGS_TIMEZONE unset, so
@@ -37,7 +37,7 @@ concurrency:
 
 jobs:
   sandbox-e2e:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode != 'rollback' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode == 'full' }}
     name: Sandbox e2e
     runs-on: ubuntu-latest
     environment: things-sandbox
@@ -126,3 +126,59 @@ jobs:
           if test -f "$RUNNER_TEMP/sandbox-rollback-result.json"; then
             cat "$RUNNER_TEMP/sandbox-rollback-result.json" >> "$GITHUB_STEP_SUMMARY"
           fi
+
+  heading:
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'capture-heading' || inputs.mode == 'heading') }}
+    name: Heading sandbox (manual)
+    runs-on: ubuntu-latest
+    environment: things-sandbox
+    timeout-minutes: 30
+    env:
+      THINGS_E2E_RUN_ID: e2e-gh${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Heading harness self-test (offline)
+        env:
+          THINGS_E2E_REQUIRE_RUN: "1"
+        run: go test -tags 'e2e heading fakecloud' -run '^TestSandboxHeading' -count=1 -timeout 10m ./server
+      - name: Capture native heading seeds (read-only, zero commits)
+        if: ${{ inputs.mode == 'capture-heading' }}
+        env:
+          THINGS_SANDBOX_USERNAME: ${{ secrets.THINGS_SANDBOX_USERNAME }}
+          THINGS_SANDBOX_PASSWORD: ${{ secrets.THINGS_SANDBOX_PASSWORD }}
+          THINGS_E2E_REQUIRE_RUN: "1"
+          THINGS_E2E_CAPTURE_OUT: ${{ runner.temp }}/heading-capture.json
+        run: go test -tags e2e -run '^TestSandboxHeadingCapture$' -count=1 -v -timeout 20m ./server
+      - name: Upload sanitized heading capture
+        if: ${{ success() && inputs.mode == 'capture-heading' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: heading-capture-${{ github.run_id }}
+          path: ${{ runner.temp }}/heading-capture.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Require reviewed native heading evidence (no credentials)
+        if: ${{ inputs.mode == 'heading' }}
+        id: heading_evidence
+        run: go test -tags 'e2e heading' -run '^TestHeadingNativeEvidence$' -count=1 ./server
+      - name: Create headings and move run-owned tasks (sandbox only)
+        if: ${{ inputs.mode == 'heading' }}
+        id: heading_writes
+        env:
+          THINGS_SANDBOX_USERNAME: ${{ secrets.THINGS_SANDBOX_USERNAME }}
+          THINGS_SANDBOX_PASSWORD: ${{ secrets.THINGS_SANDBOX_PASSWORD }}
+          THINGS_E2E_REQUIRE_RUN: "1"
+        run: go test -tags 'e2e heading' -run '^TestSandboxHeadingE2E$' -count=1 -v -timeout 20m ./server
+      - name: Trash only this heading run's objects
+        if: ${{ always() && inputs.mode == 'heading' && steps.heading_evidence.outcome == 'success' && steps.heading_writes.outcome != 'skipped' }}
+        env:
+          THINGS_SANDBOX_USERNAME: ${{ secrets.THINGS_SANDBOX_USERNAME }}
+          THINGS_SANDBOX_PASSWORD: ${{ secrets.THINGS_SANDBOX_PASSWORD }}
+          THINGS_E2E_REQUIRE_RUN: "1"
+        run: go test -tags 'e2e heading' -run '^TestSandboxHeadingCleanup$' -count=1 -v -timeout 5m ./server
