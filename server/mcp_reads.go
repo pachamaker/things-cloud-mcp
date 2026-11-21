@@ -235,16 +235,28 @@ func mcpReadCollection(tool string, req mcp.CallToolRequest) (*mcp.CallToolResul
 			if e != nil {
 				return e
 			}
+			var headingPages [][]areaOutput
+			if tool == "things_list_project_tasks" {
+				headings, e = r.withoutInheritedTrash(headings)
+				if e != nil {
+					return e
+				}
+				metadata := make([]areaOutput, 0, len(headings))
+				for _, heading := range headings {
+					metadata = append(metadata, areaOutput{UUID: heading.UUID, Title: heading.Title})
+				}
+				headingPages = [][]areaOutput{metadata}
+			}
 			render = func() *mcp.CallToolResult {
 				out := summarizeTasks(tasks, headings, tool, s.Today)
 				// Only inspect/project returned candidates for the expensive encoded-title fallback.
 				end := min(len(out), opts.Offset+min(opts.Limit, max(0, len(out)-opts.Offset)))
 				if opts.Offset < len(out) {
 					for i := opts.Offset; i < end; i++ {
-						out[i] = fitSummaryTitle(out[i], rev, s)
+						out[i] = fitSummaryTitle(out[i], rev, s, headingPages...)
 					}
 				}
-				return encodeCollectionPage(out, opts, rev, s.Today, s.Timezone)
+				return encodeCollectionPage(out, opts, rev, s.Today, s.Timezone, headingPages...)
 			}
 
 		}
@@ -256,12 +268,15 @@ func mcpReadCollection(tool string, req mcp.CallToolRequest) (*mcp.CallToolResul
 	return render(), nil
 }
 
-func fitSummaryTitle(o taskSummaryOutput, rev string, s readRevisionState) taskSummaryOutput {
+func fitSummaryTitle(o taskSummaryOutput, rev string, s readRevisionState, headings ...[]areaOutput) taskSummaryOutput {
 	// Fit against a real one-item envelope with worst-case pagination metadata.
 	fits := func(x taskSummaryOutput) bool {
 		next := int(^uint(0) >> 1)
 		reason := "bytes"
 		p := readPage[taskSummaryOutput]{Items: []taskSummaryOutput{x}, Returned: 1, Total: next, HasMore: true, NextOffset: &next, Revision: rev, Today: s.Today.String(), Timezone: s.Timezone, PageLimitedBy: &reason}
+		if len(headings) > 0 {
+			p.Headings = &headings[0]
+		}
 		b, err := json.Marshal(p)
 		return err == nil && len(b) <= maxReadBytes
 	}

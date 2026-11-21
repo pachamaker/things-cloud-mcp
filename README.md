@@ -102,7 +102,7 @@ See [migration, examples and verification](docs/testing/bounded-mcp-reads.md).
 | `things_list_projects` | All projects | `limit`, `offset`, `revision` |
 | `things_list_areas` | All areas | `limit`, `offset`, `revision` |
 | `things_list_tags` | All tags | `limit`, `offset`, `revision` |
-| `things_list_project_tasks` | To-dos in a project, those under its headings included: first the to-dos directly in the project, then each heading's in heading order; to-dos under a heading carry `heading_id` and `heading_title` | `project_uuid`, `limit`, `offset`, `revision` |
+| `things_list_project_tasks` | To-dos in a project, those under its headings included: first the to-dos directly in the project, then each heading's in heading order; to-dos under a heading carry `heading_id` and `heading_title`. Each page adds `headings` (UUID/title in heading order), including empty and archived headings, excluding trash. Pagination counts tasks only | `project_uuid`, `limit`, `offset`, `revision` |
 | `things_list_area_tasks` | Tasks in an area | `area_uuid`, `limit`, `offset`, `revision` |
 | `things_list_completed` | Completed tasks with paginated date filtering | `limit`, `offset`, `revision`, `completed_after`, `completed_before` |
 | `things_list_checklist_items` | Checklist items for a task | `task_uuid`, `limit`, `offset`, `revision` |
