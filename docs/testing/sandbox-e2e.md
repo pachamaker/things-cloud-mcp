@@ -308,3 +308,47 @@ ignores. Check `git ls-files .github` before committing.
 - Not exercised because the write is not verified: `things_edit_task` with `when: "none"`
   (writes `sr`/`tir` without `st`; the firewall would refuse it), This Evening,
   reminders, reordering, deleting areas and tags, and anything recurring.
+
+
+## Heading capture and opt-in writes (KI-45)
+
+Manual workflow modes `capture-heading` and `heading` use the existing protected
+`things-sandbox` environment and concurrency group. No protection or secrets change.
+The default `full`, nightly suite and rollback mode keep their existing behavior.
+No new live run is triggered by a pull request.
+
+1. On a branch allowed by the environment, dispatch `capture-heading`. It runs
+   `TestSandboxHeadingCapture` with `harnessReadOnly`, which refuses all commits.
+   It exports historical create/update payloads only for the ordinary native seeds
+   `SEED project`, `SEED heading`, and `SEED under heading`, preserving commit
+   grouping and sanitizing private strings and unrelated IDs. The successful job
+   uploads exactly one sanitized JSON file, retained seven days; no raw history,
+   credentials or SQLite cache is uploaded. It does not create or move any seed.
+2. Review the artifact's native-client provenance and record the actual client
+   version/device manually (history does not contain them). Check native creation
+   under a heading AND a separate modify assigning the heading, including native
+   `pr/ar/ix` behavior. An incomplete artifact is still useful and is uploaded with
+   an explicit evidence warning. If a move is absent, perform it in an official
+   Things app signed into sandbox on an isolated device/user and recapture.
+3. Adjust the encoder if native membership differs; add the reviewed fixture as
+   `testdata/captures/heading-assignment-native.json` and update protocol evidence.
+   No such fixture is fabricated or included in this PR.
+4. Only then dispatch `heading`. `TestSandboxHeadingE2E` (`e2e && heading`) checks
+   the fixture before loading credentials. Without create+modify evidence for the
+   exact proposed membership tuple it fails closed before account access.
+   It creates its own project/headings/tag/tasks, covers creation under a heading,
+   root-to-heading, same-project and cross-project moves, and verifies dates,
+   deadline, tags, notes, project listings, observer mirror and exact wire keys.
+   Cleanup only trashes this run's own task-like objects. Its tag requires manual
+   sandbox housekeeping, just as in the existing full suite.
+
+Local validation uses
+`THINGS_E2E_RUN_ID=e2e-heading-local go test -tags 'e2e heading fakecloud' -run '^TestSandboxHeading' -count=1 ./server`.
+The fake-cloud build bypasses only the native-evidence prerequisite for a fully
+in-memory harness check; it cannot make a real cloud request and is not native
+protocol evidence. No live heading test is included in the ordinary nightly suite.
+
+Bootstrap: the new workflow must first exist on a protected/allowed branch.
+A draft feature PR is not authority to weaken environment protection or merge
+unverified protocol writes. A separate capture-only change can be reviewed and
+merged first if needed; capture alone cannot certify Mac/iOS sync and restart.

@@ -816,3 +816,28 @@ cases has not been verified.
   fail-closed by design; the error already names the history index.
 - **Writes:** the server writes `Task6`, which skips the SDK's Task7 write preflight, so the
   write half of arthursoares#37 does not affect it.
+
+### KI-45 · MCP cannot create or move a to-do under a heading
+- **Status:** local implementation with offline tests; native protocol evidence and
+  sandbox/client verification pending. Not release-ready.
+- **Request (2026-11-21):** add `heading` to create/edit; preserve dates, tags and
+  notes on moves; do not touch the owner's account.
+- **Cause:** the MCP schema, request structs and handlers omit `heading`; `project`
+  deliberately rejects heading UUIDs (KI-10). Creation always used `agr: []`.
+- **Contract:** `heading` infers the project; an explicit project must match;
+  reject parent_task/area conflicts, missing/trashed/non-open destinations and
+  repeating targets or destination containers. Heading-only edits write membership
+  and modification time, never scheduling, tags, notes or indexes. Existing
+  project moves still clear the heading. No `heading: "none"` in this change.
+- **Reference:** pinned SDK CLI `taskUpdate.Heading` and create `--heading` write
+  `agr`. The proposed MCP payload explicitly sets the owning `pr` and clears `ar`
+  to avoid conflicting old containers; this combination still needs a native
+  capture under protocol §8. Do not mark `agr` verified from mocked tests.
+- **Checks:** `server/write_heading_test.go`: create, same/cross-project move,
+  field preservation, explicit edits, invalid destinations, recurrence refusal,
+  MCP forwarding and schema. Tests intercept HTTP commits in process; no accounts.
+- **PR validation (2026-11-21):** unit/race tests, build, vet, tidy, staticcheck,
+  govulncheck, actionlint, full fakecloud harness and opt-in heading fakecloud suite
+  passed locally. No live Actions dispatch or account writes performed.
+- **Release gate:** native sandbox capture of creation/assignment and moves,
+  fixture comparison, sandbox e2e wire rules/scenarios, Mac+iOS sync and restart.

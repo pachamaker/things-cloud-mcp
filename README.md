@@ -115,12 +115,12 @@ See [migration, examples and verification](docs/testing/bounded-mcp-reads.md).
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `things_create_task` | Create a task | `title` (req), `note`, `when`, `deadline`, `project`, `parent_task`, `tags` |
+| `things_create_task` | Create a task | `title` (req), `note`, `when`, `deadline`, `project`, `heading`, `parent_task`, `tags` |
 | `things_create_project` | Create a project | `title` (req), `note`, `when`, `deadline`, `area` |
 | `things_create_heading` | Create a heading in a project | `title` (req), `project` |
 | `things_create_area` | Create an area | `title` (req), `tags` |
 | `things_create_tag` | Create a tag | `title` (req), `shorthand`, `parent` |
-| `things_edit_task` | Edit a task | `uuid` (req), `title`, `note`, `when`, `deadline`, `project`, `parent_task`, `area`, `tags` |
+| `things_edit_task` | Edit a task | `uuid` (req), `title`, `note`, `when`, `deadline`, `project`, `heading`, `parent_task`, `area`, `tags` |
 | `things_complete_task` | Complete a task | `uuid` |
 | `things_uncomplete_task` | Reopen a completed task | `uuid` |
 | `things_trash_task` | Move to trash | `uuid` |
@@ -494,3 +494,22 @@ The three fixes ship in the pinned fork. The upstream PRs were open when checked
 ## Credits
 
 Built on top of [arthursoares/things-cloud-sdk](https://github.com/arthursoares/things-cloud-sdk), which reverse-engineered the Things Cloud sync protocol. Since ADR-0001 the server uses it as a pinned Go dependency (`go.mod`) instead of an embedded copy.
+
+### Heading placement (KI-45, local implementation — not release-verified)
+
+`things_create_task` and `things_edit_task` accept an optional `heading` UUID.
+The owning project is inferred from the heading; if `project` is supplied it must
+match. A heading must be open, not trashed, and belong to one open, non-trashed,
+non-repeating project. `parent_task` and `area` cannot be combined with `heading`.
+
+A heading-only edit preserves scheduling (including Inbox), deadlines, tags,
+notes and ordering by omitting those fields from the update. Explicit edits to
+these fields still apply. A new task with a heading defaults to Anytime unless
+`when` is given. To leave a heading, use the existing `project` move without
+`heading`; `heading: "none"` is not supported.
+
+Offline tests verify the MCP contract and payloads only. **Do not release this
+write capability until a native sandbox capture confirms heading assignment
+(`agr`/`pr`/`ar`/ordering) and the sandbox round trip has been checked on Mac and
+iOS.** The SDK CLI is an implementation reference, not that evidence. No real
+account is used by these tests.

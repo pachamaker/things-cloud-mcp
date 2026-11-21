@@ -296,6 +296,7 @@ refused (KI-01), and no list shows templates (KI-05). This needs the SDK to stor
 | Move to Today / Anytime / Someday / Inbox | `things_move_to_*` | ✅ verified (Today is the owner's day, `THINGS_TIMEZONE`) |
 | Create project / area / tag / heading | `things_create_*` | ✅ create only |
 | Checklist add / complete / reopen / delete | `things_*_checklist_item` | ✅ verified |
+| Heading placement | `things_create_task`, `things_edit_task` (`heading`) | Local implementation; native capture and sandbox Mac/iOS verification pending (KI-45); do not release yet |
 | Recurrence (`repeat`) | create/edit | ⛔ forbidden (KI-01) |
 | This Evening, reminders, reordering, delete area/tag | — | ❓ not implemented, needs captures |
 

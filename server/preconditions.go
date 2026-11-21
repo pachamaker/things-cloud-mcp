@@ -282,3 +282,42 @@ func checkChecklistStatus(m mirrorLookup, uuid string, want things.TaskStatus) e
 	}
 	return nil
 }
+
+// resolveHeadingProject checks the complete destination, including its owning
+// project. Existing edit fields are left alone unless explicitly requested.
+func resolveHeadingProject(m mirrorLookup, heading, project, parentTask, area string) (string, error) {
+	if heading == "" {
+		return "", nil
+	}
+	if parentTask != "" || area != "" {
+		return "", invalidInputf("heading cannot be combined with parent_task or area")
+	}
+	h, err := lookupTask(m, "heading", heading, things.TaskTypeHeading)
+	if err != nil {
+		return "", err
+	}
+	if h.InTrash || h.Status != things.TaskStatusPending {
+		return "", invalidInputf("heading %s must be open and not in the trash", heading)
+	}
+	if err := refuseRepeating(h, "heading"); err != nil {
+		return "", err
+	}
+	if len(h.ParentTaskIDs) != 1 {
+		return "", invalidInputf("heading %s must belong to exactly one project", heading)
+	}
+	owner := h.ParentTaskIDs[0]
+	p, err := lookupTask(m, "heading project", owner, things.TaskTypeProject)
+	if err != nil {
+		return "", err
+	}
+	if p.InTrash || p.Status != things.TaskStatusPending {
+		return "", invalidInputf("heading project %s must be open and not in the trash", owner)
+	}
+	if err := refuseRepeating(p, "heading project"); err != nil {
+		return "", err
+	}
+	if project != "" && project != owner {
+		return "", invalidInputf("heading %s belongs to project %s, not project %s", heading, owner, project)
+	}
+	return owner, nil
+}

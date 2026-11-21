@@ -347,6 +347,7 @@ type CreateTaskRequest struct {
 	When       string `json:"when,omitempty"`        // today, anytime, someday, inbox, YYYY-MM-DD
 	Deadline   string `json:"deadline,omitempty"`    // YYYY-MM-DD
 	Project    string `json:"project,omitempty"`     // project UUID
+	Heading    string `json:"heading,omitempty"`     // heading UUID (infers project)
 	ParentTask string `json:"parent_task,omitempty"` // parent task UUID (for subtasks)
 	Tags       string `json:"tags,omitempty"`        // comma-separated tag UUIDs
 	Repeat     string `json:"repeat,omitempty"`      // always rejected, see rejectRepeat (KI-01)
@@ -360,6 +361,7 @@ type EditTaskRequest struct {
 	When       string `json:"when,omitempty"`
 	Deadline   string `json:"deadline,omitempty"`
 	Project    string `json:"project,omitempty"`
+	Heading    string `json:"heading,omitempty"`
 	ParentTask string `json:"parent_task,omitempty"`
 	Area       string `json:"area,omitempty"`
 	Tags       string `json:"tags,omitempty"`
@@ -602,6 +604,11 @@ func createTask(req CreateTaskRequest) (string, error) {
 	if err := validateOptionalUUID("project", req.Project); err != nil {
 		return "", err
 	}
+	if req.Heading != "" {
+		if err := validateUUID("heading", req.Heading); err != nil {
+			return "", err
+		}
+	}
 	if err := validateOptionalUUID("parent_task", req.ParentTask); err != nil {
 		return "", err
 	}
@@ -609,8 +616,14 @@ func createTask(req CreateTaskRequest) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	var headingProject string
 	if err := precheck(func(m mirrorLookup) error {
-		return checkRefs(m, taskRefs{Project: req.Project, ParentTask: req.ParentTask, Tags: tg})
+		if err := checkRefs(m, taskRefs{Project: req.Project, ParentTask: req.ParentTask, Tags: tg}); err != nil {
+			return err
+		}
+		var err error
+		headingProject, err = resolveHeadingProject(m, req.Heading, req.Project, req.ParentTask, "")
+		return err
 	}); err != nil {
 		return "", err
 	}
@@ -651,6 +664,15 @@ func createTask(req CreateTaskRequest) (string, error) {
 		}
 	}
 
+	agr := []string{}
+	if req.Heading != "" {
+		agr = []string{req.Heading}
+		pr = []string{headingProject}
+		if req.When == "" {
+			st = 1
+		}
+	}
+
 	nt := emptyNote()
 	if req.Note != "" {
 		nt = textNote(req.Note)
@@ -660,7 +682,7 @@ func createTask(req CreateTaskRequest) (string, error) {
 		Tp: 0, Sr: sr, Dds: nil, Rt: []string{}, Rmd: nil,
 		Ss: 0, Tr: false, Dl: []string{}, Icp: false, St: st,
 		Ar: []string{}, Tt: req.Title, Do: 0, Lai: nil, Tir: tir,
-		Tg: tg, Agr: []string{}, Ix: 0, Cd: now, Lt: false,
+		Tg: tg, Agr: agr, Ix: 0, Cd: now, Lt: false,
 		Icc: 0, Md: nil, Ti: 0, Dd: dd, Ato: nil, Nt: nt,
 		Icsd: nil, Pr: pr, Rp: nil, Acrd: nil, Sp: nil,
 		Sb: 0, Rr: nil, Xx: defaultExtension(),
@@ -717,6 +739,11 @@ func editTask(req EditTaskRequest) error {
 	if err := validateOptionalUUID("project", req.Project); err != nil {
 		return err
 	}
+	if req.Heading != "" {
+		if err := validateUUID("heading", req.Heading); err != nil {
+			return err
+		}
+	}
 	if err := validateOptionalUUID("parent_task", req.ParentTask); err != nil {
 		return err
 	}
@@ -731,6 +758,7 @@ func editTask(req EditTaskRequest) error {
 	if req.Area != "none" {
 		refs.Area = req.Area
 	}
+	var headingProject string
 	var wasInInbox, hadHeading bool
 	if err := precheck(func(m mirrorLookup) error {
 		task, err := requireActiveToDo(m, req.UUID)
@@ -739,7 +767,11 @@ func editTask(req EditTaskRequest) error {
 		}
 		wasInInbox = task.Schedule == thingscloud.TaskScheduleInbox
 		hadHeading = len(task.ActionGroupIDs) > 0
-		return checkRefs(m, refs)
+		if err := checkRefs(m, refs); err != nil {
+			return err
+		}
+		headingProject, err = resolveHeadingProject(m, req.Heading, req.Project, req.ParentTask, req.Area)
+		return err
 	}); err != nil {
 		return err
 	}
@@ -773,7 +805,11 @@ func editTask(req EditTaskRequest) error {
 		}
 		u.deadline(dd)
 	}
-	if req.ParentTask != "" {
+	if req.Heading != "" {
+		u.project(headingProject)
+		u.fields["agr"] = []string{req.Heading}
+		u.clearArea()
+	} else if req.ParentTask != "" {
 		u.project(req.ParentTask)
 	} else if req.Project != "" {
 		u.project(req.Project)
