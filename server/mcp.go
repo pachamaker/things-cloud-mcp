@@ -655,7 +655,7 @@ func newMCPHandler(writes bool) http.Handler {
 	), mcpListAllTasks)
 
 	addRead(mcp.NewTool("things_list_project_tasks",
-		mcp.WithDescription("List to-dos in a specific Things project, including those under its headings: first the to-dos directly in the project, then each heading's to-dos in heading order. To-dos under a heading carry heading_id and heading_title."),
+		mcp.WithDescription("List to-dos in a specific Things project, including those under its headings: first the to-dos directly in the project, then each heading's to-dos in heading order. To-dos under a heading carry heading_id and heading_title. Each page also includes headings (UUID and title), including empty and archived headings, excluding trash. Pagination counts tasks only."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("project_uuid",
 			mcp.Required(),

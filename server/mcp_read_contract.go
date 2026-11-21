@@ -22,15 +22,16 @@ type pageOptions struct {
 }
 
 type readPage[T any] struct {
-	Items         []T     `json:"items"`
-	Returned      int     `json:"returned"`
-	Total         int     `json:"total"`
-	HasMore       bool    `json:"has_more"`
-	NextOffset    *int    `json:"next_offset"`
-	Revision      string  `json:"revision"`
-	Today         string  `json:"today"`
-	Timezone      string  `json:"timezone"`
-	PageLimitedBy *string `json:"page_limited_by"`
+	Headings      *[]areaOutput `json:"headings,omitempty"`
+	Items         []T           `json:"items"`
+	Returned      int           `json:"returned"`
+	Total         int           `json:"total"`
+	HasMore       bool          `json:"has_more"`
+	NextOffset    *int          `json:"next_offset"`
+	Revision      string        `json:"revision"`
+	Today         string        `json:"today"`
+	Timezone      string        `json:"timezone"`
+	PageLimitedBy *string       `json:"page_limited_by"`
 }
 
 func integerArgument(req mcp.CallToolRequest, name string, fallback, minimum, maximum int) (int, error) {
@@ -121,8 +122,16 @@ func boundedReadResult(v any) *mcp.CallToolResult {
 	return mcp.NewToolResultText(string(b))
 }
 
-func encodeCollectionPage[T any](items []T, p pageOptions, revision string, today civil.Date, zone string) *mcp.CallToolResult {
+func encodeCollectionPage[T any](items []T, p pageOptions, revision string, today civil.Date, zone string, headings ...[]areaOutput) *mcp.CallToolResult {
 	page := readPage[T]{Items: make([]T, 0), Total: len(items), Revision: revision, Today: today.String(), Timezone: zone}
+	if len(headings) > 0 {
+		page.Headings = &headings[0]
+		if b, err := json.Marshal(page); err != nil {
+			return readError("encode_error", "failed to encode collection")
+		} else if len(b) > maxReadBytes {
+			return oversizedReadItem(page)
+		}
+	}
 	if p.Offset >= len(items) {
 		return boundedReadResult(page)
 	}

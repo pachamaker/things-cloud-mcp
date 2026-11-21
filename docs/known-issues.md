@@ -539,6 +539,7 @@ cases has not been verified.
   (KI-01).
 
 ### KI-13 · Tasks under headings are missing from project listings
+- **Follow-up (2026-11-21):** project task pages add `headings`, an ordered UUID/title list including empty and archived headings and excluding trash. All existing envelope fields and task pagination semantics remain unchanged; other tools omit this field. Heading metadata shares the 24 KiB budget, can reduce the task count on a byte-limited page, and returns an explicit `item_too_large` error if it cannot fit. No Things Cloud writes change; native heading assignment remains outside this read-only change. Tests: `TestProjectHeadings_KI13_*`.
 - **Status:** fixed ([#21](https://github.com/pachamaker/things-cloud-mcp/pull/21), `a53bb30`) · **Evidence:** confirmed on
   the sandbox account: before the fix, e2e run 38139217523 on `main` logged
   `SEED under heading` as missing from its project; with it, a local
